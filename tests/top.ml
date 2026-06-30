@@ -1,6 +1,9 @@
 open Genlex
 open Core
 
+let ps = Pstring.unsafe_of_string
+let s_of_ps = Pstring.to_string
+
 (*> lexer *)
 let string_of_token = function
     Kwd k -> k
@@ -19,14 +22,14 @@ let lexer=
 ;;
 
 (*> parser *)
-let rec parse_star p = parser       
+let rec parse_star p = parser
     [< x = p; l = (parse_star p) >] -> x::l
   | [< >] -> []
 ;;
 
 let anon_var = parser
-    [< 'Kwd "_" >] -> "_"
-  | [< 'Ident x >] -> x
+    [< 'Kwd "_" >] -> ps "_"
+  | [< 'Ident x >] -> ps x
 ;;
 
 let virg_an_var = parser
@@ -38,10 +41,10 @@ let lident = parser
 ;;
 
 let parse_atom = parser
-    [< 'Kwd "Prop" >] -> SRT Prop
-  | [< 'Kwd "Set" >] -> SRT Set
-  | [< 'Kwd "Kind" >] -> SRT Kind
-  | [< 'Ident x >] -> REF x
+    [< 'Kwd "Prop" >] -> Expr_sort Prop
+  | [< 'Kwd "Set" >] -> Expr_sort Set
+  | [< 'Kwd "Kind" >] -> Expr_sort Kind
+  | [< 'Ident x >] -> Expr_ref (ps x)
 ;;
 
 let rec parse_expr = parser
@@ -51,7 +54,7 @@ let rec parse_expr = parser
        typ = parse_expr (*[ ... : ^ <expr>*);
        'Kwd "]"         (*[ ... : <expr> ^ ]*);
        trm = parse_expr (*[ ... ] ^ <expr>*)
-    >] -> List.fold_right (fun x t->ABS (x,typ,t)) l trm
+    >] -> List.fold_right (fun x t->Expr_abs (x,typ,t)) l trm
 
   | [< 'Kwd "let";
        x = anon_var     (*let ^ <ident>*);
@@ -61,27 +64,27 @@ let rec parse_expr = parser
        arg = parse_expr (*let ... := ^ <expr>*);
         'Kwd "in"       (*let ... := <expr> ^ in*);
        trm = parse_expr (*let ... in ^ <expr>*)
-    >] -> APP (ABS (x,typ,trm), arg)
+    >] -> Expr_app (Expr_abs (x,typ,trm), arg)
 
   | [< 'Kwd "(" ; r = parse_expr1 (*( ^ (<ident>|<expr>)*) >] -> r
 
-  | [< at = parse_atom; r = (parse_expr2 at) >] -> r 
+  | [< at = parse_atom; r = (parse_expr2 at) >] -> r
 
 and parse_expr1 = parser
-    [< 'Kwd "_"; r = (parse_end_pi ["_"]) >] -> r
+    [< 'Kwd "_"; r = (parse_end_pi [ps "_"]) >] -> r
 
-  | [< 'Ident x; r = (parse_expr3 x) >] -> r
+  | [< 'Ident x; r = (parse_expr3 (ps x)) >] -> r
 
   | [< t1 = parse_expr;
        l = (parse_star parse_expr);
        'Kwd ")"                     (*( <expr>* ^ )*);
-       r = (parse_expr2 (List.fold_left (fun t a->APP (t,a)) t1 l))
+       r = (parse_expr2 (List.fold_left (fun t a->Expr_app (t,a)) t1 l))
     >] -> r
 
 and parse_expr2 at = parser
     [< 'Kwd "->";
        t = parse_expr (*( <expr> ) -> ^ <expr>*)
-    >] -> PROD ("_",at,t)
+    >] -> Expr_prod (ps "_",at,t)
 
   | [< >] -> at
 
@@ -95,20 +98,20 @@ and parse_expr3 x = parser
        typ = parse_expr (*( <ident> : ^ <expr>*);
        'Kwd ")"         (*( <ident> : <expr> ^ )*);
        trm = parse_expr (*( ... ) ^ <expr>*)
-    >] -> PROD(x,typ,trm)
+    >] -> Expr_prod(x,typ,trm)
 
   | [< 'Kwd "->";
        t = parse_expr               (*( <ident> -> ^ <expr>*);
        l = (parse_star parse_expr)  (*( <ident> -> <expr> ^ <expr>*);
        'Kwd ")"                     (*( <expr>* ^ )*);
        str
-    >] -> parse_expr2 (List.fold_left (fun t a->APP(t,a))
-                         (PROD ("_",(REF x),t)) l) str
+    >] -> parse_expr2 (List.fold_left (fun t a->Expr_app(t,a))
+                         (Expr_prod (ps "_",(Expr_ref x),t)) l) str
 
   | [< l = (parse_star parse_expr);
        'Kwd ")"  (*( <expr>* ^ )*);
        str
-    >] -> parse_expr2 (List.fold_left (fun t a->APP(t,a)) (REF x) l) str
+    >] -> parse_expr2 (List.fold_left (fun t a->Expr_app(t,a)) (Expr_ref x) l) str
 
 and parse_end_pi lb = parser
     [< l = (parse_star virg_an_var);
@@ -116,7 +119,7 @@ and parse_end_pi lb = parser
        typ = parse_expr (*( <ident>* : ^ <expr>*);
        'Kwd ")"         (*( <ident>* : <expr> ^ )*);
        trm = parse_expr (*( ... ) ^ <expr>*)
-    >] -> List.fold_right (fun x t->PROD(x,typ,t)) (lb@l) trm
+    >] -> List.fold_right (fun x t->Expr_prod(x,typ,t)) (lb@l) trm
 ;;
 
 
@@ -127,52 +130,52 @@ let parse_ast strm =
   match strm with parser
       [< 'Kwd "Infer";
          e = parse_expr  (*Infer ^ <expr>*)
-      >] -> AST_INFER e
+      >] -> Ast_infer e
 
     | [< 'Kwd "Axiom";
          'Ident x        (*Axiom ^ <ident>*);
          'Kwd ":"        (*Axiom <ident> ^ :*);
          e = parse_expr  (*Axiom <ident> : ^ <expr>*)
-      >] -> AST_AXIOM(x,e)
+      >] -> Ast_axiom(ps x,e)
 
     | [< 'Kwd "Check";
          e1 = parse_expr (*Check ^ <expr>*);
          'Kwd ":"        (*Check <expr> ^ :*);
          e2 = parse_expr (*Check <expr> : ^ <expr>*)
-      >] -> AST_CHECK(e1,e2)  
+      >] -> Ast_check(e1,e2)
 
-    | [< 'Kwd "Delete" >] -> AST_DELETE
+    | [< 'Kwd "Delete" >] -> Ast_delete
 
-    | [< 'Kwd "List" >] -> AST_LIST
+    | [< 'Kwd "List" >] -> Ast_list
 
-    | [< 'Kwd "Quit" >] -> AST_QUIT
+    | [< 'Kwd "Quit" >] -> Ast_quit
 ;;
 
 
-(*> affichage *)
-let string_of_sort = function 
+(*> display *)
+let string_of_sort = function
     Kind -> "Kind"
   | Prop -> "Prop"
   | Set -> "Set"
 ;;
 
 let rec string_of_expr = function
-    SRT s -> string_of_sort s
-  | REF x -> x
-  | ABS (x,tt,t) -> "["^x^":"^(string_of_expr tt)^"]"^(string_of_expr t)
-  | APP (u,v) -> "("^(string_of_app u)^" "^(string_of_expr v)^")"
-  | PROD (x,tt,u) ->
+    Expr_sort s -> string_of_sort s
+  | Expr_ref x -> s_of_ps x
+  | Expr_abs (x,tt,t) -> "["^(s_of_ps x)^":"^(string_of_expr tt)^"]"^(string_of_expr t)
+  | Expr_app (u,v) -> "("^(string_of_app u)^" "^(string_of_expr v)^")"
+  | Expr_prod (x,tt,u) ->
       (match is_free_var x u with
-          true -> "("^x^":"^(string_of_expr tt)^")"^(string_of_expr u)
+          true -> "("^(s_of_ps x)^":"^(string_of_expr tt)^")"^(string_of_expr u)
         | false -> (string_of_arrow tt)^"->"^(string_of_expr u))
 
 and string_of_app = function
-    APP (u,v) -> (string_of_app u)^" "^(string_of_expr v)
+    Expr_app (u,v) -> (string_of_app u)^" "^(string_of_expr v)
   | t -> string_of_expr t
 
 and string_of_arrow = function
-    ABS (x0,x1,x2) -> "("^(string_of_expr (ABS (x0,x1,x2)))^")"
-  | PROD (x0,x1,x2) -> "("^(string_of_expr (PROD (x0,x1,x2)))^")"
+    Expr_abs (x0,x1,x2) -> "("^(string_of_expr (Expr_abs (x0,x1,x2)))^")"
+  | Expr_prod (x0,x1,x2) -> "("^(string_of_expr (Expr_prod (x0,x1,x2)))^")"
   | t -> string_of_expr t
 ;;
 
@@ -180,94 +183,76 @@ let print_expr e = print_string (string_of_expr e);;
 
 
 let rec print_names = function
-    Nil -> ()
-  | Cons (x,l) ->
+    [] -> ()
+  | x :: l ->
       print_names l;
-      print_string (x^" ")
+      print_string ((s_of_ps x)^" ")
 ;;
-
-(*
-let rec print_terms = function
-    Nil -> ()
-  | Cons(t,l) ->
-      print_string "x. : ";
-      print_term t;
-      print_newline();
-      print_terms l
-;;
-
-let print_local_ctx = function
-    Nil -> print_newline()
-  | l ->
-      print_endline "Dans le contexte:";
-      print_terms l
-;;
-*)
 
 let print_message = function
-    Pnew_axiom x ->
-      print_endline (x^" admis.")
-  | Pinfered_type e ->
-      print_string "Type infere: ";
+    Pmsg_new_axiom x ->
+      print_endline ((s_of_ps x)^" admitted.")
+  | Pmsg_inferred_type e ->
+      print_string "Inferred type: ";
       print_expr e;
       print_newline()
-  | Pcorrect ->
+  | Pmsg_correct ->
       print_endline "Correct."
-  | Pcontext_listing l ->
-      print_string "Axiomes: ";
+  | Pmsg_context_listing l ->
+      print_string "Axioms: ";
       print_names l;
       print_newline()
-  | Pdelete_axiom x ->
-      print_endline (x^" supprime.")
-  | Pexiting ->
-      print_endline "\nAu revoir..."; exit 0
+  | Pmsg_delete_axiom x ->
+      print_endline ((s_of_ps x)^" deleted.")
+  | Pmsg_exiting ->
+      print_endline "\nGoodbye..."; exit 0
 ;;
 
 let rec print_type_err = function
-    Punder (x,e,err) ->
-      print_string x;
+    Perr_under (x,e,err) ->
+      print_string (s_of_ps x);
       print_string " : ";
       print_expr e;
       print_newline();
       print_type_err err
-  | Pexpected_type(m,at,et) ->
-      print_string "Le terme ";
+  | Perr_expected_type(m,at,et) ->
+      print_string "The term ";
       print_expr m;
-      print_string " a le type ";
+      print_string " has type ";
       print_expr at;
-      print_string " mais est utilise avec le type ";
+      print_string " but is used with type ";
       print_expr et;
       print_endline "."
-  | Pkind_ill_typed ->
-      print_endline "Kind est mal type."
-  | Pdb_error n ->
-      print_string "Variable de de Bruijn #";
-      print_int (int_of_nat n);
-      print_endline " libre."
-  | Plambda_kind t ->
-      print_string "Le terme ";
+  | Perr_kind_ill_typed ->
+      print_endline "Kind is ill-typed."
+  | Perr_db n ->
+      print_string "De Bruijn variable #";
+      print_int n;
+      print_endline " is free."
+  | Perr_lambda_kind t ->
+      print_string "The term ";
       print_expr t;
-      print_endline " est une abstraction sur une kind."
-  | Pnot_a_type(m,t) ->
-      print_string "Le type de ";
+      print_endline " is an abstraction over a kind."
+  | Perr_not_a_type(m,t) ->
+      print_string "The type of ";
       print_expr m;
-      print_string ", qui est ";
+      print_string ", which is ";
       print_expr t;
-      print_endline " ne se reduit pas vers une sorte."
-  | Pnot_a_fun(m,t) ->
-      print_string "Le type de ";
+      print_endline " does not reduce to a sort."
+  | Perr_not_a_fun(m,t) ->
+      print_string "The type of ";
       print_expr m;
-      print_string ", qui est ";
+      print_string ", which is ";
       print_expr t;
-      print_endline " ne se reduit pas vers un produit."
-  | Papply_err(u,tu,v,tv) ->
-      print_string "Le terme ";
+      print_endline " does not reduce to a product."
+  | Perr_apply(u,tu,v,tv) ->
+      print_string "The term ";
       print_expr u;
-      print_string " de type ";
+      print_string " of type ";
       print_expr tu;
-      print_string " ne peut etre applique a ";
+      print_string " cannot be applied to ";
       print_expr v;
-      print_string " qui a pour type ";
+      print_string " which has type ";
       print_expr tv;
       print_endline "."
 ;;
@@ -275,8 +260,8 @@ let rec print_type_err = function
 let print_type_error err =
   begin
     match err with
-        Punder _ ->
-          print_endline "Dans le contexte:";
+        Perr_under _ ->
+          print_endline "In context:";
       | _ -> ()
   end;
   print_type_err err
@@ -284,35 +269,35 @@ let print_type_error err =
 
 
 let print_error = function
-    Punbound_vars l ->
-      print_string "Variables inconnues: [ ";
+    Perr_unbound_vars l ->
+      print_string "Unknown variables: [ ";
       print_names l;
       print_endline "]."
-  | Pname_clash x ->
-      print_endline ("Nom "^x^" deja utilise.")
-  | Ptype_error te ->
+  | Perr_name_clash x ->
+      print_endline ("Name "^(s_of_ps x)^" already in use.")
+  | Perr_type_error te ->
       print_type_error te
-  | Pcannot_delete ->
-      print_endline "Contexte deja vide."
+  | Perr_cannot_delete ->
+      print_endline "Context already empty."
 ;;
 
 
 
-(*> encapsulation de l'etat *)
-let update_state = 
+(*> state encapsulation *)
+let update_state =
   let state = ref empty_state in
-    (fun ast -> 
-       match (interp_ast !state ast) with
-           Inl(Pair(ns,msg)) ->
+    (fun ast ->
+       match (interpret_ast !state ast) with
+           Inl(ns, msg) ->
              print_message msg;
              state := ns
          | Inr err ->
-             print_string "Erreur: ";
+             print_string "Error: ";
              print_error err)
 ;;
 
 
-(*> boucle toplevel *)
+(*> toplevel loop *)
 
 
 let rec discarder stk strm =
@@ -340,7 +325,7 @@ let skip_til_dot err_msg strm =
         List.iter
           (fun tok -> print_string ((string_of_token tok)^" ")) toklst
       end;
-    print_string "\nErreur de syntaxe: ";
+    print_string "\nSyntax error: ";
     print_endline err_msg
 ;;
 
@@ -350,8 +335,8 @@ let rec parse_strm strm =
         [< ast = parse_ast; 'Kwd "." (*<command> ^ .*); strm >] ->
           [< 'ast; parse_strm strm >]
       | [< _ = Stream.empty >] -> [< >]
-  with 
-      Stream.Failure -> 
+  with
+      Stream.Failure ->
         skip_til_dot "^ <command>" strm;
         parse_strm strm
     | Stream.Error s ->

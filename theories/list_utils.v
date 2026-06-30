@@ -13,249 +13,158 @@
 (* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA *)
 (* 02110-1301 USA                                                     *)
 
+(** Utility lemmas and definitions for lists:
+    positional insertion, truncation, and decidable named lookup. *)
 
-Require Import Arith.
-Require Export List.
+From Stdlib Require Import Arith Lia.
+From Stdlib Require Export List.
 
 Global Set Asymmetric Patterns.
 
-Section Listes.
+Hint Resolve in_eq in_cons: coc.
 
-  Variable A : Set.
+(** [insert x n l1 l2] holds when [l2] is [l1] with [x] inserted at position [n]. *)
+Definition insert {A : Type} (x : A) (n : nat) (l1 l2 : list A) : Prop :=
+  l2 = firstn n l1 ++ x :: skipn n l1 /\ n <= length l1.
 
-  Let List := list A.
-
-
-  Inductive In (x : A) : List -> Prop :=
-    | In_hd : forall l : List, In x (x :: l)
-    | In_tl : forall (y : A) (l : List), In x l -> In x (y :: l).
-
-  Hint Resolve In_hd In_tl: coc. 
-
-
-  Lemma In_app :
-   forall (x : A) (l1 l2 : List), In x (l1 ++ l2) -> In x l1 \/ In x l2.
-simple induction l1; simpl in |- *; intros;
- auto with coc core arith datatypes.
-
-inversion_clear H0; auto with coc core arith datatypes.
-elim H with l2; auto with coc core arith datatypes.
+(** Inserting at position 0 prepends the element. *)
+Lemma insert_head {A : Type} (x : A) (l : list A) : insert x 0 l (x :: l).
+Proof.
+  unfold insert; simpl; auto with arith.
 Qed.
 
-
-  Definition incl (l1 l2 : List) : Prop := forall x : A, In x l1 -> In x l2.
-
-  Hint Unfold incl: coc.
-
-
-  Lemma incl_app_sym : forall l1 l2 : List, incl (l1 ++ l2) (l2 ++ l1).
-red in |- *; intros.
-elim In_app with x l1 l2; intros; auto with coc core arith datatypes.
-elim l2; simpl in |- *; auto with coc core arith datatypes.
-
-elim H0; simpl in |- *; auto with coc core arith datatypes.
+(** Insertion at [S n] in [y :: l] reduces to insertion at [n] in [l]. *)
+Lemma insert_tail {A : Type} (x : A) (n : nat) (l il : list A) (y : A) :
+  insert x n l il -> insert x (S n) (y :: l) (y :: il).
+Proof.
+  unfold insert; intros [Heq Hle]; split.
+  - simpl. f_equal. exact Heq.
+  - simpl. lia.
 Qed.
 
+(** [first_item x l n] holds when [x] first occurs at position [n] in [l]:
+    [nth_error l n = Some x] and [x] does not occur in [firstn n l]. *)
+Definition first_item {A : Set} (x : A) (l : list A) (n : nat) : Prop :=
+  nth_error l n = Some x /\ ~ In x (firstn n l).
 
-  Inductive item (x : A) : List -> nat -> Prop :=
-    | item_hd : forall l : List, item x (x :: l) 0
-    | item_tl :
-        forall (l : List) (n : nat) (y : A),
-        item x l n -> item x (y :: l) (S n).
-
-  Lemma fun_item :
-   forall (u v : A) (e : List) (n : nat), item u e n -> item v e n -> u = v.
-simple induction 1; intros.
-inversion_clear H0; auto with coc core arith datatypes.
-
-inversion_clear H2; auto with coc core arith datatypes.
+(** Backward-compat: x is first at index 0 in x :: l. *)
+Lemma first_item_head {A : Set} (x : A) (l : list A) : first_item x (x :: l) 0.
+Proof.
+  unfold first_item; simpl; auto.
 Qed.
 
-
-  Fixpoint nth_def (d : A) (l : List) {struct l} : 
-   nat -> A :=
-    fun n : nat =>
-    match l, n with
-    | nil, _ => d
-    | x :: _, O => x
-    | _ :: tl, S k => nth_def d tl k
-    end.
-
-  Lemma nth_sound :
-   forall (x : A) (l : List) (n : nat),
-   item x l n -> forall d : A, nth_def d l n = x.
-simple induction 1; simpl in |- *; auto with coc core arith datatypes.
+(** Backward-compat: if x is first at n in l and x <> y, then first at S n in y :: l. *)
+Lemma first_item_tail {A : Set} (x : A) (l : list A) (y : A) (n : nat) :
+  first_item x l n -> x <> y -> first_item x (y :: l) (S n).
+Proof.
+  unfold first_item; intros [Hnth Hnotin] Hne.
+  split; [exact Hnth | simpl; intros [Heq | Hin]; [exact (Hne (eq_sym Heq)) | exact (Hnotin Hin)]].
 Qed.
 
-  Lemma inv_nth_nl : forall (x : A) (n : nat), ~ item x nil n.
-unfold not in |- *; intros.
-inversion_clear H.
+Hint Resolve first_item_head first_item_tail: coc.
+
+(** The position of the first occurrence is unique. *)
+Lemma first_item_unique {A : Set} :
+  forall (x : A) (l : list A) (n : nat),
+  first_item x l n -> forall m : nat, first_item x l m -> m = n.
+Proof.
+  unfold first_item.
+  intros x l n [Hn Hnotin] m [Hm Hmnotin].
+  revert l n m Hn Hnotin Hm Hmnotin.
+  induction l as [|h l' IH]; intros n m Hn Hnotin Hm Hmnotin.
+  - destruct n; simpl in Hn; discriminate.
+  - destruct n as [|n'], m as [|m'].
+    + reflexivity.
+    + simpl in Hn; injection Hn as Hn; subst h.
+      exfalso; apply Hmnotin. simpl. left. reflexivity.
+    + simpl in Hm; injection Hm as Hm; subst h.
+      exfalso; apply Hnotin. simpl. left. reflexivity.
+    + f_equal. apply IH with (n := n') (m := m').
+      * exact Hn.
+      * simpl in Hnotin. intros Hin; apply Hnotin; right; exact Hin.
+      * exact Hm.
+      * simpl in Hmnotin. intros Hin; apply Hmnotin; right; exact Hin.
 Qed.
 
-  Lemma inv_nth_cs :
-   forall (x y : A) (l : List) (n : nat), item x (y :: l) (S n) -> item x l n.
-intros.
-inversion_clear H; auto with coc core arith datatypes.
-Qed.
-
-  Inductive insert (x : A) : nat -> List -> List -> Prop :=
-    | insert_hd : forall l : List, insert x 0 l (x :: l)
-    | insert_tl :
-        forall (n : nat) (l il : List) (y : A),
-        insert x n l il -> insert x (S n) (y :: l) (y :: il).
-
-
-  Inductive trunc : nat -> List -> List -> Prop :=
-    | trunc_O : forall e : List, trunc 0 e e
-    | trunc_S :
-        forall (k : nat) (e f : List) (x : A),
-        trunc k e f -> trunc (S k) (x :: e) f.
-
-  Hint Resolve trunc_O trunc_S: coc.
-
-
-  Lemma item_trunc :
-   forall (n : nat) (e : List) (t : A),
-   item t e n -> exists f : List, trunc (S n) e f.
-simple induction n; intros.
-inversion_clear H.
-exists l; auto with coc core arith datatypes.
-
-inversion_clear H0.
-elim H with l t; intros; auto with coc core arith datatypes.
-exists x; auto with coc core arith datatypes.
-Qed.
-
-
-  Lemma ins_le :
-   forall (k : nat) (f g : List) (d x : A),
-   insert x k f g ->
-   forall n : nat, k <= n -> nth_def d f n = nth_def d g (S n).
-simple induction 1; auto with coc core arith datatypes.
-simple destruct n0; intros.
-inversion_clear H2.
-
-simpl in |- *.
-auto with coc core arith datatypes.
-Qed.
-
-  Lemma ins_gt :
-   forall (k : nat) (f g : List) (d x : A),
-   insert x k f g -> forall n : nat, k > n -> nth_def d f n = nth_def d g n.
-simple induction 1; auto with coc core arith datatypes.
-intros.
-inversion_clear H0.
-
-simple destruct n0; intros.
-auto with coc core arith datatypes.
-
-simpl in |- *; auto with coc core arith datatypes.
-Qed.
-
-  Lemma ins_eq :
-   forall (k : nat) (f g : List) (d x : A),
-   insert x k f g -> nth_def d g k = x.
-simple induction 1; simpl in |- *; auto with coc core arith datatypes.
-Qed.
-
-
-
-
-Definition list_item :
- forall (e : List) (n : nat),
- {t : A | item t e n} + {(forall t : A, ~ item t e n)}.
-
-simple induction e.
-right.
-red in |- *; intros t H; inversion_clear H.
-intros h f itemf n.
-case n.
-left; exists h; constructor.
-intro k; case (itemf k).
-simple destruct 1; intro u; left; exists u; constructor; trivial.
-intros; right.
-red in |- *; intros.
-inversion_clear H.
-apply (n0 t); auto.
+(** Decidable first-occurrence lookup using equality decision. *)
+Definition list_index {A : Set} (eq_dec : forall x y : A, {x = y} + {x <> y}) :
+  forall (x : A) (l : list A), {n : nat | first_item x l n} + {~ In x l}.
+Proof.
+  refine
+    (fix list_index (x : A) (l : list A) {struct l} :
+      {n : nat | first_item x l n} + {~ In x l} :=
+      match l return ({n : nat | first_item x l n} + {~ In x l}) with
+      | nil => inright _ _
+      | y :: l1 =>
+          match eq_dec x y with
+          | left found => inleft _ (exist _ 0 _)
+          | right notfound =>
+              match list_index x l1 with
+              | inleft (exist k in_tail) => inleft _ (exist _ (S k) _)
+              | inright not_tail => inright _ _
+              end
+          end
+      end).
+  - simpl; tauto.
+  - subst y. apply first_item_head.
+  - apply first_item_tail; [exact in_tail | exact notfound].
+  - simpl; intros [-> | H]; [exact (notfound eq_refl) | exact (not_tail H)].
 Defined.
 
+Hint Resolve insert_head insert_tail: coc.
+Hint Resolve in_eq in_cons first_item_head first_item_tail: coc.
+Hint Unfold incl: coc.
 
-
-
-  Definition list_disjoint (l1 l2 : List) : Prop :=
-    forall x : A, In x l1 -> In x l2 -> False.
-
-
-
-
-  Inductive first_item (x : A) : List -> nat -> Prop :=
-    | fit_hd : forall l : List, first_item x (x :: l) 0
-    | fit_tl :
-        forall (l : List) (y : A) (n : nat),
-        first_item x l n -> x <> y -> first_item x (y :: l) (S n).
-
-  Hint Resolve fit_hd fit_tl: coc.
-
-  Lemma first_item_is_item :
-   forall (x : A) (l : List) (n : nat), first_item x l n -> item x l n.
-simple induction 1; intros.
-apply item_hd.
-
-apply item_tl; trivial with coc core arith datatypes.
+(** [insert x n l1 l2] preserves list length. *)
+Lemma insert_length {A : Type} (x : A) (n : nat) (l1 l2 : list A) :
+  insert x n l1 l2 -> length l2 = S (length l1).
+Proof.
+  unfold insert; intros [Heq Hle]; subst l2.
+  rewrite length_app; simpl.
+  rewrite firstn_length_le by lia.
+  rewrite length_skipn. lia.
 Qed.
 
-  Lemma first_item_unique :
-   forall (x : A) (l : List) (n : nat),
-   first_item x l n -> forall m : nat, first_item x l m -> m = n.
-simple induction 1; intros; auto with coc core arith datatypes.
-inversion_clear H0; auto with coc core arith datatypes.
-
-elim H2; auto with coc core arith datatypes.
-
-generalize H2.
-inversion_clear H3; intros.
-elim H3; auto with coc core arith datatypes.
-
-elim H1 with n1; auto with coc core arith datatypes.
+(** Insertion preserves [nth] at indices >= the insertion point. *)
+Lemma insert_nth_ge {A : Type} :
+  forall (k : nat) (f g : list A) (d x : A),
+  insert x k f g ->
+  forall n : nat, k <= n -> nth n f d = nth (S n) g d.
+Proof.
+  unfold insert; intros k f g d x [Heq Hle] n Hkn; subst g.
+  revert k f Hle Hkn; induction n as [|n' IH]; intros k f Hle Hkn.
+  - assert (k = 0) by lia; subst k. simpl. destruct f; simpl; auto.
+  - destruct k as [|k'].
+    + simpl. destruct f; simpl; auto.
+    + simpl. destruct f as [|h f'].
+      * simpl in Hle; lia.
+      * simpl. apply IH; simpl in Hle; lia.
 Qed.
 
+(** Insertion preserves [nth] at indices strictly below the insertion point. *)
+Lemma insert_nth_lt {A : Type} :
+  forall (k : nat) (f g : list A) (d x : A),
+  insert x k f g -> forall n : nat, k > n -> nth n f d = nth n g d.
+Proof.
+  unfold insert; intros k f g d x [Heq Hle] n Hkn; subst g.
+  revert n f Hle Hkn; induction k as [|k' IH]; intros n f Hle Hkn.
+  - lia.
+  - destruct f as [|h f']; [simpl in Hle; lia|].
+    destruct n as [|n'].
+    + simpl. auto.
+    + simpl. apply IH; simpl in Hle; lia.
+Qed.
 
- 
-  Hypothesis eq_dec : forall x y : A, {x = y} + {x <> y}.
-
-  Definition list_index :
-   forall (x : A) (l : List), {n : nat | first_item x l n} + {~ In x l}.
-
-refine
- (fix list_index (x : A) (l : List) {struct l} :
-    {n : nat | first_item x l n} + {~ In x l} :=
-    match l return ({n : nat | first_item x l n} + {~ In x l}) with
-    | nil => inright _ _
-    | y :: l1 =>
-        match eq_dec x y with
-        | left found => inleft _ (exist _ 0 _)
-        | right notfound =>
-            match list_index x l1 with
-            | inleft (exist k in_tail) => inleft _ (exist _ (S k) _)
-            | inright not_tail => inright _ _
-            end
-        end
-    end); auto with coc.
-
-red in |- *; intros.
-inversion H.
-
-elim found; auto with coc.
-
-red in |- *; intros; apply not_tail.
-inversion H; auto with coc.
-elim notfound; trivial.
-Defined.
-
-End Listes.
-
-  Hint Resolve item_hd item_tl insert_hd insert_tl trunc_O trunc_S: coc.
-  Hint Resolve In_hd In_tl fit_hd fit_tl trunc_O trunc_S: coc.
-  Hint Unfold incl: coc.
-
-
+(** The element at the insertion index is the inserted element. *)
+Lemma insert_nth_eq {A : Type} :
+  forall (k : nat) (f g : list A) (d x : A),
+  insert x k f g -> nth k g d = x.
+Proof.
+  unfold insert; intros k f g d x [Heq Hle]; subst g.
+  revert k f Hle; induction k as [|k' IH]; intros f Hle.
+  - simpl. destruct f; simpl; auto.
+  - destruct f as [|h f']; [simpl in Hle; lia|].
+    simpl. apply IH; simpl in Hle; lia.
+Qed.
+Hint Resolve Forall_nil Forall_cons: coc.
+Hint Resolve Forall2_nil Forall2_cons: coc.

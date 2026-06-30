@@ -13,49 +13,26 @@
 (* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA *)
 (* 02110-1301 USA                                                     *)
 
+(** Concrete types for the extracted type-checker:
+    [nat] for integers (extracted to OCaml [int] via ExtrOcamlNatInt)
+    and [PrimString.string] for names (extracted via ExtrOCamlPString). *)
 
+From Stdlib Require Import PString.
 
-(* Formalisation of several Objective Caml basic types *)
+(** The type of names, backed by primitive strings. *)
+Definition name : Set := PrimString.string.
 
-(* integers *)
+(** Decidable equality on names via primitive string comparison. *)
+Definition name_eq_dec : forall s1 s2 : name, {s1 = s2} + {s1 <> s2}.
+Proof.
+  intros s1 s2.
+  destruct (PrimString.compare s1 s2) eqn:H.
+  - left. apply compare_eq. exact H.
+  - right. intro Heq. subst. rewrite compare_refl in H. discriminate.
+  - right. intro Heq. subst. rewrite compare_refl in H. discriminate.
+Defined.
 
-  Parameter ml_int : Set.
-  Parameter ml_eq_int : forall m n : ml_int, {m = n} + {m <> n}.
-  Parameter ml_zero : ml_int.
-  Parameter ml_succ : ml_int -> ml_int.
-
-  Parameter ml_int_pred : forall m n : ml_int, ml_succ m = ml_succ n -> m = n.
-(* This axiom is wrong in practice: (ml_succ -1)=ml_zero *)
-  Axiom dangerous_discr : forall n : ml_int, ml_zero <> ml_succ n.
-
-  Parameter
-    ml_int_case :
-      forall n : ml_int, {m : ml_int | n = ml_succ m} + {n = ml_zero}.
-
-  Fixpoint int_of_nat (n : nat) : ml_int :=
-    match n with
-    | O => ml_zero
-    | S k => ml_succ (int_of_nat k)
-    end.
-
-  Lemma dangerous_int_injection :
-   forall i j : nat, int_of_nat i = int_of_nat j -> i = j.
-simple induction i; simple destruct j; simpl in |- *; intros; auto.
-elim dangerous_discr with (int_of_nat n); auto.
-
-elim dangerous_discr with (int_of_nat n); auto.
-
-elim H with n0; auto.
-apply ml_int_pred; auto.
-Qed.
-
-
-(* strings *)
-  Parameter ml_string : Set.
-  Parameter ml_eq_string : forall s1 s2 : ml_string, {s1 = s2} + {s1 <> s2}.
-
-(* will be realized by (fun n -> "x"^int_of_string n) *)
-  Parameter ml_x_int : ml_int -> ml_string.
-  Parameter
-    ml_x_int_inj : forall m n : ml_int, ml_x_int m = ml_x_int n -> m = n.
-
+(** Injective name generation from naturals.
+    Axiomatized and extracted as [fun n -> "x" ^ string_of_int n]. *)
+Parameter name_of_nat : nat -> name.
+Axiom name_of_nat_inj : forall m n : nat, name_of_nat m = name_of_nat n -> m = n.

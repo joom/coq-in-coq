@@ -14,220 +14,228 @@
 (* 02110-1301 USA                                                     *)
 
 
-Require Import Arith.
-Require Import MyList.
-Require Import Lia.
-Require Export MlTypes.
+From Stdlib Require Import Arith.
+From Stdlib Require Import Lia.
+
+From CoqInCoq Require Import list_utils.
+From CoqInCoq Require Export ml_types.
 
 
-  (* type des noms *)
-  Definition name := ml_string.
-  Definition prt_names := list name.
+  (** Type of partial name lists. *)
+  Definition partial_names := list name.
 
+  (** Decidable equality on names. *)
   Definition name_dec : forall x y : name, {x = y} + {x <> y}
-   := ml_eq_string.
+   := name_eq_dec.
 
-  Definition var_of_nat (n : nat) : name := ml_x_int (int_of_nat n).
+  (** Converts a natural number to a name. *)
+  Definition var_of_nat (n : nat) : name := name_of_nat n.
 
-  Lemma inj_var_of_nat :
+  (** [var_of_nat] is injective. *)
+  Lemma injective_var_of_nat :
    forall m n : nat, var_of_nat m = var_of_nat n -> m = n.
-unfold var_of_nat in |- *.
-intros.
-apply dangerous_int_injection.
-apply ml_x_int_inj; auto with coc core arith datatypes.
-Qed.
+  Proof.
+    unfold var_of_nat. intros. apply name_of_nat_inj. exact H.
+  Qed.
 
 
-
-
+  (** Order on name lists induced by insertion. *)
   Inductive ord_insert : list name -> list name -> Prop :=
       oi_intro :
         forall (x : name) (n : nat) (l1 l2 : list name),
-        insert _ x n l1 l2 -> ord_insert l1 l2.
+        insert x n l1 l2 -> ord_insert l1 l2.
 
 
-  Lemma wf_oi : well_founded ord_insert.
-cut (forall (n : nat) (l : list name), length l = n -> Acc ord_insert l).
-red in |- *; intros.
-apply H with (length a); auto with coc core arith datatypes.
+  (** Membership in firstn implies membership in original list. *)
+  Lemma in_firstn_orig {A : Set} (k : nat) (x : A) (l : list A) :
+    In x (firstn k l) -> In x l.
+  Proof.
+    revert l; induction k as [|k' IHk]; intros l Hin.
+    - simpl in Hin; contradiction.
+    - destruct l as [|h l'].
+      + simpl in Hin; contradiction.
+      + simpl in Hin. destruct Hin as [-> | Hin]; [left; auto | right; apply IHk; exact Hin].
+  Qed.
 
-simple induction n.
-simple destruct l; intros.
-apply Acc_intro; intros.
-inversion_clear H0.
-inversion_clear H1.
+  (** Membership in skipn implies membership in original list. *)
+  Lemma in_skipn_orig {A : Set} (k : nat) (x : A) (l : list A) :
+    In x (skipn k l) -> In x l.
+  Proof.
+    revert l; induction k as [|k' IHk]; intros l Hin.
+    - exact Hin.
+    - destruct l as [|h l'].
+      + simpl in Hin; contradiction.
+      + right; apply IHk; exact Hin.
+  Qed.
 
-discriminate H.
+  (** Auxiliary for well_founded_ord_insert: accessibility by length. *)
+  Lemma well_founded_ord_insert_aux : forall (n : nat) (lst : list name), length lst = n -> Acc ord_insert lst.
+  Proof.
+    induction n as [|n' IH]; intros lst Hlen.
+    - apply Acc_intro; intros lst0 Hord.
+      inversion_clear Hord as [x k la lb Hins].
+      apply insert_length in Hins.
+      destruct lst; simpl in Hlen; [|discriminate]. simpl in Hins. lia.
+    - apply Acc_intro; intros lst0 Hord.
+      inversion_clear Hord as [x k la lb Hins].
+      apply IH.
+      apply insert_length in Hins. lia.
+  Qed.
 
-simple destruct l; simpl in |- *; intros.
-discriminate H0.
-
-injection H0; intros.
-apply Acc_intro; intros.
-inversion_clear H2.
-apply H.
-cut (S (length y) = length (n1 :: l0)); intros.
-simpl in H2.
-injection H2; auto with coc core arith datatypes.
-elim H1; auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
-intros.
-simpl in |- *.
-elim H4; auto with coc core arith datatypes.
-Qed.
+  (** [ord_insert] is well-founded. *)
+  Lemma well_founded_ord_insert : well_founded ord_insert.
+  Proof.
+    red; intros lst. apply well_founded_ord_insert_aux with (n := length lst); auto.
+  Qed.
 
 
-Definition rmv :
- forall (x : name) (l : prt_names),
- {l1 : prt_names | exists n : nat, insert _ x n l1 l} + {~ In _ x l}.
+  (** Removes a name from a list, returning the reduced list or a proof of absence. *)
+  Definition remove :
+   forall (x : name) (l : partial_names),
+   {l1 : partial_names | exists n : nat, insert x n l1 l} + {~ In x l}.
+  Proof.
 (*
-Realizer Fix rmv {rmv/2: name->(list name)->(sumor (list name)) :=
-  [x,l]Cases l of 
+Realizer Fix remove {remove/2: name->(list name)->(sumor (list name)) :=
+  [x,l]Cases l of
      nil => (inright ?)
    | (cons y l1) => Cases (name_dec x y) of
          left => (inleft ? l1)
-       | right => Cases (rmv x l1) of
+       | right => Cases (remove x l1) of
                     (inleft v) => (inleft ? (cons ? y v))
                   | inright => (inright ?)
                   end
        end
    end}.
 *)
-refine
- (fix rmv (x : name) (l : prt_names) {struct l} :
-    {l1 : prt_names | exists n : nat, insert _ x n l1 l} + {~ In _ x l} :=
-    match
-      l
-      return
-        ({l1 : prt_names | exists n : nat, insert _ x n l1 l} + {~ In _ x l})
-    with
-    | nil => inright _ _
-    | y :: l1 =>
-        match name_dec x y with
-        | left found => inleft _ (exist _ l1 _)
-        | right notfound =>
-            match rmv x l1 with
-            | inleft (exist v rmvd) => inleft _ (exist _ (y :: v) _)
-            | inright notin => inright _ _
+    refine
+     (fix remove (x : name) (l : partial_names) {struct l} :
+        {l1 : partial_names | exists n : nat, insert x n l1 l} + {~ In x l} :=
+        match
+          l
+          return
+            ({l1 : partial_names | exists n : nat, insert x n l1 l} + {~ In x l})
+        with
+        | nil => inright _ _
+        | y :: l1 =>
+            match name_dec x y with
+            | left found => inleft _ (exist _ l1 _)
+            | right notfound =>
+                match remove x l1 with
+                | inleft (exist v rmvd) => inleft _ (exist _ (y :: v) _)
+                | inright notin => inright _ _
+                end
             end
-        end
-    end).
-red in |- *; intros.
-inversion H.
+        end).
+    simpl; auto.
 
-rewrite found.
-exists 0; trivial with coc.
+    rewrite found.
+    exists 0; trivial with coc.
 
-inversion_clear rmvd.
-exists (S x0); auto with coc core arith datatypes.
+    inversion_clear rmvd.
+    exists (S x0); auto with coc core arith datatypes.
 
-red in |- *; intros; apply notin.
-inversion H; auto with coc core arith datatypes.
-elim notfound; trivial.
-Defined.
+    simpl; intros [-> | H].
+    elim notfound; reflexivity.
+    apply notin; exact H.
+  Defined.
 
 
-
+  (** Finds a fresh variable name not in the given list, starting from [n]. *)
   Definition find_free :
-   forall (l : prt_names) (n : nat),
-   {m : nat | n <= m &  ~ In _ (var_of_nat m) l}.
+   forall (l : partial_names) (n : nat),
+   {m : nat | n <= m &  ~ In (var_of_nat m) l}.
+  Proof.
 (*
 Realizer <nat->nat>rec ffv :: :: { ord_insert }
-  [l:prt_names][n:?]Cases (rmv (var_of_nat n) l) of
+  [l:partial_names][n:?]Cases (remove (var_of_nat n) l) of
       (inleft l1) => (ffv l1 (S n))
     | inright => n
     end.
 *)
-intro l.
-apply Acc_rec with (R := ord_insert) (x := l).
-2: apply wf_oi.
-clear l.
-intros l acc_hyp ffv n.
-refine
- match rmv (var_of_nat n) l with
- | inleft (exist l1 rmvd as s) =>
-     match ffv l1 _ (S n) with
-     | exist2 m m_le m_notin => exist2 _ _ m _ _
-     end
- | inright fresh => exist2 _ _ n _ _
- end; auto with arith.
-inversion_clear rmvd.
-eapply oi_intro; eauto.
+    intro l.
+    apply Acc_rec with (R := ord_insert) (x := l).
+    2: apply well_founded_ord_insert.
+    clear l.
+    intros l acc_hyp ffv n.
+    refine
+     match remove (var_of_nat n) l with
+     | inleft (exist l1 rmvd as s) =>
+         match ffv l1 _ (S n) with
+         | exist2 m m_le m_notin => exist2 _ _ m _ _
+         end
+     | inright fresh => exist2 _ _ n _ _
+     end; auto with arith.
+    destruct rmvd as [k0 Hins].
+    eapply oi_intro; eauto.
 
-red in |- *; intro.
-apply m_notin.
-inversion_clear rmvd.
-generalize H0; clear H0.
-cut (var_of_nat m <> var_of_nat n).
-generalize x l1.
-elim H; unfold var_of_nat in |- *; intros.
-inversion H1; auto with coc.
-elim H0; auto.
-
-inversion H3; auto with coc.
-constructor; eauto.
-
-red in |- *; intros.
-enough (m = n) by lia.
-revert H0; apply inj_var_of_nat.
-Defined.
+    red in |- *; intro Hin_l.
+    apply m_notin.
+    destruct rmvd as [k0 Hins].
+    assert (Hneq : var_of_nat m <> var_of_nat n).
+    { red in |- *; intro. enough (m = n) by lia. revert H; apply injective_var_of_nat. }
+    clear m_le s ffv acc_hyp.
+    destruct Hins as [Heq Hle]; subst l.
+    apply in_app_or in Hin_l.
+    destruct Hin_l as [Hin | [Heq | Hin]].
+    - exact (in_firstn_orig k0 _ l1 Hin).
+    - exfalso; apply Hneq; exact (eq_sym Heq).
+    - exact (in_skipn_orig k0 _ l1 Hin).
+  Defined.
 
 
-
-
-
-  Definition find_free_var : forall l : prt_names, {x : name | ~ In _ x l}.
+  (** Finds a fresh variable name not occurring in the given list. *)
+  Definition find_free_var : forall l : partial_names, {x : name | ~ In x l}.
+  Proof.
 (*
 Realizer [l](var_of_nat (find_free l O)).
 *)
-intros.
-elim (find_free l 0); intros; auto with coc.
-exists (var_of_nat x); trivial.
-Defined.
+    intros.
+    elim (find_free l 0); intros; auto with coc.
+    exists (var_of_nat x); trivial.
+  Defined.
 
 
+  (** Uniqueness predicate: each name occurs at most once in the list. *)
   Definition name_unique l :=
-    forall (m n : nat) (x : name), item _ x l m -> item _ x l n -> m = n.
+    forall (m n : nat) (x : name), nth_error l m = Some x -> nth_error l n = Some x -> m = n.
 
 
-  Lemma fv_ext :
-   forall l : prt_names,
-   name_unique l -> forall x : name, ~ In _ x l -> name_unique (x :: l).
-unfold name_unique in |- *; intros.
-generalize H2.
-inversion_clear H1; intros.
-inversion_clear H1; auto with coc core arith datatypes.
-elim H0.
-elim H3; auto with coc core arith datatypes.
-
-generalize H3.
-inversion_clear H1; intros.
-elim H0.
-elim H1; auto with coc core arith datatypes.
-
-elim H with n1 n0 x0; auto with coc core arith datatypes.
-Qed.
+  (** Extending a unique name list with a fresh name preserves uniqueness. *)
+  Lemma free_var_extension :
+   forall l : partial_names,
+   name_unique l -> forall x : name, ~ In x l -> name_unique (x :: l).
+  Proof.
+    unfold name_unique; intros l Huniq x Hnotin m n x0 Hm Hn.
+    destruct m as [|m'], n as [|n']; simpl in *.
+    - reflexivity.
+    - injection Hm as Hm; subst x0.
+      exfalso; apply Hnotin. apply (nth_error_In l n'). exact Hn.
+    - injection Hn as Hn; subst x0.
+      exfalso; apply Hnotin. apply (nth_error_In l m'). exact Hm.
+    - f_equal. apply Huniq with x0; [exact Hm | exact Hn].
+  Qed.
 
 
+  (** In a unique list, item lookup yields a first-item witness. *)
   Lemma name_unique_first :
-   forall (x : name) (l : prt_names) (n : nat),
-   item _ x l n -> name_unique l -> first_item _ x l n.
-simple induction 1; intros.
-auto with coc core arith datatypes.
-
-apply fit_tl; auto with coc core arith datatypes.
-apply H1.
-red in |- *; intros.
-cut (S m = S n1); intros.
-injection H5; auto with coc core arith datatypes.
-
-elim H2 with (S m) (S n1) x0; auto with coc core arith datatypes.
-
-red in |- *; intros.
-cut (0 = S n0); intros.
-discriminate H4.
-
-elim H2 with 0 (S n0) x; auto with coc core arith datatypes.
-rewrite H3; auto with coc core arith datatypes.
-Qed.
+   forall (x : name) (l : partial_names) (n : nat),
+   nth_error l n = Some x -> name_unique l -> first_item x l n.
+  Proof.
+    unfold first_item.
+    intros x l n Hn Huniq.
+    split; [exact Hn |].
+    revert l n Hn Huniq.
+    induction l as [|h l' IH]; intros n Hn Huniq.
+    - destruct n; simpl in Hn; discriminate.
+    - destruct n as [|n'].
+      + simpl. intros []; tauto.
+      + simpl in Hn. simpl. intros [Heq | Hin].
+        * subst h.
+          assert (H := Huniq 0 (S n') x).
+          simpl in H. discriminate (H (eq_refl _) Hn).
+        * assert (Huniq' : name_unique l').
+          { unfold name_unique; intros m n0 y Hm Hn0.
+            assert (H := Huniq (S m) (S n0) y).
+            simpl in H. apply Nat.succ_inj. apply H; auto. }
+          exact (IH n' Hn Huniq' Hin).
+  Qed.

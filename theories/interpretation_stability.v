@@ -14,1438 +14,1468 @@
 (* 02110-1301 USA                                                     *)
 
 
+From Stdlib Require Import Lia.
+From CoqInCoq Require Import terms.
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import classification.
+From CoqInCoq Require Import candidates.
+From CoqInCoq Require Import interpretation_type.
 
-Require Import Termes.
-Require Import Conv.
-Require Import Types.
-Require Import Class.
-Require Import Can.
-Require Import Int_typ.
+(** Equivalent interpretations yield equal canonical inhabitants. *)
+Lemma interpret_equiv_interpret_type :
+ forall (T : term) (i i' : interpretation_env),
+ interpretation_eq_can i i' ->
+ forall s : skeleton, eq_can s (interpret_type T i s) (interpret_type T i' s).
+Proof.
+  simple induction T; simpl in |- *; intros; auto with coc core arith datatypes.
+  generalize n.
+  elim H; auto with coc core arith datatypes.
+  intros.
+  rewrite nth_overflow by (simpl; lia).
+  apply eq_can_extract.
+  simpl in |- *; auto with coc core arith datatypes.
 
-  Lemma int_equiv_int_typ :
-   forall (T : term) (i i' : intP),
-   int_eq_can i i' ->
-   forall s : skel, eq_can s (int_typ T i s) (int_typ T i' s).
-simple induction T; simpl in |- *; intros; auto with coc core arith datatypes.
-generalize n.
-elim H; auto with coc core arith datatypes.
-unfold Tnth_def in |- *.
-intros.
-apply eq_can_extr.
-simpl in |- *; auto with coc core arith datatypes.
+  simple destruct n0; intros; auto with coc core arith datatypes.
+  inversion_clear H0; apply eq_can_extract || simpl in |- *;
+   auto with coc core arith datatypes.
 
-simple destruct n0; intros; auto with coc core arith datatypes.
-unfold Tnth_def in |- *.
-inversion_clear H0; apply eq_can_extr || simpl in |- *;
- auto with coc core arith datatypes.
+  simpl in |- *; auto with coc core arith datatypes.
 
-simpl in |- *; auto with coc core arith datatypes.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  elim interpretation_eq_can_classes with i i'; auto with coc core arith datatypes.
+  elim (classify_term t (classes_of_interpretation i)); simpl in |- *;
+   auto with coc core arith datatypes.
+  case s; simpl in |- *; auto with coc core arith datatypes.
 
-unfold def_cons, int_cons, ext_ik in |- *.
-elim int_eq_can_cls with i i'; auto with coc core arith datatypes.
-elim (cl_term t (cls_of_int i)); simpl in |- *;
- auto with coc core arith datatypes.
-case s; simpl in |- *; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  elim interpretation_eq_can_classes with i i'; auto with coc core arith datatypes.
+  elim (classify_term t0 (classes_of_interpretation i)); auto with coc core arith datatypes.
+  intros.
+  generalize (H i i' H1 (prod_skel s0 s)).
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *; intros.
+  apply H2; auto with coc core arith datatypes.
+  apply H0; auto with coc core arith datatypes.
+  elim H1; intros; auto with coc core arith datatypes.
+  inversion_clear H3; auto with coc core arith datatypes.
 
-unfold skel_int in |- *.
-elim int_eq_can_cls with i i'; auto with coc core arith datatypes.
-elim (cl_term t0 (cls_of_int i)); auto with coc core arith datatypes.
-intros.
-generalize (H i i' H1 (PROD s0 s)).
-unfold skel_int in |- *.
-simpl in |- *; intros.
-apply H2; auto with coc core arith datatypes.
-apply H0; auto with coc core arith datatypes.
-elim H1; intros; auto with coc core arith datatypes.
-inversion_clear H3; auto with coc core arith datatypes.
+  apply H0; auto with coc core arith datatypes.
+  elim H1; intros; auto with coc core arith datatypes.
+  inversion_clear H3; auto with coc core arith datatypes.
 
-apply H0; auto with coc core arith datatypes.
-elim H1; intros; auto with coc core arith datatypes.
-inversion_clear H3; auto with coc core arith datatypes.
-
-case s; simpl in |- *; auto with coc core arith datatypes.
-unfold int_cons, ext_ik in |- *.
-elim int_eq_can_cls with i i'; auto with coc core arith datatypes.
-apply eq_can_Pi; auto with coc core arith datatypes.
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply H0.
-pattern (cl_term t (cls_of_int i)) at 1 3 in |- *.
-elim (cl_term t (cls_of_int i)); auto with coc core arith datatypes.
+  case s; simpl in |- *; auto with coc core arith datatypes.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim interpretation_eq_can_classes with i i'; auto with coc core arith datatypes.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply H0.
+  pattern (classify_term t (classes_of_interpretation i)) at 1 3 in |- *.
+  elim (classify_term t (classes_of_interpretation i)); auto with coc core arith datatypes.
 Qed.
 
-  Hint Resolve int_equiv_int_typ: coc.
+Hint Resolve interpret_equiv_interpret_type: coc.
 
 
-  Inductive can_interp : Int_K -> Prop :=
-    | ca_K :
-        forall (s : skel) (C : Can s),
-        is_can s C -> eq_can s C C -> can_interp (iK s C)
-    | ca_T : can_interp iT.
+(** Characterizes well-formed interpretation entries. *)
+Inductive can_interpret : interpretation_kind -> Prop :=
+  | can_interp_knd :
+      forall (s : skeleton) (C : candidate s),
+      is_can s C -> eq_can s C C -> can_interpret (interp_knd s C)
+  | can_interp_typ : can_interpret interp_typ.
 
-  Hint Resolve ca_K ca_T: coc.
+Hint Resolve can_interp_knd can_interp_typ: coc.
 
-  Definition can_adapt : intP -> Prop := Tfor_all _ can_interp.
+(** All entries in the interpretation are canonical. *)
+Definition can_adapt : interpretation_env -> Prop := Forall can_interpret.
 
-  Hint Unfold can_adapt: coc.
+Hint Unfold can_adapt: coc.
 
 
-  Lemma adapt_int_inv : forall ip : intP, can_adapt ip -> int_inv ip.
-simple induction 1; simpl in |- *; auto with coc core arith datatypes.
-simple induction 1; auto with coc core arith datatypes.
+(** A canonical interpretation satisfies the invariant. *)
+Lemma adapt_interpretation_invariant : forall ip : interpretation_env, can_adapt ip -> interpretation_invariant ip.
+Proof.
+  simple induction 1; simpl in |- *; auto with coc core arith datatypes.
+  simple induction 1; auto with coc core arith datatypes.
 Qed.
 
-  Hint Resolve adapt_int_inv: coc.
+Hint Resolve adapt_interpretation_invariant: coc.
 
 
-  Lemma int_typ_cr :
-   forall (t : term) (ip : intP),
-   can_adapt ip -> forall s : skel, is_can s (int_typ t ip _).
-simple induction t; simpl in |- *; intros; auto with coc core arith datatypes.
-generalize n.
-elim H; unfold Tnth_def in |- *; fold (Tnth_def Int_K) in |- *; intros.
-apply is_can_coerce; apply cand_sn.
+(** Interpretation of a typed term yields a canonical inhabitant. *)
+Lemma interpret_type_cr :
+ forall (t : term) (ip : interpretation_env),
+ can_adapt ip -> forall s : skeleton, is_can s (interpret_type t ip _).
+Proof.
+  simple induction t; simpl in |- *; intros; auto with coc core arith datatypes.
+  generalize n.
+  elim H; intros.
+  rewrite nth_overflow by (simpl; lia).
+  apply is_can_coerce; apply candidate_strongly_normalizing.
 
-case n0; simpl in |- *; auto with coc core arith datatypes.
-inversion_clear H0; auto with coc; simpl in |- *; auto with coc.
+  case n0; simpl in |- *; auto with coc core arith datatypes.
+  inversion_clear H0; auto with coc; simpl in |- *; auto with coc.
 
-unfold def_cons, int_cons, ext_ik in |- *.
-elim (cl_term t0 (cls_of_int ip)); auto with coc core arith datatypes.
-case s; simpl in |- *; auto with coc core arith datatypes.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term t0 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+  case s; simpl in |- *; auto with coc core arith datatypes.
 
-elim (cl_term t1 (cls_of_int ip)); auto with coc core arith datatypes.
-intros.
-generalize (H ip H1 (PROD s0 s)); simpl in |- *;
- auto with coc core arith datatypes.
+  elim (classify_term t1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+  intros.
+  generalize (H ip H1 (prod_skel s0 s)); simpl in |- *;
+   auto with coc core arith datatypes.
 
-case s; simpl in |- *; auto with coc core arith datatypes.
-apply is_can_Pi; simpl in |- *; intros; auto with coc core arith datatypes.
-unfold def_cons, int_cons, ext_ik in |- *.
-generalize X H2 H3.
-elim (cl_term t0 (cls_of_int ip)); auto with coc core arith datatypes.
-simpl in |- *.
-intros.
-change (is_can PROP (int_typ t1 (TCs Int_K (iK s0 X0) ip) PROP)) in |- *;
- auto with coc core arith datatypes.
+  case s; simpl in |- *; auto with coc core arith datatypes.
+  apply is_can_Pi; simpl in |- *; intros; auto with coc core arith datatypes.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  generalize X H2 H3.
+  elim (classify_term t0 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+  simpl in |- *.
+  intros.
+  change (is_can prop_skel (interpret_type t1 (cons (interp_knd s0 X0) ip) prop_skel)) in |- *;
+   auto with coc core arith datatypes.
 Qed.
 (*
-  Hints Resolve int_typ_cr : coc.
+  Hints Resolve interpret_type_cr : coc.
 *)
 
 
-  Lemma nth_lift_int :
-   forall (y : Int_K) (s0 : skel) (ipe ipf : intP) (n k : nat),
-   TIns _ y k ipe ipf ->
-   int_typ (lift_rec 1 (Ref n) k) ipf s0 = int_typ (Ref n) ipe s0.
-simpl in |- *; intros.
-elim (le_gt_dec k n).
-generalize n.
-elim H; simpl in |- *; auto with coc core arith datatypes.
-simple destruct n1; intro Hle; auto with coc core arith datatypes.
-inversion_clear Hle.
-
-generalize n.
-elim H; simpl in |- *; auto with coc core arith datatypes.
-intros l n0 Hgt.
-inversion_clear Hgt.
-
-simple destruct n1; intros; auto with coc core arith datatypes.
+(** Lifting a variable reference past an insertion preserves interpretation. *)
+Lemma nth_lift_interpretation :
+ forall (y : interpretation_kind) (s0 : skeleton) (ipe ipf : interpretation_env) (n k : nat),
+ insert y k ipe ipf ->
+ interpret_type (lift_rec 1 (var n) k) ipf s0 = interpret_type (var n) ipe s0.
+Proof.
+  intros y s0 ipe ipf n k H.
+  simpl.
+  destruct (le_gt_dec k n) as [Hkn | Hkn].
+  - (* n >= k: lift gives 1+n in ipf = n in ipe *)
+    rewrite (insert_nth_ge k ipe ipf _ y H n Hkn); auto.
+  - (* n < k: lift gives n in ipf = n in ipe *)
+    rewrite (insert_nth_lt k ipe ipf _ y H n Hkn); auto.
 Qed.
 
 
+(** Lifting a term preserves its interpretation up to canonical equality. *)
+Lemma lift_interpret_type :
+ forall (y : interpretation_kind) (T : term) (k : nat) (ipe ipf : interpretation_env),
+ insert y k ipe ipf ->
+ interpretation_invariant ipf ->
+ forall s : skeleton,
+ eq_can s (interpret_type T ipe s) (interpret_type (lift_rec 1 T k) ipf s).
+Proof.
+  simple induction T.
+  simpl in |- *; auto with coc core arith datatypes.
 
-  Lemma lift_int_typ :
-   forall (y : Int_K) (T : term) (k : nat) (ipe ipf : intP),
-   TIns _ y k ipe ipf ->
-   int_inv ipf ->
-   forall s : skel,
-   eq_can s (int_typ T ipe s) (int_typ (lift_rec 1 T k) ipf s).
-simple induction T.
-simpl in |- *; auto with coc core arith datatypes.
+  intros.
+  elim nth_lift_interpretation with y s ipe ipf n k; intros;
+   auto with coc core arith datatypes.
 
-intros.
-elim nth_lift_int with y s ipe ipf n k; intros;
- auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  elim classify_term_lift with (class_of_interpretation_kind y) t k (classes_of_interpretation ipe) (classes_of_interpretation ipf);
+   auto with coc core arith datatypes.
+  elim (classify_term t (classes_of_interpretation ipe)); auto with coc core arith datatypes.
+  case s; simpl in |- *; intros; auto with coc core arith datatypes.
+  apply
+   eq_can_trans with (interpret_type (lift_rec 1 t0 (S k)) (cons (interp_knd s0 X1) ipf) s1);
+   auto 10 with coc core arith datatypes.
 
-simpl in |- *; intros.
-unfold def_cons, int_cons, ext_ik in |- *.
-elim cl_term_lift with (class_of_ik y) t k (cls_of_int ipe) (cls_of_int ipf);
- auto with coc core arith datatypes.
-elim (cl_term t (cls_of_int ipe)); auto with coc core arith datatypes.
-case s; simpl in |- *; intros; auto with coc core arith datatypes.
-apply
- eq_can_trans with (int_typ (lift_rec 1 t0 (S k)) (TCs _ (iK s0 X1) ipf) s1);
- auto 10 with coc core arith datatypes.
+  apply insert_in_classes with y; auto with coc core arith datatypes.
 
-apply ins_in_cls with y; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  elim classify_term_lift with (class_of_interpretation_kind y) t k (classes_of_interpretation ipe) (classes_of_interpretation ipf);
+   auto with coc core arith datatypes.
+  elim classify_term_lift with (class_of_interpretation_kind y) t0 k (classes_of_interpretation ipe) (classes_of_interpretation ipf);
+   auto with coc core arith datatypes.
+  elim (classify_term t0 (classes_of_interpretation ipe)); auto with coc core arith datatypes.
+  intros.
+  generalize (H k ipe ipf H1 H2 (prod_skel s0 s)).
+  simpl in |- *; intros.
+  apply H3; auto with coc core arith datatypes.
+  apply interpret_equiv_interpret_type.
+  apply interpretation_invariant_eq_can.
+  apply insert_interpretation_invariant with ipf k y; auto with coc core arith datatypes.
 
-simpl in |- *; intros.
-elim cl_term_lift with (class_of_ik y) t k (cls_of_int ipe) (cls_of_int ipf);
- auto with coc core arith datatypes.
-elim cl_term_lift with (class_of_ik y) t0 k (cls_of_int ipe) (cls_of_int ipf);
- auto with coc core arith datatypes.
-elim (cl_term t0 (cls_of_int ipe)); auto with coc core arith datatypes.
-intros.
-generalize (H k ipe ipf H1 H2 (PROD s0 s)).
-simpl in |- *; intros.
-apply H3; auto with coc core arith datatypes.
-apply int_equiv_int_typ.
-apply int_inv_int_eq_can.
-apply ins_int_inv with ipf k y; auto with coc core arith datatypes.
+  apply insert_in_classes with y; auto with coc core arith datatypes.
 
-apply ins_in_cls with y; auto with coc core arith datatypes.
+  apply insert_in_classes with y; auto with coc core arith datatypes.
 
-apply ins_in_cls with y; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  case s; simpl in |- *; intros; auto with coc core arith datatypes.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  elim classify_term_lift with (class_of_interpretation_kind y) t k (classes_of_interpretation ipe) (classes_of_interpretation ipf);
+   auto with coc core arith datatypes.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  pattern (classify_term t (classes_of_interpretation ipe)) at 1 3 in |- *.
+  elim (classify_term t (classes_of_interpretation ipe)); auto with coc core arith datatypes; intros.
+  apply
+   eq_can_trans with (interpret_type (lift_rec 1 t0 (S k)) (cons (interp_knd _ X1) ipf) prop_skel);
+   auto 10 with coc core arith datatypes.
 
-simpl in |- *; intros.
-case s; simpl in |- *; intros; auto with coc core arith datatypes.
-unfold def_cons, int_cons, ext_ik in |- *.
-elim cl_term_lift with (class_of_ik y) t k (cls_of_int ipe) (cls_of_int ipf);
- auto with coc core arith datatypes.
-apply eq_can_Pi; auto with coc core arith datatypes.
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-pattern (cl_term t (cls_of_int ipe)) at 1 3 in |- *.
-elim (cl_term t (cls_of_int ipe)); auto with coc core arith datatypes; intros.
-apply
- eq_can_trans with (int_typ (lift_rec 1 t0 (S k)) (TCs _ (iK _ X1) ipf) PROP);
- auto 10 with coc core arith datatypes.
-
-apply ins_in_cls with y; auto with coc core arith datatypes.
+  apply insert_in_classes with y; auto with coc core arith datatypes.
 Qed.
 
 
+(** Relates a term's classification to its interpretation entry. *)
+Inductive interpret_var_sound (t : term) (ip : interpretation_env) : interpretation_kind -> Prop :=
+  | interp_var_knd :
+      forall s : skeleton,
+      classify_term t (classes_of_interpretation ip) = typ s ->
+      interpret_var_sound t ip (interp_knd _ (interpret_type t ip s))
+  | interp_var_typ : classify_term t (classes_of_interpretation ip) = trm -> interpret_var_sound t ip interp_typ.
 
 
-
-
-  Inductive int_var_sound (t : term) (ip : intP) : Int_K -> Prop :=
-    | ivs_K :
-        forall s : skel,
-        cl_term t (cls_of_int ip) = Typ s ->
-        int_var_sound t ip (iK _ (int_typ t ip s))
-    | ivs_T : cl_term t (cls_of_int ip) = Trm -> int_var_sound t ip iT.
-
-
-  Lemma int_var_sound_lift :
-   forall (t : term) (ip : intP) (i : Int_K),
-   int_var_sound t ip i ->
-   typ_cls (cl_term t (cls_of_int ip)) (class_of_ik i).
-intros.
-elim H; simpl in |- *; intros; rewrite H0; auto with coc core arith datatypes.
+(** Soundness of interpret_var_sound implies type_class compatibility. *)
+Lemma interpret_var_sound_lift :
+ forall (t : term) (ip : interpretation_env) (i : interpretation_kind),
+ interpret_var_sound t ip i ->
+ type_class (classify_term t (classes_of_interpretation ip)) (class_of_interpretation_kind i).
+Proof.
+  intros.
+  elim H; simpl in |- *; intros; rewrite H0; auto with coc core arith datatypes.
 Qed.
 
-  Hint Resolve ivs_K ivs_T int_var_sound_lift: coc.
-
-
-
-  Lemma subst_int_typ :
-   forall (v : term) (ipg : intP) (i : Int_K),
-   int_var_sound v ipg i ->
-   forall (e : env) (T K : term),
-   typ e T K ->
-   forall (k : nat) (ipe ipf : intP),
-   TIns _ i k ipf ipe ->
-   TTrunc _ k ipf ipg ->
-   cls_of_int ipe = class_env e ->
-   int_inv ipe ->
-   cl_term T (cls_of_int ipe) <> Trm ->
-   eq_can (skel_int T ipe) (int_typ T ipe _)
-     (int_typ (subst_rec v T k) ipf _).
-simple induction 2; intros.
-simpl in |- *; auto with coc core arith datatypes.
-
-simpl in |- *; auto with coc core arith datatypes.
-
-unfold subst_rec in |- *.
-elim (lt_eq_lt_dec k v0); [ intro Hlt_eq | intro Hlt ].
-elim Hlt_eq; clear Hlt_eq; [ idtac | intro Heq ].
-case v0; [ intro Hlt | intros n Hlt ].
-inversion_clear Hlt.
-
-unfold pred in |- *.
-elim nth_lift_int with i (skel_int (Ref (S n)) ipe) ipf ipe n k;
- auto with coc core arith datatypes.
-rewrite lift_ref_ge; auto with coc core arith datatypes.
-
-generalize H4 H6 H7.
-elim Heq.
-clear H4 H6 H7 Heq.
-elim H3; simpl in |- *; intros.
-rewrite lift0.
-unfold skel_int in |- *.
-simpl in |- *.
-generalize H7.
-inversion_clear H; intros; simpl in H9.
-unfold class_of_ik, typ_skel in |- *.
-apply extr_eq with (P := fun s c => eq_can s c (int_typ v l s)).
-generalize H6.
-inversion_clear H4; intros.
-inversion_clear H4; auto with coc core arith datatypes.
-
-elim H9; auto with coc core arith datatypes.
-
-replace (skel_int (Ref (S n)) (TCs Int_K y il)) with (skel_int (Ref n) il);
- auto with coc core arith datatypes.
-rewrite simpl_lift.
-apply eq_can_trans with (int_typ (lift n v) l (skel_int (Ref n) il)).
-apply H6; auto with coc core arith datatypes.
-inversion_clear H7; auto with coc core arith datatypes.
-
-inversion_clear H8; auto with coc core arith datatypes.
-
-inversion_clear H8.
-apply int_equiv_int_typ.
-apply int_inv_int_eq_can.
-apply ins_int_inv with il n i; auto with coc core arith datatypes.
-
-unfold lift at 2 in |- *.
-apply lift_int_typ with y; auto with coc core arith datatypes.
-apply ins_int_inv with (TCs _ y il) (S n) i;
- auto with coc core arith datatypes.
-
-elim nth_lift_int with i (skel_int (Ref v0) ipe) ipf ipe v0 k;
- auto with coc core arith datatypes.
-rewrite lift_ref_lt; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-simpl in |- *.
-replace
- (cl_term M (TCs class (cl_term T0 (cls_of_int ipe)) (cls_of_int ipe))) with
- (Typ (typ_skel (cl_term M (class_env (T0 :: e0))))).
-unfold def_cons, int_cons, ext_ik in |- *.
-elim
- class_subst
-  with
-    (class_of_ik i)
-    (cls_of_int ipg)
-    v
-    T0
-    k
-    (cls_of_int ipf)
-    (cls_of_int ipe); auto with coc core arith datatypes.
-generalize H11.
-simpl in |- *.
-generalize (refl_equal (cl_term T0 (class_env e0))).
-rewrite H9.
-pattern (cl_term T0 (class_env e0)) at 1 in |- *.
-apply class_typ_ord with s1; auto with coc core arith datatypes;
- simple induction 1; auto with coc core arith datatypes.
-simpl in |- *.
-rewrite H12.
-replace
- (typ_skel (cl_term M (TCs class (cl_term T0 (class_env e0)) (class_env e0))))
- with (skel_int M (TCs Int_K iT ipe)).
-intros.
-apply H6; auto with coc core arith datatypes.
-simpl in |- *.
-elim H12.
-elim skel_sound with e0 T0 (Srt s1); auto with coc core arith datatypes.
-unfold cls_of_int in |- *; simpl in |- *; elim H9;
- auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-simpl in |- *.
-red in |- *; intros; apply H13.
-elim H12.
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-elim H9.
-unfold cls_of_int in |- *.
-rewrite H14.
-auto with coc core arith datatypes.
-
-elim H12.
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-unfold skel_int, cls_of_int in |- *; simpl in |- *;
- auto with coc core arith datatypes; elim H9;
- auto with coc core arith datatypes.
-
-simpl in |- *.
-intros.
-replace
- (typ_skel
-    (cl_term M
-       (TCs class (Knd (cv_skel (cl_term T0 (class_env e0)))) (class_env e0))))
- with (skel_int M (TCs _ (iK _ X2) ipe)).
-apply
- eq_can_trans
-  with (int_typ M (TCs _ (iK _ X2) ipe) (skel_int M (TCs _ (iK _ X2) ipe)));
- auto with coc core arith datatypes.
-apply H6; auto with coc core arith datatypes.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H12.
-elim H9; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H9.
-unfold cls_of_int in |- *.
-red in |- *; intros; apply H13.
-elim H9.
-unfold cls_of_int in |- *.
-rewrite H17; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H9; auto with coc core arith datatypes.
-
-apply ins_in_cls with i; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H8; simpl in |- *; auto with coc core arith datatypes.
-
-generalize H11.
-simpl in |- *.
-rewrite H9.
-replace (TCs class (cl_term T0 (class_env e0)) (class_env e0)) with
- (class_env (T0 :: e0)); auto with coc core arith datatypes.
-elim class_sound with (T0 :: e0) M U (Srt s2);
- auto with coc core arith datatypes; intros.
-elim H12; auto with coc core arith datatypes.
-
-elim type_case with e0 u (Prod V Ur); intros;
- auto with coc core arith datatypes.
-inversion_clear H10.
-apply inv_typ_prod with e0 V Ur (Srt x); auto with coc core arith datatypes;
- intros.
-unfold skel_int in |- *.
-simpl in |- *.
-elim
- class_subst
-  with
-    (class_of_ik i)
-    (cls_of_int ipg)
-    v
-    u
-    k
-    (cls_of_int ipf)
-    (cls_of_int ipe); auto with coc core arith datatypes.
-cut
- (cl_term u (cls_of_int ipe) = Typ (typ_skel (cl_term u (cls_of_int ipe)))).
-intro.
-rewrite H14.
-elim
- class_subst
-  with
-    (class_of_ik i)
-    (cls_of_int ipg)
-    v
-    v0
-    k
-    (cls_of_int ipf)
-    (cls_of_int ipe); auto with coc core arith datatypes.
-rewrite H7.
-generalize (refl_equal (cl_term v0 (class_env e0))).
-pattern (cl_term v0 (class_env e0)) at 1, (cl_term V (class_env e0)) in |- *.
-elim class_sound with e0 v0 V (Srt s1); auto with coc core arith datatypes;
- intros.
-elim H15.
-replace
- (typ_skel
-    match typ_skel (cl_term u (class_env e0)) with
-    | PROP => Typ (typ_skel (cl_term u (class_env e0)))
-    | PROD _ _ => Typ (typ_skel (cl_term u (class_env e0)))
-    end) with (skel_int u ipe).
-apply H4; auto with coc core arith datatypes.
-rewrite H14.
-discriminate.
-
-unfold skel_int in |- *.
-elim H7.
-case (typ_skel (cl_term u (cls_of_int ipe)));
- auto with coc core arith datatypes.
-
-elim H15.
-elim skel_sound with e0 u (Prod V Ur); auto with coc core arith datatypes.
-cut (cl_term V (class_env e0) = Knd s); intros.
-cut
- (cl_term Ur (TCs class (cl_term V (class_env e0)) (class_env e0)) =
-  Knd (cv_skel (cl_term Ur (class_env (V :: e0))))); 
- intros.
-simpl in |- *.
-rewrite H17.
-rewrite H16.
-simpl in |- *.
-generalize (H4 k ipe ipf H5 H6 H7 H8).
-replace (skel_int u ipe) with
- (PROD s
-    (cv_skel
-       (cl_term Ur (TCs class (cl_term V (class_env e0)) (class_env e0))))).
-simpl in |- *; intros.
-apply H18; auto with coc core arith datatypes.
-rewrite H14.
-discriminate.
-
-replace s with (skel_int v0 ipe).
-apply H2; auto with coc core arith datatypes.
-rewrite H7.
-elim H15.
-discriminate.
-
-unfold skel_int in |- *.
-rewrite H7.
-elim H15; simpl in |- *; auto with coc core arith datatypes.
-
-apply int_equiv_int_typ.
-apply int_inv_int_eq_can.
-apply ins_int_inv with ipe k i; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-rewrite H7.
-elim skel_sound with e0 u (Prod V Ur); auto with coc core arith datatypes.
-simpl in |- *.
-rewrite H17.
-rewrite H16.
-simpl in |- *; auto with coc core arith datatypes.
-
-generalize (class_sound e0 u (Prod V Ur) H3 (Srt x) H11).
-simpl in |- *.
-rewrite H16.
-elim H7.
-rewrite H14.
-elim (cl_term Ur (TCs class (Knd s) (cls_of_int ipe))); simpl in |- *; intros;
- auto with coc core arith datatypes.
-inversion_clear H17.
-
-inversion_clear H17.
-
-replace s with (cv_skel (cl_term V (class_env e0))).
-generalize H15.
-elim class_sound with e0 v0 V (Srt s1); simpl in |- *;
- auto with coc core arith datatypes; intros.
-inversion_clear H16.
-
-generalize H15.
-rewrite (skel_sound e0 v0 V); auto with coc core arith datatypes.
-elim (cl_term v0 (class_env e0)); simpl in |- *; intros.
-discriminate H16.
-
-injection H16; auto with coc core arith datatypes.
-
-discriminate H16.
-
-unfold cls_of_int in |- *.
-elim H5; simpl in |- *; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H6; simpl in |- *; auto with coc core arith datatypes.
-
-generalize H9.
-rewrite H7.
-simpl in |- *.
-elim class_sound with e0 u (Prod V Ur) (Srt x); simpl in |- *;
- auto with coc core arith datatypes; intros.
-elim H14; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H5; simpl in |- *; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H6; simpl in |- *; auto with coc core arith datatypes.
-
-discriminate H10.
-
-replace (skel_int (Prod T0 U) ipe) with PROP.
-simpl; fold Can.
-elim class_subst
-  with (class_of_ik i) (cls_of_int ipg) v T0 k
-     (cls_of_int ipf) (cls_of_int ipe); auto with coc core arith datatypes.
-apply eq_can_Pi; simpl in |- *; intros; auto with coc core arith datatypes.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-replace PROP with (skel_int T0 ipe).
-apply H2; auto with coc core arith datatypes.
-rewrite H7.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-discriminate.
-
-discriminate.
-
-unfold skel_int in |- *.
-rewrite H7.
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply
- eq_can_trans
-  with
-    (int_typ U (int_cons T0 ipe (cv_skel (cl_term T0 (cls_of_int ipe))) X2)
-       PROP); auto with coc core arith datatypes.
-apply int_equiv_int_typ.
-unfold int_cons, ext_ik in |- *.
-pattern (cl_term T0 (cls_of_int ipe)) at 1 3 in |- *.
-elim (cl_term T0 (cls_of_int ipe)); auto with coc core arith datatypes.
-
-apply int_equiv_int_typ.
-unfold int_cons, ext_ik in |- *.
-pattern (cl_term T0 (cls_of_int ipe)) at 1 3 in |- *.
-elim (cl_term T0 (cls_of_int ipe)); auto with coc core arith datatypes.
-
-replace PROP with
- (skel_int U (int_cons T0 ipe (cv_skel (cl_term T0 (cls_of_int ipe))) X2)).
-apply H4; auto with coc core arith datatypes.
-unfold int_cons, ext_ik in |- *.
-elim
- class_subst
-  with
-    (class_of_ik i)
-    (cls_of_int ipg)
-    v
-    T0
-    k
-    (cls_of_int ipf)
-    (cls_of_int ipe); auto with coc core arith datatypes.
-unfold cls_of_int in |- *.
-elim H5; simpl in |- *; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H6; simpl in |- *; auto with coc core arith datatypes.
-
-unfold int_cons in |- *; auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-unfold cls_of_int at 1 in |- *.
-simpl in |- *.
-cut (typ_skel (cl_term T0 (class_env e0)) = PROP).
-generalize X2.
-rewrite H7.
-pattern (cl_term T0 (class_env e0)) in |- *.
-apply class_typ_ord with s1; simpl in |- *;
- auto with coc core arith datatypes.
-intros.
-rewrite H13.
-elim H7; auto with coc core arith datatypes.
-
-intros.
-elim H7; auto with coc core arith datatypes.
-
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-pattern (cl_term T0 (cls_of_int ipe)) at 1 in |- *.
-elim (cl_term T0 (cls_of_int ipe)); auto with coc core arith datatypes.
-
-replace
- (cls_of_int (int_cons T0 ipe (cv_skel (cl_term T0 (cls_of_int ipe))) X2))
- with (class_env (T0 :: e0)).
-apply class_typ_ord with s2; auto with coc core arith datatypes.
-discriminate.
-
-discriminate.
-
-unfold cls_of_int, int_cons, ext_ik in |- *.
-unfold int_cons, ext_ik in |- *.
-simpl in |- *.
-rewrite H7.
-cut (typ_skel (cl_term T0 (class_env e0)) = PROP).
-generalize X2.
-unfold cls_of_int in |- *.
-replace (Tmap Int_K class class_of_ik ipe) with (cls_of_int ipe);
- auto with coc core arith datatypes.
-rewrite H7.
-pattern (cl_term T0 (class_env e0)) in |- *.
-apply class_typ_ord with s1; simpl in |- *;
- auto with coc core arith datatypes.
-intros.
-rewrite H13; auto with coc core arith datatypes.
-
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-replace
- (cls_of_int (int_cons T0 ipe (cv_skel (cl_term T0 (cls_of_int ipe))) X2))
- with (class_env (T0 :: e0)).
-elim skel_sound with (T0 :: e0) U (Srt s2); simpl in |- *;
- auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-unfold cls_of_int at 1 in |- *.
-simpl in |- *.
-cut (typ_skel (cl_term T0 (class_env e0)) = PROP).
-generalize X2.
-rewrite H7.
-pattern (cl_term T0 (class_env e0)) in |- *.
-apply class_typ_ord with s1; simpl in |- *;
- auto with coc core arith datatypes.
-intros.
-rewrite H13.
-elim H7; auto with coc core arith datatypes.
-
-intros.
-elim H7; auto with coc core arith datatypes.
-
-elim skel_sound with e0 T0 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H5; simpl in |- *; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-elim H6; simpl in |- *; auto with coc core arith datatypes.
-
-unfold skel_int.
-generalize (skel_sound (T0 :: e0) U (Srt s2) H3).
-simpl in |- *.
-rewrite H7.
-elim (cl_term U (TCs class (cl_term T0 (class_env e0)) (class_env e0)));
- simpl in |- *; auto with coc core arith datatypes.
-elim (cl_term T0 (class_env e0)); simpl in |- *;
- auto with coc core arith datatypes.
-
-apply H2; auto with coc core arith datatypes.
-Qed.
-
-
-  Lemma int_cons_equal :
-   forall (ip : intP) (e : env),
-   cls_of_int ip = class_env e ->
-   forall (N : term) (s1 : sort),
-   typ e N (Srt s1) ->
-   forall C : Can (cv_skel (cl_term N (class_env e))),
-   cls_of_int (int_cons N ip _ C) = class_env (N :: e).
-intros.
-unfold int_cons, ext_ik in |- *.
-rewrite H.
-simpl in |- *.
-generalize C.
-pattern (cl_term N (class_env e)) in |- *.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-simpl in |- *; intros.
-elim skel_sound with e N (Srt s1); simpl in |- *; intros;
- auto with coc core arith datatypes.
-unfold cls_of_int in |- *; simpl in |- *; elim H;
- auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *; simpl in |- *; elim H;
- auto with coc core arith datatypes.
+Hint Resolve interp_var_knd interp_var_typ interpret_var_sound_lift: coc.
+
+
+(** Substitution commutes with interpretation up to canonical equality. *)
+Lemma subst_interpret_type :
+ forall (v : term) (ipg : interpretation_env) (i : interpretation_kind),
+ interpret_var_sound v ipg i ->
+ forall (e : environment) (T K : term),
+ has_type e T K ->
+ forall (k : nat) (ipe ipf : interpretation_env),
+ insert i k ipf ipe ->
+ ipg = skipn k ipf ->
+ classes_of_interpretation ipe = classify_environment e ->
+ interpretation_invariant ipe ->
+ classify_term T (classes_of_interpretation ipe) <> trm ->
+ eq_can (skeleton_interpretation T ipe) (interpret_type T ipe _)
+   (interpret_type (subst_rec v T k) ipf _).
+Proof.
+  simple induction 2; intros.
+  simpl in |- *; auto with coc core arith datatypes.
+
+  simpl in |- *; auto with coc core arith datatypes.
+
+  unfold subst_rec in |- *.
+  elim (lt_eq_lt_dec k v0); [ intro Hlt_eq | intro Hlt ].
+  elim Hlt_eq; clear Hlt_eq; [ idtac | intro Heq ].
+  case v0; [ intro Hlt | intros n Hlt ].
+  inversion_clear Hlt.
+
+  unfold pred in |- *.
+  elim nth_lift_interpretation with i (skeleton_interpretation (var (S n)) ipe) ipf ipe n k;
+   auto with coc core arith datatypes.
+  rewrite lift_ref_ge; auto with coc core arith datatypes.
+
+  generalize H H3 H4 H5 H6 H7.
+  elim Heq.
+  clear H H3 H4 H5 H6 H7 Heq.
+  clear H1 H2.
+  (* Induct on k to handle the k = v0 case *)
+  { revert ipf ipe ipg e0.
+  induction k as [|k' IHkins].
+  - (* k = 0 *)
+    intros ipf ipe ipg e0 H H3 H4 H5 H6 H7.
+    destruct H3 as [Hipe Hle].
+    subst ipg.
+    subst ipe.
+    simpl in *.
+    rewrite lift_zero.
+    unfold skeleton_interpretation; simpl.
+    inversion H as [s0 Hcls | Hcls]; subst.
+    + (* interp_var_knd *)
+      unfold class_of_interpretation_kind, type_skeleton.
+      apply extract_eq with (P := fun s c => eq_can s c (interpret_type v ipf s)).
+      unfold interpretation_invariant, interpretation_eq_can in H6.
+      inversion H6 as [|h1 h2 t1 t2 Hik Htail]; subst.
+      inversion_clear Hik; auto with coc core arith datatypes.
+    + (* interp_var_typ *)
+      exfalso. apply H7. simpl. reflexivity.
+  - (* k = S k' *)
+    intros ipf ipe ipg e0 H H3 H4 H5 H6 H7.
+    destruct H3 as [Hipe Hle].
+    subst ipg.
+    subst ipe.
+    destruct ipf as [|y ipf']; [simpl in Hle; lia|].
+    change (skeleton_interpretation (var (S k')) (y :: firstn k' ipf' ++ i :: skipn k' ipf'))
+      with (skeleton_interpretation (var k') (firstn k' ipf' ++ i :: skipn k' ipf')).
+    change (nth (S k') (y :: firstn k' ipf' ++ i :: skipn k' ipf') (interp_knd prop_skel strongly_normalizing))
+      with (nth k' (firstn k' ipf' ++ i :: skipn k' ipf') (interp_knd prop_skel strongly_normalizing)).
+    destruct e0 as [|h0 e0'].
+    + discriminate H5.
+    + injection H5 as Hhy H5'.
+      apply eq_can_trans with (interpret_type (lift k' v) ipf' (skeleton_interpretation (var k') (firstn k' ipf' ++ i :: skipn k' ipf'))).
+      * eapply (IHkins ipf' (firstn k' ipf' ++ i :: skipn k' ipf') (skipn k' ipf') e0').
+        -- exact H.
+        -- unfold insert; split; [reflexivity | auto with arith].
+        -- reflexivity.
+        -- exact H5'.
+        -- apply (insert_interpretation_invariant (firstn k' ipf' ++ i :: skipn k' ipf')
+                             (y :: firstn k' ipf' ++ i :: skipn k' ipf') 0 y);
+           [apply insert_head | exact H6].
+        -- intro Hc; apply H7; exact Hc.
+      * (* eq_can sk' X X - self-compatibility via interpretation_invariant ipf' *)
+        assert (Hinvy : interpretation_invariant (y :: ipf')).
+        { apply (insert_interpretation_invariant (y :: ipf') (y :: firstn k' ipf' ++ i :: skipn k' ipf') (S k') i).
+          - unfold insert; simpl; split; [reflexivity | exact Hle].
+          - exact H6. }
+        assert (Hinvipf' : interpretation_invariant ipf') by
+          (apply (insert_interpretation_invariant ipf' (y :: ipf') 0 y); [apply insert_head | exact Hinvy]).
+        apply interpret_equiv_interpret_type.
+        exact (interpretation_invariant_eq_can ipf' Hinvipf').
+      * (* eq_can sk' X RHS - from lift_interpret_type *)
+        assert (Hinvy : interpretation_invariant (y :: ipf')).
+        { apply (insert_interpretation_invariant (y :: ipf') (y :: firstn k' ipf' ++ i :: skipn k' ipf') (S k') i).
+          - unfold insert; simpl; split; [reflexivity | exact Hle].
+          - exact H6. }
+        rewrite simplify_lift.
+        exact (lift_interpret_type y _ 0 ipf' (y :: ipf') (insert_head y ipf') Hinvy _). }
+
+  elim nth_lift_interpretation with i (skeleton_interpretation (var v0) ipe) ipf ipe v0 k;
+   auto with coc core arith datatypes.
+  rewrite lift_ref_lt; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  replace
+   (classify_term M (cons (classify_term T0 (classes_of_interpretation ipe)) (classes_of_interpretation ipe))) with
+   (typ (type_skeleton (classify_term M (classify_environment (T0 :: e0))))).
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  elim
+   classify_subst
+    with
+      (class_of_interpretation_kind i)
+      (classes_of_interpretation ipg)
+      v
+      T0
+      k
+      (classes_of_interpretation ipf)
+      (classes_of_interpretation ipe); auto with coc core arith datatypes.
+  generalize H11.
+  simpl in |- *.
+  generalize (refl_equal (classify_term T0 (classify_environment e0))).
+  rewrite H9.
+  pattern (classify_term T0 (classify_environment e0)) at 1 in |- *.
+  apply class_type_ord with s1; auto with coc core arith datatypes;
+   simple induction 1; auto with coc core arith datatypes.
+  simpl in |- *.
+  rewrite H12.
+  replace
+   (type_skeleton (classify_term M (cons (classify_term T0 (classify_environment e0)) (classify_environment e0))))
+   with (skeleton_interpretation M (cons interp_typ ipe)).
+  intros.
+  apply H6; auto with coc core arith datatypes.
+  simpl in |- *.
+  elim H12.
+  elim skeleton_sound with e0 T0 (sort_term s1); auto with coc core arith datatypes.
+  unfold classes_of_interpretation in |- *; simpl in |- *; elim H9;
+   auto with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  red in |- *; intros; apply H13.
+  elim H12.
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+  elim H9.
+  unfold classes_of_interpretation in |- *.
+  rewrite H14.
+  auto with coc core arith datatypes.
+
+  elim H12.
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+  unfold skeleton_interpretation, classes_of_interpretation in |- *; simpl in |- *;
+   auto with coc core arith datatypes; elim H9;
+   auto with coc core arith datatypes.
+
+  simpl in |- *.
+  intros.
+  replace
+   (type_skeleton
+      (classify_term M
+         (cons (knd (covariant_skeleton (classify_term T0 (classify_environment e0)))) (classify_environment e0))))
+   with (skeleton_interpretation M (cons (interp_knd _ X2) ipe)).
+  apply
+   eq_can_trans
+    with (interpret_type M (cons (interp_knd _ X2) ipe) (skeleton_interpretation M (cons (interp_knd _ X2) ipe)));
+   auto with coc core arith datatypes.
+  apply H6; auto with coc core arith datatypes.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H12.
+  elim H9; auto with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H9.
+  unfold classes_of_interpretation in |- *.
+  red in |- *; intros; apply H13.
+  elim H9.
+  unfold classes_of_interpretation in |- *.
+  rewrite H17; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H9; auto with coc core arith datatypes.
+
+  apply insert_in_classes with i; auto with coc core arith datatypes.
+
+  exact (skipn_interpretation_classes k ipf ipg H8).
+
+  generalize H11.
+  simpl in |- *.
+  rewrite H9.
+  replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
+   (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
+  elim class_sound with (T0 :: e0) M U (sort_term s2);
+   auto with coc core arith datatypes; intros.
+  elim H12; auto with coc core arith datatypes.
+
+  elim type_case with e0 u (prod V Ur); intros;
+   auto with coc core arith datatypes.
+  inversion_clear H10.
+  apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+   intros.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  elim
+   classify_subst
+    with
+      (class_of_interpretation_kind i)
+      (classes_of_interpretation ipg)
+      v
+      u
+      k
+      (classes_of_interpretation ipf)
+      (classes_of_interpretation ipe); auto with coc core arith datatypes.
+  cut
+   (classify_term u (classes_of_interpretation ipe) = typ (type_skeleton (classify_term u (classes_of_interpretation ipe)))).
+  intro.
+  rewrite H14.
+  elim
+   classify_subst
+    with
+      (class_of_interpretation_kind i)
+      (classes_of_interpretation ipg)
+      v
+      v0
+      k
+      (classes_of_interpretation ipf)
+      (classes_of_interpretation ipe); auto with coc core arith datatypes.
+  rewrite H7.
+  generalize (refl_equal (classify_term v0 (classify_environment e0))).
+  pattern (classify_term v0 (classify_environment e0)) at 1, (classify_term V (classify_environment e0)) in |- *.
+  elim class_sound with e0 v0 V (sort_term s1); auto with coc core arith datatypes;
+   intros.
+  elim H15.
+  replace
+   (type_skeleton
+      match type_skeleton (classify_term u (classify_environment e0)) with
+      | prop_skel => typ (type_skeleton (classify_term u (classify_environment e0)))
+      | prod_skel _ _ => typ (type_skeleton (classify_term u (classify_environment e0)))
+      end) with (skeleton_interpretation u ipe).
+  apply H4; auto with coc core arith datatypes.
+  rewrite H14.
+  discriminate.
+
+  unfold skeleton_interpretation in |- *.
+  elim H7.
+  case (type_skeleton (classify_term u (classes_of_interpretation ipe)));
+   auto with coc core arith datatypes.
+
+  elim H15.
+  elim skeleton_sound with e0 u (prod V Ur); auto with coc core arith datatypes.
+  cut (classify_term V (classify_environment e0) = knd s); intros.
+  cut
+   (classify_term Ur (cons (classify_term V (classify_environment e0)) (classify_environment e0)) =
+    knd (covariant_skeleton (classify_term Ur (classify_environment (V :: e0)))));
+   intros.
+  simpl in |- *.
+  rewrite H17.
+  rewrite H16.
+  simpl in |- *.
+  generalize (H4 k ipe ipf H5 H6 H7 H8).
+  replace (skeleton_interpretation u ipe) with
+   (prod_skel s
+      (covariant_skeleton
+         (classify_term Ur (cons (classify_term V (classify_environment e0)) (classify_environment e0))))).
+  simpl in |- *; intros.
+  apply H18; auto with coc core arith datatypes.
+  rewrite H14.
+  discriminate.
+
+  replace s with (skeleton_interpretation v0 ipe).
+  apply H2; auto with coc core arith datatypes.
+  rewrite H7.
+  elim H15.
+  discriminate.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H7.
+  elim H15; simpl in |- *; auto with coc core arith datatypes.
+
+  apply interpret_equiv_interpret_type.
+  apply interpretation_invariant_eq_can.
+  apply insert_interpretation_invariant with ipe k i; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H7.
+  elim skeleton_sound with e0 u (prod V Ur); auto with coc core arith datatypes.
+  simpl in |- *.
+  rewrite H17.
+  rewrite H16.
+  simpl in |- *; auto with coc core arith datatypes.
+
+  generalize (class_sound e0 u (prod V Ur) H3 (sort_term x) H11).
+  simpl in |- *.
+  rewrite H16.
+  elim H7.
+  rewrite H14.
+  elim (classify_term Ur (cons (knd s) (classes_of_interpretation ipe))); simpl in |- *; intros;
+   auto with coc core arith datatypes.
+  inversion_clear H17.
+
+  inversion_clear H17.
+
+  replace s with (covariant_skeleton (classify_term V (classify_environment e0))).
+  generalize H15.
+  elim class_sound with e0 v0 V (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes; intros.
+  inversion_clear H16.
+
+  generalize H15.
+  rewrite (skeleton_sound e0 v0 V); auto with coc core arith datatypes.
+  elim (classify_term v0 (classify_environment e0)); simpl in |- *; intros.
+  discriminate H16.
+
+  injection H16; auto with coc core arith datatypes.
+
+  discriminate H16.
+
+  apply insert_in_classes with i; auto with coc core arith datatypes.
+
+  exact (skipn_interpretation_classes k ipf ipg H6).
+
+  generalize H9.
+  rewrite H7.
+  simpl in |- *.
+  elim class_sound with e0 u (prod V Ur) (sort_term x); simpl in |- *;
+   auto with coc core arith datatypes; intros.
+  elim H14; auto with coc core arith datatypes.
+
+  apply insert_in_classes with i; auto with coc core arith datatypes.
+
+  exact (skipn_interpretation_classes k ipf ipg H6).
+
+  discriminate H10.
+
+  replace (skeleton_interpretation (prod T0 U) ipe) with prop_skel.
+  simpl; fold candidate.
+  elim classify_subst
+    with (class_of_interpretation_kind i) (classes_of_interpretation ipg) v T0 k
+       (classes_of_interpretation ipf) (classes_of_interpretation ipe); auto with coc core arith datatypes.
+  apply eq_can_Pi; simpl in |- *; intros; auto with coc core arith datatypes.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  replace prop_skel with (skeleton_interpretation T0 ipe).
+  apply H2; auto with coc core arith datatypes.
+  rewrite H7.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  discriminate.
+
+  discriminate.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H7.
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply
+   eq_can_trans
+    with
+      (interpret_type U (interpretation_cons T0 ipe (covariant_skeleton (classify_term T0 (classes_of_interpretation ipe))) X2)
+         prop_skel); auto with coc core arith datatypes.
+  apply interpret_equiv_interpret_type.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  pattern (classify_term T0 (classes_of_interpretation ipe)) at 1 3 in |- *.
+  elim (classify_term T0 (classes_of_interpretation ipe)); auto with coc core arith datatypes.
+
+  apply interpret_equiv_interpret_type.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  pattern (classify_term T0 (classes_of_interpretation ipe)) at 1 3 in |- *.
+  elim (classify_term T0 (classes_of_interpretation ipe)); auto with coc core arith datatypes.
+
+  replace prop_skel with
+   (skeleton_interpretation U (interpretation_cons T0 ipe (covariant_skeleton (classify_term T0 (classes_of_interpretation ipe))) X2)).
+  apply H4; auto with coc core arith datatypes.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim
+   classify_subst
+    with
+      (class_of_interpretation_kind i)
+      (classes_of_interpretation ipg)
+      v
+      T0
+      k
+      (classes_of_interpretation ipf)
+      (classes_of_interpretation ipe); auto with coc core arith datatypes.
+  apply insert_in_classes with i; auto with coc core arith datatypes.
+
+  exact (skipn_interpretation_classes k ipf ipg H6).
+
+  unfold interpretation_cons in |- *; auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  unfold classes_of_interpretation at 1 in |- *.
+  simpl in |- *.
+  cut (type_skeleton (classify_term T0 (classify_environment e0)) = prop_skel).
+  generalize X2.
+  rewrite H7.
+  pattern (classify_term T0 (classify_environment e0)) in |- *.
+  apply class_type_ord with s1; simpl in |- *;
+   auto with coc core arith datatypes.
+  intros.
+  rewrite H13.
+  elim H7; auto with coc core arith datatypes.
+
+  intros.
+  elim H7; auto with coc core arith datatypes.
+
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  pattern (classify_term T0 (classes_of_interpretation ipe)) at 1 in |- *.
+  elim (classify_term T0 (classes_of_interpretation ipe)); auto with coc core arith datatypes.
+
+  replace
+   (classes_of_interpretation (interpretation_cons T0 ipe (covariant_skeleton (classify_term T0 (classes_of_interpretation ipe))) X2))
+   with (classify_environment (T0 :: e0)).
+  apply class_type_ord with s2; auto with coc core arith datatypes.
+  discriminate.
+
+  discriminate.
+
+  unfold classes_of_interpretation, interpretation_cons, extend_interpretation_kind in |- *.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  simpl in |- *.
+  rewrite H7.
+  cut (type_skeleton (classify_term T0 (classify_environment e0)) = prop_skel).
+  generalize X2.
+  unfold classes_of_interpretation in |- *.
+  replace (map class_of_interpretation_kind ipe) with (classes_of_interpretation ipe);
+   auto with coc core arith datatypes.
+  rewrite H7.
+  pattern (classify_term T0 (classify_environment e0)) in |- *.
+  apply class_type_ord with s1; simpl in |- *;
+   auto with coc core arith datatypes.
+  intros.
+  rewrite H13; auto with coc core arith datatypes.
+
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  replace
+   (classes_of_interpretation (interpretation_cons T0 ipe (covariant_skeleton (classify_term T0 (classes_of_interpretation ipe))) X2))
+   with (classify_environment (T0 :: e0)).
+  elim skeleton_sound with (T0 :: e0) U (sort_term s2); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  unfold classes_of_interpretation at 1 in |- *.
+  simpl in |- *.
+  cut (type_skeleton (classify_term T0 (classify_environment e0)) = prop_skel).
+  generalize X2.
+  rewrite H7.
+  pattern (classify_term T0 (classify_environment e0)) in |- *.
+  apply class_type_ord with s1; simpl in |- *;
+   auto with coc core arith datatypes.
+  intros.
+  rewrite H13.
+  elim H7; auto with coc core arith datatypes.
+
+  intros.
+  elim H7; auto with coc core arith datatypes.
+
+  elim skeleton_sound with e0 T0 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  apply insert_in_classes with i; auto with coc core arith datatypes.
+
+  exact (skipn_interpretation_classes k ipf ipg H6).
+
+  unfold skeleton_interpretation.
+  generalize (skeleton_sound (T0 :: e0) U (sort_term s2) H3).
+  simpl in |- *.
+  rewrite H7.
+  elim (classify_term U (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)));
+   simpl in |- *; auto with coc core arith datatypes.
+  elim (classify_term T0 (classify_environment e0)); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  apply H2; auto with coc core arith datatypes.
 Qed.
 
 
-
-  Lemma int_typ_red1 :
-   forall U V : term,
-   red1 U V ->
-   forall (e : env) (K : term),
-   typ e U K ->
-   forall ip : intP,
-   cls_of_int ip = class_env e ->
-   int_inv ip ->
-   cl_term U (cls_of_int ip) <> Trm ->
-   eq_can (skel_int U ip) (int_typ U ip _) (int_typ V ip _).
-simple induction 1; intros.
-unfold skel_int in |- *.
-apply inv_typ_app with e (Abs T M) N K; intros;
- auto with coc core arith datatypes.
-elim type_case with e (Abs T M) (Prod V0 Ur); intros;
- auto with coc core arith datatypes.
-inversion_clear H7.
-apply inv_typ_prod with e V0 Ur (Srt x); intros;
- auto with coc core arith datatypes.
-apply inv_typ_abs with e T M (Prod V0 Ur); intros;
- auto with coc core arith datatypes.
-cut (typ e N T); intros.
-cut
- (cl_term M (TCs _ (cl_term T (cls_of_int ip)) (cls_of_int ip)) =
-  Typ (typ_skel (cl_term M (class_env (T :: e))))).
-cut (int_var_sound N ip (ext_ik T ip _ (int_typ N ip (skel_int N ip)))).
-simpl in |- *; unfold def_cons, int_cons, ext_ik in |- *; simpl in |- *;
- rewrite H1.
-cut (cl_term T (cls_of_int ip) = cl_term T (class_env e)).
-elim class_sound with e N T (Srt s0); intros;
- auto with coc core arith datatypes; rewrite H18.
-simpl in |- *.
-replace
- (typ_skel
-    match typ_skel (cl_term M (TCs class (Typ PROP) (class_env e))) with
-    | PROP => Typ (typ_skel (cl_term M (TCs _ (Typ PROP) (class_env e))))
-    | _ => Typ (typ_skel (cl_term M (TCs _ (Typ PROP) (class_env e))))
-    end) with (skel_int M (TCs Int_K iT ip)).
-unfold subst in |- *.
-apply subst_int_typ with ip iT (T :: e) T0;
- auto with coc core arith datatypes.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H16.
-elim H1; auto with coc core arith datatypes.
-
-red in |- *; intro; apply H3.
-simpl in |- *.
-replace (TCs class (cl_term T (cls_of_int ip)) (cls_of_int ip)) with
- (cls_of_int (TCs Int_K iT ip)).
-rewrite H19; auto with coc core arith datatypes.
-
-unfold cls_of_int at 1 in |- *.
-simpl in |- *.
-elim H16; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H1.
-unfold cls_of_int in |- *.
-elim
- (typ_skel
-    (cl_term M (TCs class (Typ PROP) (Tmap Int_K class class_of_ik ip))));
- auto with coc core arith datatypes.
-
-elim H18.
-unfold subst in |- *.
-replace (typ_skel (cl_term M (TCs class (Knd s) (class_env e)))) with
- (skel_int M (TCs Int_K (iK s (int_typ N ip s)) ip)).
-apply subst_int_typ with ip (iK s (int_typ N ip s)) (T :: e) T0;
- auto with coc core arith datatypes.
-apply ivs_K.
-generalize H16.
-rewrite H1.
-elim class_sound with e N T (Srt s0); auto with coc core arith datatypes;
- intros.
-discriminate H19.
-
-inversion_clear H19; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H1.
-rewrite H16; auto with coc core arith datatypes.
-
-auto 10 with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-simpl in |- *.
-red in |- *; intro; apply H3.
-simpl in |- *.
-rewrite H16.
-unfold cls_of_int in |- *.
-rewrite H19; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H1; auto with coc core arith datatypes.
-
-elim H1; auto with coc core arith datatypes.
-
-unfold ext_ik in |- *.
-unfold skel_int in |- *.
-generalize (ivs_T N ip) (ivs_K N ip).
-rewrite H1.
-elim class_sound with e N T (Srt s0); auto with coc core arith datatypes;
- intros.
-
-generalize H3.
-simpl in |- *.
-rewrite H1.
-replace (TCs class (cl_term T (class_env e)) (class_env e)) with
- (class_env (T :: e)); auto with coc core arith datatypes.
-elim class_sound with (T :: e) M T0 (Srt s3);
- auto with coc core arith datatypes.
-simple induction 1; auto with coc core arith datatypes.
-
-apply type_conv with V0 s0; auto with coc core arith datatypes.
-apply inv_conv_prod_l with Ur T0; auto with coc core arith datatypes.
-
-discriminate H7.
-
-apply inv_typ_abs with e M N K; intros; auto with coc core arith datatypes.
-unfold skel_int in |- *.
-rewrite H3.
-simpl in |- *.
-unfold def_cons in |- *.
-replace (TCs _ (cl_term M (class_env e)) (class_env e)) with
- (class_env (M :: e)); auto with coc core arith datatypes.
-elim class_sound with (M :: e) N T (Srt s2);
- auto with coc core arith datatypes.
-simpl in |- *.
-unfold int_cons in |- *.
-unfold ext_ik in |- *.
-rewrite H3.
-elim class_red with e M M' (Srt s1); auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-rewrite H3.
-elim class_red with e M M' (Srt s1); auto with coc core arith datatypes.
-cut (cl_term M (cls_of_int ip) = cl_term M (class_env e)).
-elim (cl_term M (class_env e)); simpl in |- *; intros;
- auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
-
-apply inv_typ_abs with e N M K; intros; auto with coc core arith datatypes.
-unfold skel_int in |- *.
-simpl in |- *.
-rewrite H3.
-replace (TCs _ (cl_term M (class_env e)) (class_env e)) with
- (class_env (M :: e)); auto with coc core arith datatypes.
-replace (cl_term M (TCs class (cl_term N (class_env e)) (class_env e))) with
- (Typ (typ_skel (cl_term M (class_env (N :: e))))).
-cut (cl_term N (cls_of_int ip) = cl_term N (class_env e)).
-pattern (cl_term N (class_env e)) in |- *.
-apply class_typ_ord with s1; intros; auto with coc core arith datatypes.
-simpl in |- *.
-replace
- (typ_skel (cl_term M (TCs class (cl_term N (class_env e)) (class_env e))))
- with (skel_int M (def_cons N ip)).
-apply H1 with (N :: e) T; auto with coc core arith datatypes.
-unfold def_cons, int_cons, ext_ik in |- *.
-simpl in |- *.
-rewrite H3.
-unfold cls_of_int in |- *.
-simpl in |- *.
-pattern (cl_term N (class_env e)) in |- *.
-apply class_typ_ord with s1; intros; auto with coc core arith datatypes.
-simpl in |- *.
-elim skel_sound with e N (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-elim H3; auto with coc core arith datatypes.
-
-simpl in |- *.
-elim H3; auto with coc core arith datatypes.
-
-unfold def_cons, int_cons, ext_ik in |- *.
-rewrite H3.
-pattern (cl_term N (class_env e)) in |- *.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-
-unfold def_cons in |- *.
-red in |- *; intro; apply H5.
-simpl in |- *.
-replace (TCs class (cl_term N (cls_of_int ip)) (cls_of_int ip)) with
- (cls_of_int
-    (int_cons N ip (cv_skel (cl_term N (cls_of_int ip)))
-       (default_can (cv_skel (cl_term N (cls_of_int ip)))))).
-rewrite H11; auto with coc core arith datatypes.
-
-replace (TCs class (cl_term N (cls_of_int ip)) (cls_of_int ip)) with
- (class_env (N :: e)); auto with coc core arith datatypes.
-rewrite H3.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-rewrite H3; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-replace (cls_of_int (def_cons N ip)) with
- (TCs class (cl_term N (class_env e)) (class_env e)).
-auto with coc core arith datatypes.
-
-symmetry  in |- *.
-unfold def_cons in |- *.
-replace (TCs class (cl_term N (class_env e)) (class_env e)) with
- (class_env (N :: e)); auto with coc core arith datatypes.
-rewrite H3.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-simpl in |- *.
-intros.
-replace
- (typ_skel (cl_term M (TCs class (cl_term N (class_env e)) (class_env e))))
- with (skel_int M (TCs Int_K (iK (cv_skel (cl_term N (class_env e))) X2) ip)).
-apply
- eq_can_trans
-  with (int_typ M (TCs _ (iK _ X2) ip) (skel_int M (TCs _ (iK _ X2) ip)));
- auto with coc core arith datatypes.
-apply H1 with (N :: e) T; auto with coc core arith datatypes.
-elim int_cons_equal with ip e N s1 X2; auto with coc core arith datatypes.
-unfold cls_of_int in |- *.
-simpl in |- *.
-unfold ext_ik in |- *.
-rewrite H10; simpl in |- *; auto with coc core arith datatypes.
-
-unfold cls_of_int in |- *.
-simpl in |- *.
-red in |- *; intros; apply H5.
-simpl in |- *.
-rewrite H10.
-simpl in |- *.
-unfold cls_of_int in |- *.
-rewrite H14; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-unfold cls_of_int in |- *.
-simpl in |- *.
-elim H3.
-rewrite H10; auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
-
-generalize H5.
-simpl in |- *.
-rewrite H3.
-replace (TCs class (cl_term N (class_env e)) (class_env e)) with
- (class_env (N :: e)); auto with coc core arith datatypes.
-elim class_sound with (N :: e) M T (Srt s2); simpl in |- *; intros;
- auto with coc core arith datatypes.
-elim H10; auto with coc core arith datatypes.
-
-apply inv_typ_app with e M1 M2 K; intros; auto with coc core arith datatypes.
-elim type_case with e M1 (Prod V0 Ur); intros;
- auto with coc core arith datatypes.
-inversion_clear H9.
-apply inv_typ_prod with e V0 Ur (Srt x); intros;
- auto with coc core arith datatypes.
-unfold skel_int in |- *.
-simpl in |- *.
-rewrite H3.
-elim class_red with e M1 N1 (Prod V0 Ur); auto with coc core arith datatypes.
-cut (cl_term M1 (class_env e) = Typ (typ_skel (cl_term M1 (class_env e)))).
-intro.
-rewrite H13.
-cut (cl_term M2 (cls_of_int ip) = cl_term M2 (class_env e)).
-elim class_sound with e M2 V0 (Srt s1); auto with coc core arith datatypes;
- intros.
-replace
- (typ_skel
-    match typ_skel (cl_term M1 (class_env e)) return class with
-    | PROP => Typ (typ_skel (cl_term M1 (class_env e)))
-    | PROD _ _ => Typ (typ_skel (cl_term M1 (class_env e)))
-    end) with (skel_int M1 ip).
-apply H1 with e (Prod V0 Ur); auto with coc core arith datatypes.
-red in |- *; intro; apply H5.
-simpl in |- *.
-rewrite H15; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-elim H3.
-elim (typ_skel (cl_term M1 (cls_of_int ip)));
- auto with coc core arith datatypes.
-
-generalize (H1 e (Prod V0 Ur) H6 ip H3 H4).
-replace (skel_int M1 ip) with
- (PROD s
-    (typ_skel
-       match typ_skel (cl_term M1 (class_env e)) with
-       | PROP => Typ (typ_skel (cl_term M1 (class_env e)))
-       | PROD _ s2 => Typ s2
-       end)).
-simpl in |- *; intros.
-apply H15; auto with coc core arith datatypes.
-red in |- *; intro; apply H5.
-simpl in |- *.
-rewrite H16; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-rewrite H3.
-elim skel_sound with e M1 (Prod V0 Ur); auto with coc core arith datatypes.
-simpl in |- *.
-cut (cl_term V0 (class_env e) = Knd s); intros.
-cut
- (cl_term Ur (TCs class (cl_term V0 (class_env e)) (class_env e)) =
-  Knd (cv_skel (cl_term Ur (class_env (V0 :: e))))); 
- intros.
-rewrite H16.
-rewrite H15; simpl in |- *; auto with coc core arith datatypes.
-
-generalize (class_sound e M1 (Prod V0 Ur) H6 (Srt x) H10).
-simpl in |- *.
-rewrite H15.
-rewrite H13.
-elim (cl_term Ur (TCs class (Knd s) (class_env e))); intros;
- auto with coc core arith datatypes.
-inversion_clear H16.
-
-inversion_clear H16.
-
-generalize H14.
-rewrite H3.
-elim class_sound with e M2 V0 (Srt s1); intros;
- auto with coc core arith datatypes.
-discriminate H15.
-
-inversion_clear H15; auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
-
-generalize H5.
-simpl in |- *.
-rewrite H3.
-elim class_sound with e M1 (Prod V0 Ur) (Srt x); intros;
- auto with coc core arith datatypes.
-elim H13; auto with coc core arith datatypes.
-
-discriminate H9.
-
-cut (cl_term M1 (cls_of_int ip) <> Trm); intros.
-apply inv_typ_app with e M1 M2 K; intros; auto with coc core arith datatypes.
-elim type_case with e M1 (Prod V0 Ur); intros;
- auto with coc core arith datatypes.
-inversion_clear H10.
-apply inv_typ_prod with e V0 Ur (Srt x); intros;
- auto with coc core arith datatypes.
-unfold skel_int in |- *.
-simpl in |- *.
-rewrite H3.
-elim class_red with e M2 N2 V0; auto with coc core arith datatypes.
-cut (cl_term M1 (class_env e) = Typ (typ_skel (cl_term M1 (class_env e)))).
-intro.
-rewrite H14.
-cut (cl_term M2 (cls_of_int ip) = cl_term M2 (class_env e)).
-elim class_sound with e M2 V0 (Srt s1); auto with coc core arith datatypes;
- intros.
-cut
- (eq_can _
-    (int_typ M1 ip
-       (PROD s
-          (typ_skel
-             match typ_skel (cl_term M1 (class_env e)) with
-             | PROP => Typ (typ_skel (cl_term M1 (class_env e)))
-             | PROD _ s2 => Typ s2
-             end)))
-    (int_typ M1 ip
-       (PROD s
-          (typ_skel
-             match typ_skel (cl_term M1 (class_env e)) with
-             | PROP => Typ (typ_skel (cl_term M1 (class_env e)))
-             | PROD _ s2 => Typ s2
-             end)))).
-simpl in |- *; intros.
-apply H16; auto with coc core arith datatypes.
-replace s with (skel_int M2 ip).
-apply H1 with e V0; auto with coc core arith datatypes.
-rewrite H15.
-discriminate.
-
-unfold skel_int in |- *.
-generalize H15.
-rewrite H3.
-elim class_sound with e M2 V0 (Srt s1); intros;
- auto with coc core arith datatypes.
-discriminate H17.
-
-inversion_clear H17; auto with coc core arith datatypes.
-
-auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
-
-generalize H6.
-rewrite H3.
-elim class_sound with e M1 (Prod V0 Ur) (Srt x);
- auto with coc core arith datatypes; intros.
-elim H14; auto with coc core arith datatypes.
-
-discriminate H10.
-
-red in |- *; intros; apply H5.
-simpl in |- *.
-rewrite H6; auto with coc core arith datatypes.
-
-apply inv_typ_prod with e M1 M2 K; intros; auto with coc core arith datatypes.
-unfold skel_int in |- *.
-simpl in |- *.
-rewrite H3.
-elim class_red with e M1 N1 (Srt s1); auto with coc core arith datatypes.
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-cut (skel_int M1 ip = PROP); intros.
-pattern (cl_term M2 (class_env (M1 :: e))) in |- *.
-apply class_typ_ord with s2; auto with coc core arith datatypes.
-elim skel_sound with (M1 :: e) M2 (Srt s2); simpl in |- *;
- auto with coc core arith datatypes.
-apply eq_can_Pi; auto with coc core arith datatypes.
-elim H9.
-apply H1 with e (Srt s1); auto with coc core arith datatypes.
-rewrite H3.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-discriminate.
-
-discriminate.
-
-simpl in |- *; intros.
-unfold int_cons, ext_ik in |- *.
-rewrite H3.
-elim class_red with e M1 N1 (Srt s1); auto with coc core arith datatypes.
-pattern (cl_term M1 (class_env e)) at 1 3 in |- *.
-elim (cl_term M1 (class_env e)); auto with coc core arith datatypes.
-intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-
-pattern (cl_term M1 (class_env e)) in |- *.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-simpl in |- *.
-apply eq_can_Pi; auto with coc core arith datatypes.
-elim H9.
-apply H1 with e (Srt s1); auto with coc core arith datatypes.
-rewrite H3.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-discriminate.
-
-discriminate.
-
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply int_equiv_int_typ.
-unfold int_cons, ext_ik in |- *.
-rewrite H3.
-elim class_red with e M1 N1 (Srt s1); auto with coc core arith datatypes.
-elim (cl_term M1 (class_env e)); auto with coc core arith datatypes.
-
-simpl in |- *.
-apply eq_can_Pi; auto with coc core arith datatypes.
-elim H9.
-apply H1 with e (Srt s1); auto with coc core arith datatypes.
-rewrite H3.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-discriminate.
-
-discriminate.
-
-simpl in |- *; intros.
-change
-  (eq_can PROP
-     (int_typ M2 (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X1)
-        PROP)
-     (int_typ M2 (int_cons N1 ip (cv_skel (cl_term M1 (class_env e))) X2)
-        PROP)) in |- *.
-unfold int_cons, ext_ik in |- *.
-rewrite H3.
-elim class_red with e M1 N1 (Srt s1); auto with coc core arith datatypes.
-pattern (cl_term M1 (class_env e)) at 1 3 in |- *.
-elim (cl_term M1 (class_env e)); auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-rewrite H3.
-elim skel_sound with e M1 (Srt s1); simpl in |- *;
- auto with coc core arith datatypes.
-
-apply inv_typ_prod with e M1 M2 K; intros; auto with coc core arith datatypes.
-unfold skel_int in |- *.
-simpl in |- *.
-rewrite H3.
-elim class_red with (M1 :: e) M2 N2 (Srt s2);
- auto with coc core arith datatypes.
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-pattern (cl_term M2 (class_env (M1 :: e))) in |- *.
-apply class_typ_ord with s2; auto with coc core arith datatypes.
-elim skel_sound with (M1 :: e) M2 (Srt s2); simpl in |- *;
- auto with coc core arith datatypes.
-apply eq_can_Pi; auto with coc core arith datatypes.
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply
- eq_can_trans
-  with
-    (int_typ M2 (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2) PROP);
- auto with coc core arith datatypes.
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-replace PROP with
- (skel_int M2 (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2)).
-apply H1 with (M1 :: e) (Srt s2); auto with coc core arith datatypes.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-red in |- *; intros.
-apply H5.
-simpl in |- *.
-replace (TCs class (cl_term M1 (cls_of_int ip)) (cls_of_int ip)) with
- (cls_of_int (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2)).
-rewrite H12; auto with coc core arith datatypes.
-
-rewrite H3.
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-replace (cls_of_int (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2))
- with (class_env (M1 :: e)).
-elim skel_sound with (M1 :: e) M2 (Srt s2);
- auto with coc core arith datatypes.
-
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-symmetry  in |- *.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-cut (cl_term M1 (cls_of_int ip) = cl_term M1 (class_env e)).
-pattern (cl_term M1 (class_env e)) in |- *.
-apply class_typ_ord with s1; auto with coc core arith datatypes.
-simpl in |- *; intros.
-apply eq_can_Pi; auto with coc core arith datatypes.
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply eq_can_trans with (int_typ M2 (int_cons M1 ip PROP X2) PROP);
- auto with coc core arith datatypes.
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-pattern PROP at 1 3 5 in |- *.
-replace PROP with (skel_int M2 (int_cons M1 ip PROP X2)).
-cut (cv_skel (cl_term M1 (class_env e)) = PROP); intros.
-apply H1 with (M1 :: e) (Srt s2); auto with coc core arith datatypes.
-generalize X2 H12.
-change
-  (forall X2 : Can PROP,
-   eq_can PROP X2 X2 ->
-   cls_of_int (int_cons M1 ip PROP X2) = class_env (M1 :: e)) 
- in |- *.
-elim H13.
-intros.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-replace (cls_of_int (int_cons M1 ip PROP X2)) with (class_env (M1 :: e)).
-red in |- *; intros; apply H5.
-simpl in |- *.
-rewrite H3.
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-rewrite H14; auto with coc core arith datatypes.
-
-generalize X2 H12.
-change
-  (forall X2 : Can PROP,
-   eq_can PROP X2 X2 ->
-   class_env (M1 :: e) = cls_of_int (int_cons M1 ip PROP X2)) 
- in |- *.
-elim H13.
-intros.
-symmetry  in |- *.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-elim H3.
-rewrite H9; simpl in |- *; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-replace (cls_of_int (int_cons M1 ip PROP X2)) with (class_env (M1 :: e)).
-elim skel_sound with (M1 :: e) M2 (Srt s2);
- auto with coc core arith datatypes.
-
-generalize X2 H12.
-change
-  (forall X2 : Can PROP,
-   eq_can PROP X2 X2 ->
-   class_env (M1 :: e) = cls_of_int (int_cons M1 ip PROP X2)) 
- in |- *.
-replace PROP with (cv_skel (cl_term M1 (class_env e))).
-intros.
-symmetry  in |- *.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-elim H3.
-rewrite H9; auto with coc core arith datatypes.
-
-intros.
-simpl in |- *.
-apply eq_can_Pi; auto with coc core arith datatypes.
-simpl in |- *; intros.
-replace eq_cand with (eq_can PROP); auto with coc core arith datatypes.
-apply
- eq_can_trans
-  with
-    (int_typ M2 (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2) PROP);
- auto with coc core arith datatypes.
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-replace PROP with
- (skel_int M2 (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2)).
-apply H1 with (M1 :: e) (Srt s2); auto with coc core arith datatypes.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-unfold int_cons, ext_ik in |- *.
-elim (cl_term M1 (cls_of_int ip)); auto with coc core arith datatypes.
-
-red in |- *; intros.
-apply H5.
-simpl in |- *.
-replace (TCs class (cl_term M1 (cls_of_int ip)) (cls_of_int ip)) with
- (cls_of_int (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2)).
-rewrite H13; auto with coc core arith datatypes.
-
-rewrite H3.
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-unfold skel_int in |- *.
-replace (cls_of_int (int_cons M1 ip (cv_skel (cl_term M1 (class_env e))) X2))
- with (class_env (M1 :: e)).
-elim skel_sound with (M1 :: e) M2 (Srt s2);
- auto with coc core arith datatypes.
-
-replace (TCs class (cl_term M1 (class_env e)) (class_env e)) with
- (class_env (M1 :: e)); auto with coc core arith datatypes.
-symmetry  in |- *.
-apply int_cons_equal with s1; auto with coc core arith datatypes.
-
-elim H3; auto with coc core arith datatypes.
+(** Interpretation is compatible with environment extension. *)
+Lemma interpretation_cons_equal :
+ forall (ip : interpretation_env) (e : environment),
+ classes_of_interpretation ip = classify_environment e ->
+ forall (N : term) (s1 : sort),
+ has_type e N (sort_term s1) ->
+ forall C : candidate (covariant_skeleton (classify_term N (classify_environment e))),
+ classes_of_interpretation (interpretation_cons N ip _ C) = classify_environment (N :: e).
+Proof.
+  intros.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H.
+  simpl in |- *.
+  generalize C.
+  pattern (classify_term N (classify_environment e)) in |- *.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  elim skeleton_sound with e N (sort_term s1); simpl in |- *; intros;
+   auto with coc core arith datatypes.
+  unfold classes_of_interpretation in |- *; simpl in |- *; elim H;
+   auto with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *; simpl in |- *; elim H;
+   auto with coc core arith datatypes.
 Qed.
 
 
+(** One-step reduction preserves interpretation up to canonical equality. *)
+Lemma interpret_type_reduces_once :
+ forall U V : term,
+ reduces_once U V ->
+ forall (e : environment) (K : term),
+ has_type e U K ->
+ forall ip : interpretation_env,
+ classes_of_interpretation ip = classify_environment e ->
+ interpretation_invariant ip ->
+ classify_term U (classes_of_interpretation ip) <> trm ->
+ eq_can (skeleton_interpretation U ip) (interpret_type U ip _) (interpret_type V ip _).
+Proof.
+  simple induction 1; intros.
+  unfold skeleton_interpretation in |- *.
+  apply inversion_has_type_app with e (lam T M) N K; intros;
+   auto with coc core arith datatypes.
+  elim type_case with e (lam T M) (prod V0 Ur); intros;
+   auto with coc core arith datatypes.
+  inversion_clear H7.
+  apply inversion_has_type_prod with e V0 Ur (sort_term x); intros;
+   auto with coc core arith datatypes.
+  apply inversion_has_type_abs with e T M (prod V0 Ur); intros;
+   auto with coc core arith datatypes.
+  cut (has_type e N T); intros.
+  cut
+   (classify_term M (cons (classify_term T (classes_of_interpretation ip)) (classes_of_interpretation ip)) =
+    typ (type_skeleton (classify_term M (classify_environment (T :: e))))).
+  cut (interpret_var_sound N ip (extend_interpretation_kind T ip _ (interpret_type N ip (skeleton_interpretation N ip)))).
+  simpl in |- *; unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *; simpl in |- *;
+   rewrite H1.
+  cut (classify_term T (classes_of_interpretation ip) = classify_term T (classify_environment e)).
+  elim class_sound with e N T (sort_term s0); intros;
+   auto with coc core arith datatypes; rewrite H18.
+  simpl in |- *.
+  replace
+   (type_skeleton
+      match type_skeleton (classify_term M (cons (typ prop_skel) (classify_environment e))) with
+      | prop_skel => typ (type_skeleton (classify_term M (cons (typ prop_skel) (classify_environment e))))
+      | _ => typ (type_skeleton (classify_term M (cons (typ prop_skel) (classify_environment e))))
+      end) with (skeleton_interpretation M (cons interp_typ ip)).
+  unfold subst in |- *.
+  apply subst_interpret_type with ip interp_typ (T :: e) T0;
+   auto with coc core arith datatypes.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H16.
+  elim H1; auto with coc core arith datatypes.
 
-  Lemma red_int_typ :
-   forall (e : env) (U K : term),
-   typ e U K ->
-   forall ip : intP,
-   cls_of_int ip = class_env e ->
-   int_inv ip ->
-   cl_term U (class_env e) <> Trm ->
-   forall V : term,
-   red U V -> eq_can (skel_int U ip) (int_typ U ip _) (int_typ V ip _).
-simple induction 5; auto with coc core arith datatypes; intros.
-apply eq_can_trans with (int_typ P ip (skel_int U ip));
- auto with coc core arith datatypes.
-replace (skel_int U ip) with (skel_int P ip).
-apply int_typ_red1 with e K; auto with coc core arith datatypes.
-apply subject_reduction with U; auto with coc core arith datatypes.
+  red in |- *; intro; apply H3.
+  simpl in |- *.
+  replace (cons (classify_term T (classes_of_interpretation ip)) (classes_of_interpretation ip)) with
+   (classes_of_interpretation (cons interp_typ ip)).
+  rewrite H19; auto with coc core arith datatypes.
 
-rewrite H0.
-elim class_red with e U P K; auto with coc core arith datatypes.
+  unfold classes_of_interpretation at 1 in |- *.
+  simpl in |- *.
+  elim H16; auto with coc core arith datatypes.
 
-unfold skel_int in |- *.
-rewrite H0.
-elim skel_sound with e U K; auto with coc core arith datatypes.
-elim skel_sound with e P K; auto with coc core arith datatypes.
-apply subject_reduction with U; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H1.
+  unfold classes_of_interpretation in |- *.
+  elim
+   (type_skeleton
+      (classify_term M (cons (typ prop_skel) (map class_of_interpretation_kind ip))));
+   auto with coc core arith datatypes.
+
+  elim H18.
+  unfold subst in |- *.
+  replace (type_skeleton (classify_term M (cons (knd s) (classify_environment e)))) with
+   (skeleton_interpretation M (cons (interp_knd s (interpret_type N ip s)) ip)).
+  apply subst_interpret_type with ip (interp_knd s (interpret_type N ip s)) (T :: e) T0;
+   auto with coc core arith datatypes.
+  apply interp_var_knd.
+  generalize H16.
+  rewrite H1.
+  elim class_sound with e N T (sort_term s0); auto with coc core arith datatypes;
+   intros.
+  discriminate H19.
+
+  inversion_clear H19; auto with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H1.
+  rewrite H16; auto with coc core arith datatypes.
+
+  auto 10 with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  red in |- *; intro; apply H3.
+  simpl in |- *.
+  rewrite H16.
+  unfold classes_of_interpretation in |- *.
+  rewrite H19; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H1; auto with coc core arith datatypes.
+
+  elim H1; auto with coc core arith datatypes.
+
+  unfold extend_interpretation_kind in |- *.
+  unfold skeleton_interpretation in |- *.
+  generalize (interp_var_typ N ip) (interp_var_knd N ip).
+  rewrite H1.
+  elim class_sound with e N T (sort_term s0); auto with coc core arith datatypes;
+   intros.
+
+  generalize H3.
+  simpl in |- *.
+  rewrite H1.
+  replace (cons (classify_term T (classify_environment e)) (classify_environment e)) with
+   (classify_environment (T :: e)); auto with coc core arith datatypes.
+  elim class_sound with (T :: e) M T0 (sort_term s3);
+   auto with coc core arith datatypes.
+  simple induction 1; auto with coc core arith datatypes.
+
+  apply type_conv with V0 s0; auto with coc core arith datatypes.
+  apply inversion_convertible_product_left with Ur T0; auto with coc core arith datatypes.
+
+  discriminate H7.
+
+  apply inversion_has_type_abs with e M N K; intros; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  rewrite H3.
+  simpl in |- *.
+  unfold default_cons in |- *.
+  replace (cons (classify_term M (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M :: e)); auto with coc core arith datatypes.
+  elim class_sound with (M :: e) N T (sort_term s2);
+   auto with coc core arith datatypes.
+  simpl in |- *.
+  unfold interpretation_cons in |- *.
+  unfold extend_interpretation_kind in |- *.
+  rewrite H3.
+  elim class_red with e M M' (sort_term s1); auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H3.
+  elim class_red with e M M' (sort_term s1); auto with coc core arith datatypes.
+  cut (classify_term M (classes_of_interpretation ip) = classify_term M (classify_environment e)).
+  elim (classify_term M (classify_environment e)); simpl in |- *; intros;
+   auto with coc core arith datatypes.
+
+  elim H3; auto with coc core arith datatypes.
+
+  apply inversion_has_type_abs with e N M K; intros; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  rewrite H3.
+  replace (cons (classify_term M (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M :: e)); auto with coc core arith datatypes.
+  replace (classify_term M (cons (classify_term N (classify_environment e)) (classify_environment e))) with
+   (typ (type_skeleton (classify_term M (classify_environment (N :: e))))).
+  cut (classify_term N (classes_of_interpretation ip) = classify_term N (classify_environment e)).
+  pattern (classify_term N (classify_environment e)) in |- *.
+  apply class_type_ord with s1; intros; auto with coc core arith datatypes.
+  simpl in |- *.
+  replace
+   (type_skeleton (classify_term M (cons (classify_term N (classify_environment e)) (classify_environment e))))
+   with (skeleton_interpretation M (default_cons N ip)).
+  apply H1 with (N :: e) T; auto with coc core arith datatypes.
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  simpl in |- *.
+  rewrite H3.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  pattern (classify_term N (classify_environment e)) in |- *.
+  apply class_type_ord with s1; intros; auto with coc core arith datatypes.
+  simpl in |- *.
+  elim skeleton_sound with e N (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+  elim H3; auto with coc core arith datatypes.
+
+  simpl in |- *.
+  elim H3; auto with coc core arith datatypes.
+
+  unfold default_cons, interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H3.
+  pattern (classify_term N (classify_environment e)) in |- *.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+
+  unfold default_cons in |- *.
+  red in |- *; intro; apply H5.
+  simpl in |- *.
+  replace (cons (classify_term N (classes_of_interpretation ip)) (classes_of_interpretation ip)) with
+   (classes_of_interpretation
+      (interpretation_cons N ip (covariant_skeleton (classify_term N (classes_of_interpretation ip)))
+         (default_can (covariant_skeleton (classify_term N (classes_of_interpretation ip)))))).
+  rewrite H11; auto with coc core arith datatypes.
+
+  replace (cons (classify_term N (classes_of_interpretation ip)) (classes_of_interpretation ip)) with
+   (classify_environment (N :: e)); auto with coc core arith datatypes.
+  rewrite H3.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  rewrite H3; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  replace (classes_of_interpretation (default_cons N ip)) with
+   (cons (classify_term N (classify_environment e)) (classify_environment e)).
+  auto with coc core arith datatypes.
+
+  symmetry  in |- *.
+  unfold default_cons in |- *.
+  replace (cons (classify_term N (classify_environment e)) (classify_environment e)) with
+   (classify_environment (N :: e)); auto with coc core arith datatypes.
+  rewrite H3.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  simpl in |- *.
+  intros.
+  replace
+   (type_skeleton (classify_term M (cons (classify_term N (classify_environment e)) (classify_environment e))))
+   with (skeleton_interpretation M (cons (interp_knd (covariant_skeleton (classify_term N (classify_environment e))) X2) ip)).
+  apply
+   eq_can_trans
+    with (interpret_type M (cons (interp_knd _ X2) ip) (skeleton_interpretation M (cons (interp_knd _ X2) ip)));
+   auto with coc core arith datatypes.
+  apply H1 with (N :: e) T; auto with coc core arith datatypes.
+  elim interpretation_cons_equal with ip e N s1 X2; auto with coc core arith datatypes.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  unfold extend_interpretation_kind in |- *.
+  rewrite H10; simpl in |- *; auto with coc core arith datatypes.
+
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  red in |- *; intros; apply H5.
+  simpl in |- *.
+  rewrite H10.
+  simpl in |- *.
+  unfold classes_of_interpretation in |- *.
+  rewrite H14; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  unfold classes_of_interpretation in |- *.
+  simpl in |- *.
+  elim H3.
+  rewrite H10; auto with coc core arith datatypes.
+
+  elim H3; auto with coc core arith datatypes.
+
+  generalize H5.
+  simpl in |- *.
+  rewrite H3.
+  replace (cons (classify_term N (classify_environment e)) (classify_environment e)) with
+   (classify_environment (N :: e)); auto with coc core arith datatypes.
+  elim class_sound with (N :: e) M T (sort_term s2); simpl in |- *; intros;
+   auto with coc core arith datatypes.
+  elim H10; auto with coc core arith datatypes.
+
+  apply inversion_has_type_app with e M1 M2 K; intros; auto with coc core arith datatypes.
+  elim type_case with e M1 (prod V0 Ur); intros;
+   auto with coc core arith datatypes.
+  inversion_clear H9.
+  apply inversion_has_type_prod with e V0 Ur (sort_term x); intros;
+   auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  rewrite H3.
+  elim class_red with e M1 N1 (prod V0 Ur); auto with coc core arith datatypes.
+  cut (classify_term M1 (classify_environment e) = typ (type_skeleton (classify_term M1 (classify_environment e)))).
+  intro.
+  rewrite H13.
+  cut (classify_term M2 (classes_of_interpretation ip) = classify_term M2 (classify_environment e)).
+  elim class_sound with e M2 V0 (sort_term s1); auto with coc core arith datatypes;
+   intros.
+  replace
+   (type_skeleton
+      match type_skeleton (classify_term M1 (classify_environment e)) return class with
+      | prop_skel => typ (type_skeleton (classify_term M1 (classify_environment e)))
+      | prod_skel _ _ => typ (type_skeleton (classify_term M1 (classify_environment e)))
+      end) with (skeleton_interpretation M1 ip).
+  apply H1 with e (prod V0 Ur); auto with coc core arith datatypes.
+  red in |- *; intro; apply H5.
+  simpl in |- *.
+  rewrite H15; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  elim H3.
+  elim (type_skeleton (classify_term M1 (classes_of_interpretation ip)));
+   auto with coc core arith datatypes.
+
+  generalize (H1 e (prod V0 Ur) H6 ip H3 H4).
+  replace (skeleton_interpretation M1 ip) with
+   (prod_skel s
+      (type_skeleton
+         match type_skeleton (classify_term M1 (classify_environment e)) with
+         | prop_skel => typ (type_skeleton (classify_term M1 (classify_environment e)))
+         | prod_skel _ s2 => typ s2
+         end)).
+  simpl in |- *; intros.
+  apply H15; auto with coc core arith datatypes.
+  red in |- *; intro; apply H5.
+  simpl in |- *.
+  rewrite H16; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H3.
+  elim skeleton_sound with e M1 (prod V0 Ur); auto with coc core arith datatypes.
+  simpl in |- *.
+  cut (classify_term V0 (classify_environment e) = knd s); intros.
+  cut
+   (classify_term Ur (cons (classify_term V0 (classify_environment e)) (classify_environment e)) =
+    knd (covariant_skeleton (classify_term Ur (classify_environment (V0 :: e)))));
+   intros.
+  rewrite H16.
+  rewrite H15; simpl in |- *; auto with coc core arith datatypes.
+
+  generalize (class_sound e M1 (prod V0 Ur) H6 (sort_term x) H10).
+  simpl in |- *.
+  rewrite H15.
+  rewrite H13.
+  elim (classify_term Ur (cons (knd s) (classify_environment e))); intros;
+   auto with coc core arith datatypes.
+  inversion_clear H16.
+
+  inversion_clear H16.
+
+  generalize H14.
+  rewrite H3.
+  elim class_sound with e M2 V0 (sort_term s1); intros;
+   auto with coc core arith datatypes.
+  discriminate H15.
+
+  inversion_clear H15; auto with coc core arith datatypes.
+
+  elim H3; auto with coc core arith datatypes.
+
+  generalize H5.
+  simpl in |- *.
+  rewrite H3.
+  elim class_sound with e M1 (prod V0 Ur) (sort_term x); intros;
+   auto with coc core arith datatypes.
+  elim H13; auto with coc core arith datatypes.
+
+  discriminate H9.
+
+  cut (classify_term M1 (classes_of_interpretation ip) <> trm); intros.
+  apply inversion_has_type_app with e M1 M2 K; intros; auto with coc core arith datatypes.
+  elim type_case with e M1 (prod V0 Ur); intros;
+   auto with coc core arith datatypes.
+  inversion_clear H10.
+  apply inversion_has_type_prod with e V0 Ur (sort_term x); intros;
+   auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  rewrite H3.
+  elim class_red with e M2 N2 V0; auto with coc core arith datatypes.
+  cut (classify_term M1 (classify_environment e) = typ (type_skeleton (classify_term M1 (classify_environment e)))).
+  intro.
+  rewrite H14.
+  cut (classify_term M2 (classes_of_interpretation ip) = classify_term M2 (classify_environment e)).
+  elim class_sound with e M2 V0 (sort_term s1); auto with coc core arith datatypes;
+   intros.
+  cut
+   (eq_can _
+      (interpret_type M1 ip
+         (prod_skel s
+            (type_skeleton
+               match type_skeleton (classify_term M1 (classify_environment e)) with
+               | prop_skel => typ (type_skeleton (classify_term M1 (classify_environment e)))
+               | prod_skel _ s2 => typ s2
+               end)))
+      (interpret_type M1 ip
+         (prod_skel s
+            (type_skeleton
+               match type_skeleton (classify_term M1 (classify_environment e)) with
+               | prop_skel => typ (type_skeleton (classify_term M1 (classify_environment e)))
+               | prod_skel _ s2 => typ s2
+               end)))).
+  simpl in |- *; intros.
+  apply H16; auto with coc core arith datatypes.
+  replace s with (skeleton_interpretation M2 ip).
+  apply H1 with e V0; auto with coc core arith datatypes.
+  rewrite H15.
+  discriminate.
+
+  unfold skeleton_interpretation in |- *.
+  generalize H15.
+  rewrite H3.
+  elim class_sound with e M2 V0 (sort_term s1); intros;
+   auto with coc core arith datatypes.
+  discriminate H17.
+
+  inversion_clear H17; auto with coc core arith datatypes.
+
+  auto with coc core arith datatypes.
+
+  elim H3; auto with coc core arith datatypes.
+
+  generalize H6.
+  rewrite H3.
+  elim class_sound with e M1 (prod V0 Ur) (sort_term x);
+   auto with coc core arith datatypes; intros.
+  elim H14; auto with coc core arith datatypes.
+
+  discriminate H10.
+
+  red in |- *; intros; apply H5.
+  simpl in |- *.
+  rewrite H6; auto with coc core arith datatypes.
+
+  apply inversion_has_type_prod with e M1 M2 K; intros; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  rewrite H3.
+  elim class_red with e M1 N1 (sort_term s1); auto with coc core arith datatypes.
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  cut (skeleton_interpretation M1 ip = prop_skel); intros.
+  pattern (classify_term M2 (classify_environment (M1 :: e))) in |- *.
+  apply class_type_ord with s2; auto with coc core arith datatypes.
+  elim skeleton_sound with (M1 :: e) M2 (sort_term s2); simpl in |- *;
+   auto with coc core arith datatypes.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  elim H9.
+  apply H1 with e (sort_term s1); auto with coc core arith datatypes.
+  rewrite H3.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  discriminate.
+
+  discriminate.
+
+  simpl in |- *; intros.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H3.
+  elim class_red with e M1 N1 (sort_term s1); auto with coc core arith datatypes.
+  pattern (classify_term M1 (classify_environment e)) at 1 3 in |- *.
+  elim (classify_term M1 (classify_environment e)); auto with coc core arith datatypes.
+  intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+
+  pattern (classify_term M1 (classify_environment e)) in |- *.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  simpl in |- *.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  elim H9.
+  apply H1 with e (sort_term s1); auto with coc core arith datatypes.
+  rewrite H3.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  discriminate.
+
+  discriminate.
+
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply interpret_equiv_interpret_type.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H3.
+  elim class_red with e M1 N1 (sort_term s1); auto with coc core arith datatypes.
+  elim (classify_term M1 (classify_environment e)); auto with coc core arith datatypes.
+
+  simpl in |- *.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  elim H9.
+  apply H1 with e (sort_term s1); auto with coc core arith datatypes.
+  rewrite H3.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  discriminate.
+
+  discriminate.
+
+  simpl in |- *; intros.
+  change
+    (eq_can prop_skel
+       (interpret_type M2 (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X1)
+          prop_skel)
+       (interpret_type M2 (interpretation_cons N1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2)
+          prop_skel)) in |- *.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  rewrite H3.
+  elim class_red with e M1 N1 (sort_term s1); auto with coc core arith datatypes.
+  pattern (classify_term M1 (classify_environment e)) at 1 3 in |- *.
+  elim (classify_term M1 (classify_environment e)); auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H3.
+  elim skeleton_sound with e M1 (sort_term s1); simpl in |- *;
+   auto with coc core arith datatypes.
+
+  apply inversion_has_type_prod with e M1 M2 K; intros; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  simpl in |- *.
+  rewrite H3.
+  elim class_red with (M1 :: e) M2 N2 (sort_term s2);
+   auto with coc core arith datatypes.
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  pattern (classify_term M2 (classify_environment (M1 :: e))) in |- *.
+  apply class_type_ord with s2; auto with coc core arith datatypes.
+  elim skeleton_sound with (M1 :: e) M2 (sort_term s2); simpl in |- *;
+   auto with coc core arith datatypes.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply
+   eq_can_trans
+    with
+      (interpret_type M2 (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2) prop_skel);
+   auto with coc core arith datatypes.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  replace prop_skel with
+   (skeleton_interpretation M2 (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2)).
+  apply H1 with (M1 :: e) (sort_term s2); auto with coc core arith datatypes.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  red in |- *; intros.
+  apply H5.
+  simpl in |- *.
+  replace (cons (classify_term M1 (classes_of_interpretation ip)) (classes_of_interpretation ip)) with
+   (classes_of_interpretation (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2)).
+  rewrite H12; auto with coc core arith datatypes.
+
+  rewrite H3.
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  replace (classes_of_interpretation (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2))
+   with (classify_environment (M1 :: e)).
+  elim skeleton_sound with (M1 :: e) M2 (sort_term s2);
+   auto with coc core arith datatypes.
+
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  symmetry  in |- *.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  cut (classify_term M1 (classes_of_interpretation ip) = classify_term M1 (classify_environment e)).
+  pattern (classify_term M1 (classify_environment e)) in |- *.
+  apply class_type_ord with s1; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply eq_can_trans with (interpret_type M2 (interpretation_cons M1 ip prop_skel X2) prop_skel);
+   auto with coc core arith datatypes.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  pattern prop_skel at 1 3 5 in |- *.
+  replace prop_skel with (skeleton_interpretation M2 (interpretation_cons M1 ip prop_skel X2)).
+  cut (covariant_skeleton (classify_term M1 (classify_environment e)) = prop_skel); intros.
+  apply H1 with (M1 :: e) (sort_term s2); auto with coc core arith datatypes.
+  generalize X2 H12.
+  change
+    (forall X2 : candidate prop_skel,
+     eq_can prop_skel X2 X2 ->
+     classes_of_interpretation (interpretation_cons M1 ip prop_skel X2) = classify_environment (M1 :: e))
+   in |- *.
+  elim H13.
+  intros.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  replace (classes_of_interpretation (interpretation_cons M1 ip prop_skel X2)) with (classify_environment (M1 :: e)).
+  red in |- *; intros; apply H5.
+  simpl in |- *.
+  rewrite H3.
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  rewrite H14; auto with coc core arith datatypes.
+
+  generalize X2 H12.
+  change
+    (forall X2 : candidate prop_skel,
+     eq_can prop_skel X2 X2 ->
+     classify_environment (M1 :: e) = classes_of_interpretation (interpretation_cons M1 ip prop_skel X2))
+   in |- *.
+  elim H13.
+  intros.
+  symmetry  in |- *.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  elim H3.
+  rewrite H9; simpl in |- *; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  replace (classes_of_interpretation (interpretation_cons M1 ip prop_skel X2)) with (classify_environment (M1 :: e)).
+  elim skeleton_sound with (M1 :: e) M2 (sort_term s2);
+   auto with coc core arith datatypes.
+
+  generalize X2 H12.
+  change
+    (forall X2 : candidate prop_skel,
+     eq_can prop_skel X2 X2 ->
+     classify_environment (M1 :: e) = classes_of_interpretation (interpretation_cons M1 ip prop_skel X2))
+   in |- *.
+  replace prop_skel with (covariant_skeleton (classify_term M1 (classify_environment e))).
+  intros.
+  symmetry  in |- *.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  elim H3.
+  rewrite H9; auto with coc core arith datatypes.
+
+  intros.
+  simpl in |- *.
+  apply eq_can_Pi; auto with coc core arith datatypes.
+  simpl in |- *; intros.
+  replace eq_candidate with (eq_can prop_skel); auto with coc core arith datatypes.
+  apply
+   eq_can_trans
+    with
+      (interpret_type M2 (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2) prop_skel);
+   auto with coc core arith datatypes.
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  replace prop_skel with
+   (skeleton_interpretation M2 (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2)).
+  apply H1 with (M1 :: e) (sort_term s2); auto with coc core arith datatypes.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  unfold interpretation_cons, extend_interpretation_kind in |- *.
+  elim (classify_term M1 (classes_of_interpretation ip)); auto with coc core arith datatypes.
+
+  red in |- *; intros.
+  apply H5.
+  simpl in |- *.
+  replace (cons (classify_term M1 (classes_of_interpretation ip)) (classes_of_interpretation ip)) with
+   (classes_of_interpretation (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2)).
+  rewrite H13; auto with coc core arith datatypes.
+
+  rewrite H3.
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  replace (classes_of_interpretation (interpretation_cons M1 ip (covariant_skeleton (classify_term M1 (classify_environment e))) X2))
+   with (classify_environment (M1 :: e)).
+  elim skeleton_sound with (M1 :: e) M2 (sort_term s2);
+   auto with coc core arith datatypes.
+
+  replace (cons (classify_term M1 (classify_environment e)) (classify_environment e)) with
+   (classify_environment (M1 :: e)); auto with coc core arith datatypes.
+  symmetry  in |- *.
+  apply interpretation_cons_equal with s1; auto with coc core arith datatypes.
+
+  elim H3; auto with coc core arith datatypes.
 Qed.
 
 
-  Lemma conv_int_typ :
-   forall (e : env) (U V K : term),
-   conv U V ->
-   typ e U K ->
-   typ e V K ->
-   forall ip : intP,
-   cls_of_int ip = class_env e ->
-   int_inv ip ->
-   cl_term U (class_env e) <> Trm ->
-   eq_can (skel_int U ip) (int_typ U ip _) (int_typ V ip _).
-intros.
-elim church_rosser with U V; intros; auto with coc core arith datatypes.
-apply eq_can_trans with (int_typ x ip (skel_int U ip));
- auto with coc core arith datatypes.
-apply red_int_typ with e K; auto with coc core arith datatypes.
+(** Multi-step reduction preserves interpretation up to canonical equality. *)
+Lemma reduces_interpret_type :
+ forall (e : environment) (U K : term),
+ has_type e U K ->
+ forall ip : interpretation_env,
+ classes_of_interpretation ip = classify_environment e ->
+ interpretation_invariant ip ->
+ classify_term U (classify_environment e) <> trm ->
+ forall V : term,
+ reduces U V -> eq_can (skeleton_interpretation U ip) (interpret_type U ip _) (interpret_type V ip _).
+Proof.
+  intros e U K HT ip Hcls Hinv Hcl V Hred.
+  induction Hred; auto with coc core arith datatypes.
+  apply eq_can_trans with (interpret_type y ip (skeleton_interpretation U ip));
+   auto with coc core arith datatypes.
+  replace (skeleton_interpretation U ip) with (skeleton_interpretation y ip).
+  apply interpret_type_reduces_once with e K; auto with coc core arith datatypes.
+  apply subject_reduction_theorem with U; auto with coc core arith datatypes.
 
-apply eq_can_sym.
-replace (skel_int U ip) with (skel_int V ip).
-apply red_int_typ with e K; auto with coc core arith datatypes.
-rewrite (class_red e V x K); auto with coc core arith datatypes.
-elim class_red with e U x K; auto with coc core arith datatypes.
+  rewrite Hcls.
+  elim class_red with e U y K; auto with coc core arith datatypes.
 
-unfold skel_int in |- *.
-rewrite H2.
-elim skel_sound with e U K; auto with coc core arith datatypes.
-elim skel_sound with e V K; auto with coc core arith datatypes.
+  unfold skeleton_interpretation in |- *.
+  rewrite Hcls.
+  elim skeleton_sound with e U K; auto with coc core arith datatypes.
+  elim skeleton_sound with e y K; auto with coc core arith datatypes.
+  apply subject_reduction_theorem with U; auto with coc core arith datatypes.
 Qed.
 
+
+(** Convertible terms have equal interpretations. *)
+Lemma convertible_interpret_type :
+ forall (e : environment) (U V K : term),
+ convertible U V ->
+ has_type e U K ->
+ has_type e V K ->
+ forall ip : interpretation_env,
+ classes_of_interpretation ip = classify_environment e ->
+ interpretation_invariant ip ->
+ classify_term U (classify_environment e) <> trm ->
+ eq_can (skeleton_interpretation U ip) (interpret_type U ip _) (interpret_type V ip _).
+Proof.
+  intros.
+  elim church_rosser_theorem with U V; intros; auto with coc core arith datatypes.
+  apply eq_can_trans with (interpret_type x ip (skeleton_interpretation U ip));
+   auto with coc core arith datatypes.
+  apply reduces_interpret_type with e K; auto with coc core arith datatypes.
+
+  apply eq_can_sym.
+  replace (skeleton_interpretation U ip) with (skeleton_interpretation V ip).
+  apply reduces_interpret_type with e K; auto with coc core arith datatypes.
+  rewrite (class_red e V x K); auto with coc core arith datatypes.
+  elim class_red with e U x K; auto with coc core arith datatypes.
+
+  unfold skeleton_interpretation in |- *.
+  rewrite H2.
+  elim skeleton_sound with e U K; auto with coc core arith datatypes.
+  elim skeleton_sound with e V K; auto with coc core arith datatypes.
+Qed.

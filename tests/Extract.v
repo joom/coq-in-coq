@@ -14,38 +14,25 @@
 (* 02110-1301 USA                                                     *)
 
 
+From Stdlib Require Extraction.
+From Stdlib Require Import ExtrOcamlBasic.
+From Stdlib Require Import ExtrOcamlNatInt.
+From Stdlib Require Import ExtrOCamlPString.
 
-Require Import Termes.
-Require Import Conv.
-Require Import Types.
-Require Import Conv_Dec.
-Require Import Infer.
-Require Import Names.
-Require Import Expr.
-Require Import Machine.
-Require Extraction.
+From CoqInCoq Require Import terms.
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import decidable_conversion.
+From CoqInCoq Require Import inference.
+From CoqInCoq Require Import names.
+From CoqInCoq Require Import expressions.
+From CoqInCoq Require Import machine.
 
-Extract Inductive bool => "bool" [ "true" "false" ].
-Extract Inductive sumbool => "bool" [ "true" "false" ].
-Extract Inductive sumor => "option" [ "Some" "None" ].
-
-(* integers *)
-
-Extract Inlined Constant ml_int => "int".
-Extract Constant ml_eq_int => "(=)".
-Extract Constant ml_zero => "0".
-Extract Constant ml_int_case => "function 0 -> None | n -> Some (pred n)".
-Extract Inlined Constant ml_succ => "succ".
-
-(* strings *)
-
-Extract Inlined Constant ml_string => "string".
-Extract Constant ml_eq_string => "(=)".
-Extract Constant ml_x_int => "fun n -> ""x"" ^ (string_of_int n)".
+Extract Constant name_of_nat => "fun n -> Pstring.unsafe_of_string (""x"" ^ (string_of_int n))".
 
 Extraction
- NoInline list_index is_free_var check_typ red_to_sort red_to_prod exec_axiom
+ NoInline list_index is_free_var check_type reduces_to_sort reduces_to_prod execute_axiom
          glob_ctx glob_names empty_state name_dec find_free_var synthesis
-         interp_command transl_message transl_error interp_ast.
+         interpret_command translate_message_string translate_error_string interpret_ast.
 
-Extraction "core.ml" is_free_var empty_state interp_ast.
+Extraction "core.ml" is_free_var empty_state interpret_ast.

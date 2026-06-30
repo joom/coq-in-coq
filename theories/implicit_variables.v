@@ -13,8 +13,10 @@
 (* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA *)
 (* 02110-1301 USA                                                     *)
 
+(** Implicit type declarations for common variable names,
+    loaded inline by files that need them. *)
 
- Implicit Types i k m n p : nat.
+Implicit Types i k m n p : nat.
 Implicit Type s : sort.
 Implicit Types A B M N T t u v : term.
-Implicit Types e f g : env.
+Implicit Types e f g : environment.

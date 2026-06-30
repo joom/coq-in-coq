@@ -14,471 +14,526 @@
 (* 02110-1301 USA                                                     *)
 
 
-Require Import Termes.
-Require Import Conv.
-Require Import Ered.
-Require Import Types.
-Require Import ETypes.
-Require Import Conv_Dec.
-Require Import Strong_Norm.
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import eta_reduction.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import eta_typing.
+From CoqInCoq Require Import decidable_conversion.
+From CoqInCoq Require Import strong_normalization.
+From CoqInCoq Require Import terms.
 
-Definition is_lam (t : term) :=
-  exists T : term, (exists M : term, t = Abs T M).
+(** A term is a lam abstraction. *)
+Definition is_lambda (t : term) :=
+  exists T : term, (exists M : term, t = lam T M).
 
+(** A normal type and normal body yield a normal lam. *)
 Lemma normal_normal_abs :
- forall T M : term, normal T -> normal M -> normal (Abs T M).
-intros; unfold normal, not in |- *; intros.
-inversion_clear H1.
-elim H with M'; auto with coc.
-elim H0 with M'; auto with coc.
+ forall T M : term, normal T -> normal M -> normal (lam T M).
+Proof.
+  intros; unfold normal, not in |- *; intros.
+  inversion_clear H1.
+  elim H with M'; auto with coc.
+  elim H0 with M'; auto with coc.
 Qed.
 
+(** Normal head and argument with non-lam head yield a normal app. *)
 Lemma normal_normal_app :
- forall M N : term, normal M -> normal N -> ~ is_lam M -> normal (App M N).
-intros; unfold normal, not in |- *; intros.
-generalize H H1; clear H H1; inversion_clear H2.
-intros.
-apply H1.
-unfold is_lam in |- *; split with T; split with M0; trivial.
-intros H1; elim H1 with N1; auto with coc.
-elim H0 with N2; auto with coc.
+ forall M N : term, normal M -> normal N -> ~ is_lambda M -> normal (app M N).
+Proof.
+  intros; unfold normal, not in |- *; intros.
+  generalize H H1; clear H H1; inversion_clear H2.
+  intros.
+  apply H1.
+  unfold is_lambda in |- *; split with T; split with M0; trivial.
+  intros H1; elim H1 with N1; auto with coc.
+  elim H0 with N2; auto with coc.
 Qed.
 
 
+(** Normal domain and codomain yield a normal prod. *)
 Lemma normal_normal_prod :
- forall T U : term, normal T -> normal U -> normal (Prod T U).
-intros; unfold normal, not in |- *; intros.
-inversion_clear H1.
-elim H with N1; auto with coc.
-elim H0 with N2; auto with coc.
+ forall T U : term, normal T -> normal U -> normal (prod T U).
+Proof.
+  intros; unfold normal, not in |- *; intros.
+  inversion_clear H1.
+  elim H with N1; auto with coc.
+  elim H0 with N2; auto with coc.
 Qed.
 
 Hint Resolve normal_normal_abs normal_normal_app normal_normal_prod: ecoc.
 
+(** A normal lam has normal type and body components. *)
 Lemma normal_abs_inv :
- forall T M : term, normal (Abs T M) -> normal T /\ normal M.
-unfold normal in |- *; intuition.
-apply H with (Abs u M); auto with coc.
-apply H with (Abs T u); auto with coc.
+ forall T M : term, normal (lam T M) -> normal T /\ normal M.
+Proof.
+  unfold normal in |- *; intuition.
+  apply H with (lam u M); auto with coc.
+  apply H with (lam T u); auto with coc.
 Qed.
 
+(** A normal app has normal head, normal argument, and non-lam head. *)
 Lemma normal_app_inv :
- forall M N : term, normal (App M N) -> normal M /\ normal N /\ ~ is_lam M.
-unfold normal in |- *; intuition.
-apply H with (App u N); auto with coc.
-apply H with (App M u); auto with coc.
-generalize H0; clear H0; unfold is_lam in |- *; intros (T, (x0, H0)).
-rewrite H0 in H; apply H with (subst N x0); auto with coc.
+ forall M N : term, normal (app M N) -> normal M /\ normal N /\ ~ is_lambda M.
+Proof.
+  unfold normal in |- *; intuition.
+  apply H with (app u N); auto with coc.
+  apply H with (app M u); auto with coc.
+  generalize H0; clear H0; unfold is_lambda in |- *; intros (T, (x0, H0)).
+  rewrite H0 in H; apply H with (subst N x0); auto with coc.
 Qed.
 
+(** A normal prod has normal domain and codomain. *)
 Lemma normal_prod_inv :
- forall T U : term, normal (Prod T U) -> normal T /\ normal U.
-unfold normal in |- *; intuition.
-apply H with (Prod u U); auto with coc.
-apply H with (Prod T u); auto with coc.
+ forall T U : term, normal (prod T U) -> normal T /\ normal U.
+Proof.
+  unfold normal in |- *; intuition.
+  apply H with (prod u U); auto with coc.
+  apply H with (prod T u); auto with coc.
 Qed.
 
 
-Inductive NF_Econv : term -> term -> Prop :=
-  | nf_var : forall n : nat, NF_Econv (Ref n) (Ref n)
-  | nf_app :
+(** Conversion on normal forms up to type erasure. *)
+Inductive normal_form_eta_convertible : term -> term -> Prop :=
+  | nf_conv_var : forall n : nat, normal_form_eta_convertible (var n) (var n)
+  | nf_conv_app :
       forall M M' N N' : term,
-      NF_Econv M M' ->
-      ~ is_lam M -> NF_Econv N N' -> NF_Econv (App M N) (App M' N')
-  | nf_lam :
+      normal_form_eta_convertible M M' ->
+      ~ is_lambda M -> normal_form_eta_convertible N N' -> normal_form_eta_convertible (app M N) (app M' N')
+  | nf_conv_lam :
       forall T T' M M' : term,
-      NF_Econv M M' ->
-      normal T -> normal T' -> NF_Econv (Abs T M) (Abs T' M')
-  | nf_sort : forall s : sort, NF_Econv (Srt s) (Srt s)
-  | nf_prod :
+      normal_form_eta_convertible M M' ->
+      normal T -> normal T' -> normal_form_eta_convertible (lam T M) (lam T' M')
+  | nf_conv_sort : forall s : sort, normal_form_eta_convertible (sort_term s) (sort_term s)
+  | nf_conv_prod :
       forall T T' U U' : term,
-      NF_Econv T T' -> NF_Econv U U' -> NF_Econv (Prod T U) (Prod T' U').
+      normal_form_eta_convertible T T' -> normal_form_eta_convertible U U' -> normal_form_eta_convertible (prod T U) (prod T' U').
 
-Hint Resolve nf_var nf_app nf_lam nf_sort nf_prod: ecoc.
+Hint Resolve nf_conv_var nf_conv_app nf_conv_lam nf_conv_sort nf_conv_prod: ecoc.
 
-Lemma normal_prop : normal (Srt prop).
-unfold normal, not in |- *; intros.
-inversion H.
+(** The sort prop is normal. *)
+Lemma normal_prop : normal (sort_term prop).
+Proof.
+  unfold normal, not in |- *; intros.
+  inversion H.
 Qed.
 Hint Resolve normal_prop: ecoc.
 
 
-Lemma not_is_lam_Ered1 :
- forall M N : term, Ered1 M N -> normal M -> ~ is_lam M -> ~ is_lam N.
-simple induction 1; intros.
-elim H0 with (subst N0 M0); auto with coc.
-elim H1; unfold is_lam in |- *; split with T; split with M0; trivial.
-elim H3; unfold is_lam in |- *; split with M0; split with N0; trivial.
-elim H3; unfold is_lam in |- *; split with N0; split with M0; trivial.
-unfold not in |- *; unfold is_lam in |- *; intros (x, (x0, H4)); discriminate.
-unfold not in |- *; unfold is_lam in |- *; intros (x, (x0, H4)); discriminate.
-unfold not in |- *; unfold is_lam in |- *; intros (x, (x0, H4)); discriminate.
-unfold not in |- *; unfold is_lam in |- *; intros (x, (x0, H4)); discriminate.
+(** Erasure reduction preserves the non-lam property. *)
+Lemma not_is_lambda_eta_reduces_once :
+ forall M N : term, eta_reduces_once M N -> normal M -> ~ is_lambda M -> ~ is_lambda N.
+Proof.
+  simple induction 1; intros.
+  elim H0 with (subst N0 M0); auto with coc.
+  elim H1; unfold is_lambda in |- *; split with T; split with M0; trivial.
+  elim H3; unfold is_lambda in |- *; split with M0; split with N0; trivial.
+  elim H3; unfold is_lambda in |- *; split with N0; split with M0; trivial.
+  unfold not in |- *; unfold is_lambda in |- *; intros (x, (x0, H4)); discriminate.
+  unfold not in |- *; unfold is_lambda in |- *; intros (x, (x0, H4)); discriminate.
+  unfold not in |- *; unfold is_lambda in |- *; intros (x, (x0, H4)); discriminate.
+  unfold not in |- *; unfold is_lambda in |- *; intros (x, (x0, H4)); discriminate.
 Qed.
 
-Hint Resolve not_is_lam_Ered1: ecoc.
+Hint Resolve not_is_lambda_eta_reduces_once: ecoc.
 
-Lemma Ered1_normal_normal :
- forall M N : term, Ered1 M N -> normal M -> normal N.
-simple induction 1; intros.
-elim H0 with (subst N0 M0); auto with coc.
-elim (normal_abs_inv T M0 H0); auto with ecoc.
-elim (normal_abs_inv M0 N0 H2); auto with ecoc.
-elim (normal_abs_inv N0 M0 H2); auto with ecoc.
-elim (normal_app_inv M1 M2 H2); intros.
-elim H4; eauto with ecoc.
-elim (normal_app_inv M1 M2 H2); intros.
-elim H4; eauto with ecoc.
-elim (normal_prod_inv M1 M2 H2); auto with ecoc.
-elim (normal_prod_inv M1 M2 H2); auto with ecoc.
+(** One-step erasure reduction preserves normality. *)
+Lemma eta_reduces_once_normal_normal :
+ forall M N : term, eta_reduces_once M N -> normal M -> normal N.
+Proof.
+  simple induction 1; intros.
+  elim H0 with (subst N0 M0); auto with coc.
+  elim (normal_abs_inv T M0 H0); auto with ecoc.
+  elim (normal_abs_inv M0 N0 H2); auto with ecoc.
+  elim (normal_abs_inv N0 M0 H2); auto with ecoc.
+  elim (normal_app_inv M1 M2 H2); intros.
+  elim H4; eauto with ecoc.
+  elim (normal_app_inv M1 M2 H2); intros.
+  elim H4; eauto with ecoc.
+  elim (normal_prod_inv M1 M2 H2); auto with ecoc.
+  elim (normal_prod_inv M1 M2 H2); auto with ecoc.
 Qed.
 
-Hint Resolve Ered1_normal_normal: ecoc.
+Hint Resolve eta_reduces_once_normal_normal: ecoc.
 
-Lemma refl_NF_Econv : forall t : term, normal t -> NF_Econv t t.
-simple induction t; auto with ecoc; intros.
-elim (normal_abs_inv t0 t1 H1); auto with ecoc.
-elim (normal_app_inv t0 t1 H1); intros.
-elim H3; auto with ecoc.
-elim (normal_prod_inv t0 t1 H1); auto with ecoc.
+(** Normal forms are normal_form_eta_convertible-reflexive. *)
+Lemma refl_normal_form_eta_convertible : forall t : term, normal t -> normal_form_eta_convertible t t.
+Proof.
+  simple induction t; auto with ecoc; intros.
+  elim (normal_abs_inv t0 t1 H1); auto with ecoc.
+  elim (normal_app_inv t0 t1 H1); intros.
+  elim H3; auto with ecoc.
+  elim (normal_prod_inv t0 t1 H1); auto with ecoc.
 Qed.
 
-Hint Resolve refl_NF_Econv: ecoc.
+Hint Resolve refl_normal_form_eta_convertible: ecoc.
 
-Lemma NF_Econv_not_is_lam :
- forall M N : term, NF_Econv M N -> ~ is_lam M -> ~ is_lam N.
-intros M N H; inversion_clear H; auto; intros.
-unfold is_lam, not in |- *; intros (x, (x0, H3)); discriminate.
-elim H; unfold is_lam in |- *; split with T; split with M0; trivial.
-unfold is_lam, not in |- *; intros (x, (x0, H3)); discriminate.
+(** normal_form_eta_convertible preserves the non-lam property. *)
+Lemma normal_form_eta_convertible_not_lambda :
+ forall M N : term, normal_form_eta_convertible M N -> ~ is_lambda M -> ~ is_lambda N.
+Proof.
+  intros M N H; inversion_clear H; auto; intros.
+  unfold is_lambda, not in |- *; intros (x, (x0, H3)); discriminate.
+  elim H; unfold is_lambda in |- *; split with T; split with M0; trivial.
+  unfold is_lambda, not in |- *; intros (x, (x0, H3)); discriminate.
 Qed.
 
-Hint Resolve NF_Econv_not_is_lam: ecoc.
+Hint Resolve normal_form_eta_convertible_not_lambda: ecoc.
 
-Lemma sym_NF_Econv : forall M N : term, NF_Econv M N -> NF_Econv N M.
-simple induction 1; eauto with ecoc; eauto with ecoc.
+(** normal_form_eta_convertible is symmetric. *)
+Lemma sym_normal_form_eta_convertible : forall M N : term, normal_form_eta_convertible M N -> normal_form_eta_convertible N M.
+Proof.
+  simple induction 1; eauto with ecoc; eauto with ecoc.
 Qed.
 
-Hint Resolve sym_NF_Econv: ecoc.
+Hint Resolve sym_normal_form_eta_convertible: ecoc.
 
-Lemma trans_NF_Econv_NF_Econv :
+(** normal_form_eta_convertible is transitive. *)
+Lemma trans_normal_form_eta_convertible :
  forall M N : term,
- NF_Econv M N -> forall P : term, NF_Econv N P -> NF_Econv M P.
-simple induction 1; auto with ecoc; intros.
-inversion H5; auto with ecoc.
-inversion H4; auto with ecoc.
-inversion H4; auto with ecoc.
+ normal_form_eta_convertible M N -> forall P : term, normal_form_eta_convertible N P -> normal_form_eta_convertible M P.
+Proof.
+  simple induction 1; auto with ecoc; intros.
+  inversion H5; auto with ecoc.
+  inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 Qed.
 
-Lemma Ered1_normal_NF_Econv :
- forall T T' : term, Ered1 T T' -> normal T -> NF_Econv T T'.
-simple induction 1; intros.
-elim H0 with (subst N M); auto with coc.
-elim (normal_abs_inv T0 M H0); intros.
-apply trans_NF_Econv_NF_Econv with (Abs (Srt prop) M); auto with ecoc.
-elim (normal_abs_inv M N H2); eauto with ecoc.
-elim (normal_abs_inv N M H2); eauto with ecoc.
-elim (normal_app_inv M1 M2 H2); intros.
-elim H4; eauto with ecoc.
-elim (normal_app_inv M1 M2 H2); intros.
-elim H4; eauto with ecoc.
-elim (normal_prod_inv M1 M2 H2); auto with ecoc.
-elim (normal_prod_inv M1 M2 H2); auto with ecoc.
+(** One-step erasure reduction on a normal term yields normal_form_eta_convertible. *)
+Lemma eta_reduces_once_normal_form_convertible :
+ forall T T' : term, eta_reduces_once T T' -> normal T -> normal_form_eta_convertible T T'.
+Proof.
+  simple induction 1; intros.
+  elim H0 with (subst N M); auto with coc.
+  elim (normal_abs_inv T0 M H0); intros.
+  apply trans_normal_form_eta_convertible with (lam (sort_term prop) M); auto with ecoc.
+  elim (normal_abs_inv M N H2); eauto with ecoc.
+  elim (normal_abs_inv N M H2); eauto with ecoc.
+  elim (normal_app_inv M1 M2 H2); intros.
+  elim H4; eauto with ecoc.
+  elim (normal_app_inv M1 M2 H2); intros.
+  elim H4; eauto with ecoc.
+  elim (normal_prod_inv M1 M2 H2); auto with ecoc.
+  elim (normal_prod_inv M1 M2 H2); auto with ecoc.
 Qed.
 
-Hint Resolve Ered1_normal_NF_Econv: ecoc.
+Hint Resolve eta_reduces_once_normal_form_convertible: ecoc.
 
-Lemma Ered_normal_NF_Econv :
- forall T T' : term, Ered T T' -> normal T -> NF_Econv T T'.
-intros T T' H.
-pattern T in |- *.
-apply Ered1_Ered_ind with T'; auto with ecoc sets.
-intros.
-apply trans_NF_Econv_NF_Econv with R; eauto with ecoc.
+(** Multi-step erasure reduction on a normal term yields normal_form_eta_convertible. *)
+Lemma eta_reduces_normal_form_convertible :
+ forall T T' : term, eta_reduces T T' -> normal T -> normal_form_eta_convertible T T'.
+Proof.
+  intros T T' H.
+  pattern T in |- *.
+  apply eta_reduces_reverse_ind with T'; auto with ecoc sets.
+  intros.
+  apply trans_normal_form_eta_convertible with R; eauto with ecoc.
 Qed.
 
-Hint Resolve Ered_normal_NF_Econv: ecoc.
+Hint Resolve eta_reduces_normal_form_convertible: ecoc.
 
-Lemma normal_Econv_NF_conv :
- forall T T' : term, Econv T T' -> normal T -> normal T' -> NF_Econv T T'.
-intros T T' H.
-elim Econv_church_rosser with T T'; auto with ecoc; intros.
-apply trans_NF_Econv_NF_Econv with x; eauto with ecoc.
+(** Normal forms related by eta_convertible are related by normal_form_eta_convertible. *)
+Lemma normal_eta_convertible_normal_form :
+ forall T T' : term, eta_convertible T T' -> normal T -> normal T' -> normal_form_eta_convertible T T'.
+Proof.
+  intros T T' H.
+  elim eta_church_rosser with T T'; auto with ecoc; intros.
+  apply trans_normal_form_eta_convertible with x; eauto with ecoc.
 Qed.
 
-Hint Resolve normal_Econv_NF_conv: ecoc.
+Hint Resolve normal_eta_convertible_normal_form: ecoc.
 
 
-Lemma NF_Econv_Econv : forall M N : term, NF_Econv M N -> Econv M N.
-simple induction 1; auto with ecoc.
+(** normal_form_eta_convertible implies eta_convertible. *)
+Lemma normal_form_eta_convertible_eta_convertible : forall M N : term, normal_form_eta_convertible M N -> eta_convertible M N.
+Proof.
+  simple induction 1; auto with ecoc.
 Qed.
-Hint Resolve NF_Econv_Econv: ecoc.
+Hint Resolve normal_form_eta_convertible_eta_convertible: ecoc.
 
-Inductive equiv_env (P : term -> term -> Prop) : env -> env -> Prop :=
-  | EE_n : equiv_env P nil nil
-  | EE_c :
-      forall (t t' : term) (e e' : env),
+(** Pointwise equivalence of environments under a relation. *)
+Inductive equiv_env (P : term -> term -> Prop) : environment -> environment -> Prop :=
+  | equiv_env_nil : equiv_env P nil nil
+  | equiv_env_cons :
+      forall (t t' : term) (e e' : environment),
       P t t' -> equiv_env P e e' -> equiv_env P (t :: e) (t' :: e').
- 
+
+(** Equivalent environments map the same position to related items. *)
 Lemma equiv_env_item :
- forall (P : term -> term -> Prop) (n : nat) (e e' : env) (A B : term),
- item _ A e n -> item _ B e' n -> equiv_env P e e' -> P A B. 
-intro P; simple induction n.
-intros e e' A B H; inversion_clear H.
-intros H; inversion_clear H; intros H; inversion H; trivial.
-
-intros n0 H e e' A B H0; inversion_clear H0.
-intros H0; inversion_clear H0; intros H0; inversion_clear H0; eauto.
+ forall (P : term -> term -> Prop) (n : nat) (e e' : environment) (A B : term),
+ nth_error e n = Some A -> nth_error e' n = Some B -> equiv_env P e e' -> P A B.
+Proof.
+  intro P; induction n as [|n0 IHn].
+  - intros e e' A B HA HB Heq.
+    destruct e as [|h e'']; simpl in HA; [discriminate|].
+    destruct e' as [|h' e''']; simpl in HB; [discriminate|].
+    injection HA as <-. injection HB as <-.
+    inversion Heq; trivial.
+  - intros e e' A B HA HB Heq.
+    destruct e as [|h e'']; simpl in HA; [discriminate|].
+    destruct e' as [|h' e''']; simpl in HB; [discriminate|].
+    inversion_clear Heq. eapply IHn; eauto.
 Qed.
 
 
-Lemma Etyp_NF_Econv_Econv :
+(** normal_form_eta_convertible-related non-lam terms in equivalent environments have eta_convertible types. *)
+Lemma eta_has_type_normal_form_convertible :
  forall M M' : term,
- NF_Econv M M' ->
- ~ is_lam M ->
- forall (e e' : env) (A B : term),
- equiv_env Econv e e' -> Etyp e M A -> Etyp e' M' B -> Econv A B.
+ normal_form_eta_convertible M M' ->
+ ~ is_lambda M ->
+ forall (e e' : environment) (A B : term),
+ equiv_env eta_convertible e e' -> eta_has_type e M A -> eta_has_type e' M' B -> eta_convertible A B.
+Proof.
+  simple induction 1; intros.
+  apply inversion_eta_has_type_ref with e A n; trivial; intros.
+  apply inversion_eta_has_type_ref with e' B n; trivial; intros.
+  apply trans_eta_convertible with (lift (S n) U); trivial.
+  apply trans_eta_convertible with (lift (S n) U0); auto with ecoc.
+  unfold lift in |- *; apply eta_convertible_lift.
+  apply equiv_env_item with n e e'; trivial.
 
-simple induction 1; intros.
-apply inv_Etyp_ref with e A n; trivial; intros.
-apply inv_Etyp_ref with e' B n; trivial; intros.
-apply trans_Econv_Econv with (lift (S n) U); trivial.
-apply trans_Econv_Econv with (lift (S n) U0); auto with ecoc.
-unfold lift in |- *; apply Econv_Econv_lift.
-apply equiv_env_item with n e e'; trivial.
+  apply inversion_eta_has_type_application with e M0 N A; trivial.
+  intros.
+  apply inversion_eta_has_type_application with e' M'0 N' B; trivial.
+  intros.
+  apply trans_eta_convertible with (subst N Ur); trivial.
+  apply sym_eta_convertible; apply trans_eta_convertible with (subst N' Ur0); trivial.
+  unfold subst in |- *; apply eta_convertible_subst.
+  apply sym_eta_convertible; apply normal_form_eta_convertible_eta_convertible; trivial.
 
-apply inv_Etyp_app with e M0 N A; trivial.
-intros.
-apply inv_Etyp_app with e' M'0 N' B; trivial.
-intros.
-apply trans_Econv_Econv with (subst N Ur); trivial.
-apply sym_Econv; apply trans_Econv_Econv with (subst N' Ur0); trivial.
-unfold subst in |- *; apply Econv_Econv_subst.
-apply sym_Econv; apply NF_Econv_Econv; trivial.
+  cut (eta_convertible (prod V Ur) (prod V0 Ur0)).
+  intros.
+  apply sym_eta_convertible.
+  eapply inversion_eta_convertible_product_right; eauto.
 
-cut (Econv (Prod V Ur) (Prod V0 Ur0)).
-intros.
-apply sym_Econv.
-eapply inv_Econv_prod_r; eauto.
+  apply H1 with e e'; trivial.
 
-apply H1 with e e'; trivial.
+  elim H4; unfold is_lambda in |- *; split with T; split with M0; trivial.
 
-elim H4; unfold is_lam in |- *; split with T; split with M0; trivial.
+  generalize H2 H3; clear H2 H3; case s; intros.
+  elim (inversion_eta_has_type_kind e A H2).
 
-generalize H2 H3; clear H2 H3; case s; intros.
-elim (inv_Etyp_kind e A H2).
+  apply trans_eta_convertible with (sort_term kind).
+  eapply inversion_eta_has_type_prop; eauto.
 
-apply trans_Econv_Econv with (Srt kind).
-eapply inv_Etyp_prop; eauto.
+  apply sym_eta_convertible; eapply inversion_eta_has_type_prop; eauto.
 
-apply sym_Econv; eapply inv_Etyp_prop; eauto.
+  apply trans_eta_convertible with (sort_term kind).
+  eapply inversion_eta_has_type_set; eauto.
 
-apply trans_Econv_Econv with (Srt kind).
-eapply inv_Etyp_set; eauto.
+  apply sym_eta_convertible; eapply inversion_eta_has_type_set; eauto.
 
-apply sym_Econv; eapply inv_Etyp_set; eauto.
+  apply inversion_eta_has_type_product with e T U A; trivial; intros.
+  apply inversion_eta_has_type_product with e' T' U' B; trivial; intros.
+  apply trans_eta_convertible with (sort_term s2); auto with ecoc.
+  apply trans_eta_convertible with (sort_term s3); auto with ecoc.
+  apply H3 with (T :: e) (T' :: e'); trivial.
+  unfold not, is_lambda in |- *; intros (x, (x0, H14)).
+  rewrite H14 in H9.
+  apply inversion_eta_has_type_lambda with (T :: e) x x0 (sort_term s2); trivial.
+  intros.
+  elim (eta_convertible_sort_product s2 x T0); auto with ecoc.
 
-apply inv_Etyp_prod with e T U A; trivial; intros.
-apply inv_Etyp_prod with e' T' U' B; trivial; intros.
-apply trans_Econv_Econv with (Srt s2); auto with ecoc.
-apply trans_Econv_Econv with (Srt s3); auto with ecoc.
-apply H3 with (T :: e) (T' :: e'); trivial.
-unfold not, is_lam in |- *; intros (x, (x0, H14)).
-rewrite H14 in H9.
-apply inv_Etyp_abs with (T :: e) x x0 (Srt s2); trivial.
-intros.
-elim (Econv_sort_prod s2 x T0); auto with ecoc.
-
-constructor; auto with ecoc.
+  constructor; auto with ecoc.
 Qed.
 
-Lemma refl_equiv_env : forall e : env, equiv_env Econv e e.
-simple induction e; constructor; auto with ecoc.
+(** Every environment is eta_convertible-equivalent to itself. *)
+Lemma refl_equiv_env : forall e : environment, equiv_env eta_convertible e e.
+Proof.
+  simple induction e; constructor; auto with ecoc.
 Qed.
 Hint Resolve refl_equiv_env: ecoc.
 
-Lemma Econv_eq :
- forall (e : env) (a Ta : term),
- Etyp e a Ta ->
- forall b Tb : term, Etyp e b Tb -> NF_Econv a b -> Econv Ta Tb -> a = b.
+(** normal_form_eta_convertible-related terms with convertible types in the same environment are equal. *)
+Lemma eta_convertible_eq :
+ forall (e : environment) (a Ta : term),
+ eta_has_type e a Ta ->
+ forall b Tb : term, eta_has_type e b Tb -> normal_form_eta_convertible a b -> eta_convertible Ta Tb -> a = b.
+Proof.
+  simple induction 1; intros.
+  (* sort et var *)
+  inversion H2; trivial.
+  inversion H2; trivial.
+  inversion H3; trivial.
 
-simple induction 1; intros.
-(* sort et var *)
-inversion H2; trivial.
-inversion H2; trivial.
-inversion H3; trivial.
+  (* lam *)
+  inversion H7.
+  rewrite <- H13 in H6.
+  apply inversion_eta_has_type_lambda with e0 T' M' Tb; trivial.
+  intros; cut (T = T'); intros.
+  rewrite H19; cut (M = M'); intros.
+  rewrite H20; trivial.
+  apply H5 with T1; trivial.
+  rewrite H19; trivial.
+  apply inversion_eta_convertible_product_right with T T'.
+  apply trans_eta_convertible with Tb; auto with ecoc.
+  apply H1 with (sort_term s0); trivial.
+  apply normal_eta_convertible_normal_form; trivial.
+  apply inversion_eta_convertible_product_left with U T1.
+  apply trans_eta_convertible with Tb; auto with ecoc.
+  cut (eta_convertible T T').
+  intros; apply eta_has_type_normal_form_convertible with T T' e0 e0; auto with ecoc.
+  unfold not, is_lambda in |- *; intros (x, (x0, H20)).
+  rewrite H20 in H0.
+  apply inversion_eta_has_type_lambda with e0 x x0 (sort_term s1); trivial.
+  intros.
+  elim (eta_convertible_sort_product s1 x T2); auto with ecoc.
+  apply inversion_eta_convertible_product_left with U T1.
+  apply trans_eta_convertible with Tb; auto with ecoc.
 
-(* Abs *)
-inversion H7.
-rewrite <- H13 in H6.
-apply inv_Etyp_abs with e0 T' M' Tb; trivial.
-intros; cut (T = T'); intros.
-rewrite H19; cut (M = M'); intros.
-rewrite H20; trivial.
-apply H5 with T1; trivial.
-rewrite H19; trivial.
-apply inv_Econv_prod_r with T T'.
-apply trans_Econv_Econv with Tb; auto with ecoc.
-apply H1 with (Srt s0); trivial.
-apply normal_Econv_NF_conv; trivial.
-apply inv_Econv_prod_l with U T1.
-apply trans_Econv_Econv with Tb; auto with ecoc.
-cut (Econv T T').
-intros; apply Etyp_NF_Econv_Econv with T T' e0 e0; auto with ecoc.
-unfold not, is_lam in |- *; intros (x, (x0, H20)).
-rewrite H20 in H0.
-apply inv_Etyp_abs with e0 x x0 (Srt s1); trivial.
-intros.
-elim (Econv_sort_prod s1 x T2); auto with ecoc.
-apply inv_Econv_prod_l with U T1.
-apply trans_Econv_Econv with Tb; auto with ecoc.
+  (* app *)
+  inversion H5.
+  rewrite <- H11 in H4.
+  apply inversion_eta_has_type_application with e0 M' N' Tb; trivial.
 
-(* App *)
-inversion H5.
-rewrite <- H11 in H4.
-apply inv_Etyp_app with e0 M' N' Tb; trivial.
+  intros; cut (u = M').
+  intros; cut (v = N').
+  intros; rewrite H16; rewrite H17; trivial.
 
-intros; cut (u = M').
-intros; cut (v = N').
-intros; rewrite H16; rewrite H17; trivial.
+  apply H1 with V0; trivial.
+  apply inversion_eta_convertible_product_left with Ur Ur0.
+  apply eta_has_type_normal_form_convertible with u M' e0 e0; auto with ecoc.
 
-apply H1 with V0; trivial.
-apply inv_Econv_prod_l with Ur Ur0.
-apply Etyp_NF_Econv_Econv with u M' e0 e0; auto with ecoc.
+  apply H3 with (prod V0 Ur0); trivial.
+  apply eta_has_type_normal_form_convertible with u M' e0 e0; auto with ecoc.
 
-apply H3 with (Prod V0 Ur0); trivial.
-apply Etyp_NF_Econv_Econv with u M' e0 e0; auto with ecoc.
+  (* prod *)
+  inversion H5.
+  rewrite <- H10 in H4.
+  apply inversion_eta_has_type_product with e0 T' U' Tb; trivial.
+  intros; cut (T = T').
+  intros; cut (U = U').
+  intros; rewrite H15; rewrite H16; trivial.
 
-(* Prod *)
-inversion H5.
-rewrite <- H10 in H4.
-apply inv_Etyp_prod with e0 T' U' Tb; trivial.
-intros; cut (T = T').
-intros; cut (U = U').
-intros; rewrite H15; rewrite H16; trivial.
+  apply H3 with (sort_term s3); auto.
+  rewrite H15; trivial.
 
-apply H3 with (Srt s3); auto.
-rewrite H15; trivial.
+  apply trans_eta_convertible with Tb; auto with ecoc.
 
-apply trans_Econv_Econv with Tb; auto with ecoc.
+  apply H1 with (sort_term s0); auto.
+  apply eta_has_type_normal_form_convertible with T T' e0 e0; auto with ecoc.
+  unfold not, is_lambda in |- *; intros (x, (x0, H15)).
+  rewrite H15 in H0.
+  apply inversion_eta_has_type_lambda with e0 x x0 (sort_term s1); trivial.
+  intros.
+  elim (eta_convertible_sort_product s1 x T1); auto with ecoc.
 
-apply H1 with (Srt s0); auto.
-apply Etyp_NF_Econv_Econv with T T' e0 e0; auto with ecoc.
-unfold not, is_lam in |- *; intros (x, (x0, H15)).
-rewrite H15 in H0.
-apply inv_Etyp_abs with e0 x x0 (Srt s1); trivial.
-intros.
-elim (Econv_sort_prod s1 x T1); auto with ecoc.
-
-(* Conv *)
-apply H1 with Tb; trivial.
-apply trans_Econv_Econv with V; auto with ecoc.
+  (* Conv *)
+  apply H1 with Tb; trivial.
+  apply trans_eta_convertible with V; auto with ecoc.
 Qed.
 
 
-Lemma typ_is_nf :
- forall (e : env) (a Ta : term),
- typ e a Ta -> exists a' : term, red a a' /\ normal a' /\ typ e a' Ta.
-intros.
-elim (compute_nf a).
-intros; split with x; intuition; trivial.
-apply subject_reduction with a; trivial.
-apply str_norm with e Ta; trivial.
+(** Every typed term reduces to a normal form that is also typed. *)
+Lemma has_type_is_normal_form :
+ forall (e : environment) (a Ta : term),
+ has_type e a Ta -> exists a' : term, reduces a a' /\ normal a' /\ has_type e a' Ta.
+Proof.
+  intros.
+  elim (compute_normal_form a).
+  intros; split with x; intuition; trivial.
+  apply subject_reduction_theorem with a; trivial.
+  apply strong_normalization with e Ta; trivial.
 Qed.
 
 
-Lemma EConv_Conv :
- forall (e : env) (a b Ta Tb : term),
- typ e a Ta -> typ e b Tb -> Econv a b -> Econv Ta Tb -> conv a b.
-intros.
-generalize (typ_is_nf e a Ta H).
-generalize (typ_is_nf e b Tb H0).
-intros (x, H3) (x0, H4); intuition.
-cut (x = x0).
-intros.
-rewrite <- H7 in H3.
-apply trans_conv_conv with x; auto with coc.
-apply sym_conv; auto with coc.
-apply Econv_eq with e Tb Ta; auto with coc ecoc.
-apply typ_Etyp; trivial.
-apply typ_Etyp; trivial.
-apply normal_Econv_NF_conv; trivial.
-apply trans_Econv_Econv with b.
-apply sym_Econv; apply Ered_Econv; auto with ecoc.
-apply trans_Econv_Econv with a; auto with ecoc.
-apply Ered_Econv; auto with ecoc.
+(** Erasure-convertible typed terms are convertible. *)
+Lemma eta_convertible_convertible :
+ forall (e : environment) (a b Ta Tb : term),
+ has_type e a Ta -> has_type e b Tb -> eta_convertible a b -> eta_convertible Ta Tb -> convertible a b.
+Proof.
+  intros.
+  generalize (has_type_is_normal_form e a Ta H).
+  generalize (has_type_is_normal_form e b Tb H0).
+  intros (x, H3) (x0, H4); intuition.
+  cut (x = x0).
+  intros.
+  rewrite <- H7 in H3.
+  apply trans_convertible_convertible with x; auto with coc.
+  apply sym_convertible; auto with coc.
+  apply eta_convertible_eq with e Tb Ta; auto with coc ecoc.
+  apply has_type_eta_has_type; trivial.
+  apply has_type_eta_has_type; trivial.
+  apply normal_eta_convertible_normal_form; trivial.
+  apply trans_eta_convertible with b.
+  apply sym_eta_convertible; apply eta_reduces_eta_convertible; auto with ecoc.
+  apply trans_eta_convertible with a; auto with ecoc.
+  apply eta_reduces_eta_convertible; auto with ecoc.
 Qed.
 
-Lemma typ_sort_Econv_Econv :
- forall (e : env) (V U : term) (r s : sort),
- typ e V (Srt s) -> typ e U (Srt r) -> Econv U V -> Econv (Srt s) (Srt r).
-intros.
-generalize (typ_is_nf e V (Srt s) H).
-generalize (typ_is_nf e U (Srt r) H0).
-intros (x, H2) (x0, H3); intuition.
-apply Etyp_NF_Econv_Econv with x0 x e e; eauto with ecoc.
-apply normal_Econv_NF_conv; auto with ecoc.
-apply trans_Econv_Econv with U; auto with ecoc.
-apply sym_Econv.
-apply trans_Econv_Econv with V; trivial.
-apply Ered_Econv; auto with ecoc.
+(** eta_convertible-related terms typed by sorts have eta_convertible-related sort types. *)
+Lemma has_type_sort_eta_convertible :
+ forall (e : environment) (V U : term) (r s : sort),
+ has_type e V (sort_term s) -> has_type e U (sort_term r) -> eta_convertible U V -> eta_convertible (sort_term s) (sort_term r).
+Proof.
+  intros.
+  generalize (has_type_is_normal_form e V (sort_term s) H).
+  generalize (has_type_is_normal_form e U (sort_term r) H0).
+  intros (x, H2) (x0, H3); intuition.
+  apply eta_has_type_normal_form_convertible with x0 x e e; eauto with ecoc.
+  apply normal_eta_convertible_normal_form; auto with ecoc.
+  apply trans_eta_convertible with U; auto with ecoc.
+  apply sym_eta_convertible.
+  apply trans_eta_convertible with V; trivial.
+  apply eta_reduces_eta_convertible; auto with ecoc.
 
-apply Ered_Econv; auto with ecoc.
+  apply eta_reduces_eta_convertible; auto with ecoc.
 
-unfold not in |- *; unfold is_lam in |- *; intros (x1, (x2, H6)).
-rewrite H6 in H8.
-apply inv_Etyp_abs with e x1 x2 (Srt s); trivial.
-apply typ_Etyp; trivial.
+  unfold not in |- *; unfold is_lambda in |- *; intros (x1, (x2, H6)).
+  rewrite H6 in H8.
+  apply inversion_eta_has_type_lambda with e x1 x2 (sort_term s); trivial.
+  apply has_type_eta_has_type; trivial.
 
-intros.
-elim (Econv_sort_prod s x1 T); auto with ecoc.
+  intros.
+  elim (eta_convertible_sort_product s x1 T); auto with ecoc.
 
-apply typ_Etyp; trivial.
+  apply has_type_eta_has_type; trivial.
 
-apply typ_Etyp; trivial.
+  apply has_type_eta_has_type; trivial.
 Qed.
 
 
-Lemma Etyp_typ : forall (e : env) (M t : term), Etyp e M t -> typ e M t.
-fix Etyp_typ 4.
-intros.
-case H.
-intros; apply type_prop.
-case H0.
-apply wf_nil.
-intros; apply wf_var with s.
-apply Etyp_typ; trivial.
-intros; apply type_set.
-case H0.
-apply wf_nil.
-intros; apply wf_var with s.
-apply Etyp_typ; trivial.
-intros; apply type_var.
-case H0.
-apply wf_nil.
-intros; apply wf_var with s.
-apply Etyp_typ; trivial.
-trivial.
-intros.
-apply type_abs with s1 s2.
-apply Etyp_typ; trivial.
-apply Etyp_typ; trivial.
-apply Etyp_typ; trivial.
-intros; apply type_app with V.
-apply Etyp_typ; trivial.
-apply Etyp_typ; trivial.
-intros.
-apply type_prod with s1.
-apply Etyp_typ; trivial.
-apply Etyp_typ; trivial.
-intros.
-generalize (Etyp_typ e0 t0 U H0); intros.
-generalize (Etyp_typ e0 V (Srt s) H2); intros.
-generalize (type_case e0 t0 U H3).
-intros [(x, H5)| H6].
-apply type_conv with U s; trivial.
-apply EConv_Conv with e0 (Srt x) (Srt s); trivial.
-apply typ_sort_Econv_Econv with e0 U V; auto with ecoc.
-rewrite H6 in H1.
-elim (inv_Etyp_Econv_kind e0 V (Srt s)); auto with ecoc.
+(** Erasure typing implies standard typing. *)
+Lemma eta_has_type_has_type : forall (e : environment) (M t : term), eta_has_type e M t -> has_type e M t.
+Proof.
+  fix eta_has_type_has_type 4.
+  intros.
+  case H.
+  intros; apply type_prop.
+  case H0.
+  apply wf_nil.
+  intros; apply wf_var with s.
+  apply eta_has_type_has_type; trivial.
+  intros; apply type_set.
+  case H0.
+  apply wf_nil.
+  intros; apply wf_var with s.
+  apply eta_has_type_has_type; trivial.
+  intros; apply type_var.
+  case H0.
+  apply wf_nil.
+  intros; apply wf_var with s.
+  apply eta_has_type_has_type; trivial.
+  trivial.
+  intros.
+  apply type_abs with s1 s2.
+  apply eta_has_type_has_type; trivial.
+  apply eta_has_type_has_type; trivial.
+  apply eta_has_type_has_type; trivial.
+  intros; apply type_app with V.
+  apply eta_has_type_has_type; trivial.
+  apply eta_has_type_has_type; trivial.
+  intros.
+  apply type_prod with s1.
+  apply eta_has_type_has_type; trivial.
+  apply eta_has_type_has_type; trivial.
+  intros.
+  generalize (eta_has_type_has_type e0 t0 U H0); intros.
+  generalize (eta_has_type_has_type e0 V (sort_term s) H2); intros.
+  generalize (type_case e0 t0 U H3).
+  intros [(x, H5)| H6].
+  apply type_conv with U s; trivial.
+  apply eta_convertible_convertible with e0 (sort_term x) (sort_term s); trivial.
+  apply has_type_sort_eta_convertible with e0 U V; auto with ecoc.
+  rewrite H6 in H1.
+  elim (inversion_eta_has_type_convertible_kind e0 V (sort_term s)); auto with ecoc.
 Qed.

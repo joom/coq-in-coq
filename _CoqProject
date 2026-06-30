@@ -1,24 +1,23 @@
 -R theories CoqInCoq
 
 # List of vernac files to compile
-theories/MyList.v
-theories/ListType.v
-theories/Names.v
-theories/MlTypes.v
-theories/Termes.v
-theories/Conv.v
-theories/Types.v
-theories/Conv_Dec.v
-theories/Class.v
-theories/Can.v
-theories/Int_term.v
-theories/Int_typ.v
-theories/Int_stab.v
-theories/Strong_Norm.v
-theories/Consistency.v
-theories/Infer.v
-theories/Expr.v
-theories/Machine.v
-theories/Ered.v
-theories/ETypes.v
-theories/Equiv.v
+theories/list_utils.v
+theories/names.v
+theories/ml_types.v
+theories/terms.v
+theories/confluence.v
+theories/typing.v
+theories/decidable_conversion.v
+theories/classification.v
+theories/candidates.v
+theories/interpretation_term.v
+theories/interpretation_type.v
+theories/interpretation_stability.v
+theories/strong_normalization.v
+theories/consistency.v
+theories/inference.v
+theories/expressions.v
+theories/machine.v
+theories/eta_reduction.v
+theories/eta_typing.v
+theories/equivalence.v

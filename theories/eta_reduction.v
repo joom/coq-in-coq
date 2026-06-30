@@ -14,737 +14,822 @@
 (* 02110-1301 USA                                                     *)
 
 
-Require Import Termes.
-Require Import Conv.
+From CoqInCoq Require Import terms.
+From CoqInCoq Require Import confluence.
 
-Inductive Ered1 : term -> term -> Prop :=
-  | Ebeta : forall M N T : term, Ered1 (App (Abs T M) N) (subst N M)
-  | Eabs : forall M T : term, Ered1 (Abs T M) (Abs (Srt prop) M)
-  | Eabs_red_l :
+(** One-step erasure reduction on terms. *)
+Inductive eta_reduces_once : term -> term -> Prop :=
+  | eta_beta : forall M N T : term, eta_reduces_once (app (lam T M) N) (subst N M)
+  | eta_erase_abs : forall M T : term, eta_reduces_once (lam T M) (lam (sort_term prop) M)
+  | eta_abs_red_l :
       forall M M' : term,
-      Ered1 M M' -> forall N : term, Ered1 (Abs M N) (Abs M' N)
-  | Eabs_red_r :
+      eta_reduces_once M M' -> forall N : term, eta_reduces_once (lam M N) (lam M' N)
+  | eta_abs_red_r :
       forall M M' : term,
-      Ered1 M M' -> forall N : term, Ered1 (Abs N M) (Abs N M')
-  | Eapp_red_l :
+      eta_reduces_once M M' -> forall N : term, eta_reduces_once (lam N M) (lam N M')
+  | eta_app_red_l :
       forall M1 N1 : term,
-      Ered1 M1 N1 -> forall M2 : term, Ered1 (App M1 M2) (App N1 M2)
-  | Eapp_red_r :
+      eta_reduces_once M1 N1 -> forall M2 : term, eta_reduces_once (app M1 M2) (app N1 M2)
+  | eta_app_red_r :
       forall M2 N2 : term,
-      Ered1 M2 N2 -> forall M1 : term, Ered1 (App M1 M2) (App M1 N2)
-  | Eprod_red_l :
+      eta_reduces_once M2 N2 -> forall M1 : term, eta_reduces_once (app M1 M2) (app M1 N2)
+  | eta_prod_red_l :
       forall M1 N1 : term,
-      Ered1 M1 N1 -> forall M2 : term, Ered1 (Prod M1 M2) (Prod N1 M2)
-  | Eprod_red_r :
+      eta_reduces_once M1 N1 -> forall M2 : term, eta_reduces_once (prod M1 M2) (prod N1 M2)
+  | eta_prod_red_r :
       forall M2 N2 : term,
-      Ered1 M2 N2 -> forall M1 : term, Ered1 (Prod M1 M2) (Prod M1 N2).
+      eta_reduces_once M2 N2 -> forall M1 : term, eta_reduces_once (prod M1 M2) (prod M1 N2).
 
-Inductive Ered (M : term) : term -> Prop :=
-  | Erefl : Ered M M
-  | Etrans_red : forall P N : term, Ered M P -> Ered1 P N -> Ered M N.
+(** Reflexive-transitive closure of erasure reduction, via stdlib. *)
+Definition eta_reduces := clos_refl_trans_n1 term eta_reduces_once.
 
-Inductive Econv (M : term) : term -> Prop :=
-  | Erefl_conv : Econv M M
-  | Etrans_conv_red : forall P N : term, Econv M P -> Ered1 P N -> Econv M N
-  | Etrans_conv_exp : forall P N : term, Econv M P -> Ered1 N P -> Econv M N.
+(** Reflexivity of erasure reduction. *)
+Definition eta_refl : forall M, eta_reduces M M := @rtn1_refl term eta_reduces_once.
 
-Inductive Epar_red1 : term -> term -> Prop :=
-  | Epar_beta :
+(** Extending an erasure reduction by one step. *)
+Lemma eta_trans_reduces : forall M (P N : term), eta_reduces M P -> eta_reduces_once P N -> eta_reduces M N.
+Proof.
+  intros M P N H1 H2; exact (@Relation_Operators.rtn1_trans term eta_reduces_once M P N H2 H1).
+Qed.
+
+(** Conversion relation for erasure reduction, via stdlib. *)
+Definition eta_convertible := clos_refl_sym_trans_n1 term eta_reduces_once.
+
+(** Reflexivity of erasure conversion. *)
+Definition eta_refl_convertible : forall M, eta_convertible M M := @rstn1_refl term eta_reduces_once.
+
+(** Extending an erasure conversion by a forward reduction step. *)
+Lemma eta_trans_convertible_reduces : forall M (P N : term), eta_convertible M P -> eta_reduces_once P N -> eta_convertible M N.
+Proof.
+  intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term eta_reduces_once M P N (or_introl H2) H1).
+Qed.
+
+(** Extending an erasure conversion by a backward reduction step. *)
+Lemma eta_trans_convertible_expansion : forall M (P N : term), eta_convertible M P -> eta_reduces_once N P -> eta_convertible M N.
+Proof.
+  intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term eta_reduces_once M P N (or_intror H2) H1).
+Qed.
+
+(** Parallel one-step erasure reduction. *)
+Inductive eta_parallel_reduces_once : term -> term -> Prop :=
+  | eta_par_beta :
       forall M M' : term,
-      Epar_red1 M M' ->
+      eta_parallel_reduces_once M M' ->
       forall N N' : term,
-      Epar_red1 N N' ->
-      forall T : term, Epar_red1 (App (Abs T M) N) (subst N' M')
-  | Epar_abs :
+      eta_parallel_reduces_once N N' ->
+      forall T : term, eta_parallel_reduces_once (app (lam T M) N) (subst N' M')
+  | eta_par_erase_abs :
       forall M M' : term,
-      Epar_red1 M M' ->
-      forall T : term, Epar_red1 (Abs T M) (Abs (Srt prop) M')
-  | Esort_par_red : forall s : sort, Epar_red1 (Srt s) (Srt s)
-  | Eref_par_red : forall n : nat, Epar_red1 (Ref n) (Ref n)
-  | Eabs_par_red :
+      eta_parallel_reduces_once M M' ->
+      forall T : term, eta_parallel_reduces_once (lam T M) (lam (sort_term prop) M')
+  | eta_par_sort : forall s : sort, eta_parallel_reduces_once (sort_term s) (sort_term s)
+  | eta_par_var : forall n : nat, eta_parallel_reduces_once (var n) (var n)
+  | eta_par_abs :
       forall M M' : term,
-      Epar_red1 M M' ->
-      forall T T' : term, Epar_red1 T T' -> Epar_red1 (Abs T M) (Abs T' M')
-  | Eapp_par_red :
+      eta_parallel_reduces_once M M' ->
+      forall T T' : term, eta_parallel_reduces_once T T' -> eta_parallel_reduces_once (lam T M) (lam T' M')
+  | eta_par_app :
       forall M M' : term,
-      Epar_red1 M M' ->
-      forall N N' : term, Epar_red1 N N' -> Epar_red1 (App M N) (App M' N')
-  | Eprod_par_red :
+      eta_parallel_reduces_once M M' ->
+      forall N N' : term, eta_parallel_reduces_once N N' -> eta_parallel_reduces_once (app M N) (app M' N')
+  | eta_par_prod :
       forall M M' : term,
-      Epar_red1 M M' ->
-      forall N N' : term, Epar_red1 N N' -> Epar_red1 (Prod M N) (Prod M' N').
+      eta_parallel_reduces_once M M' ->
+      forall N N' : term, eta_parallel_reduces_once N N' -> eta_parallel_reduces_once (prod M N) (prod M' N').
 
-  Definition Epar_red := clos_trans term Epar_red1.
+(** Transitive closure of parallel erasure reduction. *)
+Definition eta_parallel_reduces := clos_trans term eta_parallel_reduces_once.
 
-  Definition Enormal (t : term) : Prop := forall u : term, ~ Ered1 t u.
+(** A term is E-normal if it has no erasure redex. *)
+Definition eta_normal (t : term) : Prop := forall u : term, ~ eta_reduces_once t u.
 
-Hint Resolve Erefl Ebeta Eabs Eabs_red_l Eabs_red_r Eapp_red_l Eapp_red_r
-  Eprod_red_l Eprod_red_r: ecoc.
+Hint Resolve eta_refl eta_beta eta_erase_abs eta_abs_red_l eta_abs_red_r eta_app_red_l eta_app_red_r
+  eta_prod_red_l eta_prod_red_r: ecoc.
 
-Hint Resolve Etrans_red: ecoc.
-Hint Resolve Erefl_conv Etrans_conv_red Etrans_conv_exp: ecoc.
-Hint Resolve Epar_beta Epar_abs Esort_par_red Eref_par_red Eabs_par_red
-  Eapp_par_red Eprod_par_red: ecoc.
+Hint Resolve eta_trans_reduces: ecoc.
+Hint Resolve eta_refl_convertible eta_trans_convertible_reduces eta_trans_convertible_expansion: ecoc.
+Hint Resolve eta_par_beta eta_par_erase_abs eta_par_sort eta_par_var eta_par_abs
+  eta_par_app eta_par_prod: ecoc.
 
-(* normal -> E *)
-Lemma red1_Ered1 : forall M N : term, red1 M N -> Ered1 M N.
-simple induction 1; auto with ecoc.
+(** Standard one-step reduction embeds into erasure one-step reduction. *)
+Lemma reduces_once_eta_reduces_once : forall M N : term, reduces_once M N -> eta_reduces_once M N.
+Proof.
+  simple induction 1; auto with ecoc.
 Qed.
 
-Hint Resolve red1_Ered1: ecoc.
+Hint Resolve reduces_once_eta_reduces_once: ecoc.
 
-Lemma red_Ered : forall M N : term, red M N -> Ered M N.
-simple induction 1; eauto with ecoc.
+(** Standard reduction embeds into erasure reduction. *)
+Lemma reduces_eta_reduces : forall M N : term, reduces M N -> eta_reduces M N.
+Proof.
+  intros M N H; induction H; eauto with ecoc.
 Qed.
 
-Hint Resolve red_Ered: ecoc.
+Hint Resolve reduces_eta_reduces: ecoc.
 
-Lemma conv_Econv : forall M N : term, conv M N -> Econv M N.
-simple induction 1; eauto with ecoc.
+(** Standard conversion embeds into erasure conversion. *)
+Lemma convertible_eta_convertible : forall M N : term, convertible M N -> eta_convertible M N.
+Proof.
+  intros M N H; induction H; eauto with ecoc.
+  destruct H as [Hfwd | Hbwd]; eauto with ecoc.
 Qed.
 
-Hint Resolve conv_Econv: ecoc.
+Hint Resolve convertible_eta_convertible: ecoc.
 
-(* Ered *)
-
-Lemma trans_Ered_Ered : forall M N P : term, Ered M N -> Ered N P -> Ered M P.
-intros.
-generalize H0 M H.
-simple induction 1; auto with ecoc coc core arith sets.
-intros; apply Etrans_red with P0; auto with ecoc coc core arith sets.
-Qed.
- 
-(* Epar_red1 *)
-Lemma refl_Epar_red1 : forall M : term, Epar_red1 M M.
-simple induction M; auto with coc ecoc core arith sets.
+(** Transitivity of erasure reduction. *)
+Lemma trans_eta_reduces : forall M N P : term, eta_reduces M N -> eta_reduces N P -> eta_reduces M P.
+Proof.
+  intros M N P H1 H2.
+  induction H2; auto.
+  apply eta_trans_reduces with y; auto.
 Qed.
 
-Hint Resolve refl_Epar_red1: ecoc.
-
-Lemma Epar_red1_Epar_red : forall M N : term, Epar_red1 M N -> Epar_red M N.
-intros; unfold Epar_red in |- *; apply t_trans with M; auto with ecoc sets.
+(** Every term parallel-reduces to itself. *)
+Lemma refl_eta_parallel_reduces_once : forall M : term, eta_parallel_reduces_once M M.
+Proof.
+  simple induction M; auto with coc ecoc core arith sets.
 Qed.
 
-Hint Resolve Epar_red1_Epar_red: ecoc.
+Hint Resolve refl_eta_parallel_reduces_once: ecoc.
 
-Lemma Epar_red1_lift :
+(** A single parallel step embeds into the transitive closure. *)
+Lemma eta_parallel_once_parallel : forall M N : term, eta_parallel_reduces_once M N -> eta_parallel_reduces M N.
+Proof.
+  intros; unfold eta_parallel_reduces in |- *; apply t_trans with M; auto with ecoc sets.
+Qed.
+
+Hint Resolve eta_parallel_once_parallel: ecoc.
+
+(** Parallel erasure reduction is stable under lifting. *)
+Lemma eta_parallel_reduces_once_lift :
  forall (n : nat) (a b : term),
- Epar_red1 a b -> forall k : nat, Epar_red1 (lift_rec n a k) (lift_rec n b k).
-simple induction 1; simpl in |- *; eauto with coc ecoc core arith sets.
-intros.
-rewrite distr_lift_subst; auto with coc ecoc core arith sets.
+ eta_parallel_reduces_once a b -> forall k : nat, eta_parallel_reduces_once (lift_rec n a k) (lift_rec n b k).
+Proof.
+  simple induction 1; simpl in |- *; eauto with coc ecoc core arith sets.
+  intros.
+  rewrite distribute_lift_subst; auto with coc ecoc core arith sets.
 Qed.
 
-Hint Resolve Epar_red1_lift: ecoc.
+Hint Resolve eta_parallel_reduces_once_lift: ecoc.
 
-Lemma Epar_red1_subst :
+(** Parallel erasure reduction is stable under substitution. *)
+Lemma eta_parallel_reduces_once_subst :
  forall c d : term,
- Epar_red1 c d ->
+ eta_parallel_reduces_once c d ->
  forall a b : term,
- Epar_red1 a b ->
- forall k : nat, Epar_red1 (subst_rec a c k) (subst_rec b d k).
-simple induction 1; simpl in |- *; eauto with coc ecoc core arith sets;
- intros.
-rewrite distr_subst; auto with coc ecoc core arith sets.
+ eta_parallel_reduces_once a b ->
+ forall k : nat, eta_parallel_reduces_once (subst_rec a c k) (subst_rec b d k).
+Proof.
+  simple induction 1; simpl in |- *; eauto with coc ecoc core arith sets;
+   intros.
+  rewrite distribute_subst; auto with coc ecoc core arith sets.
 
-elim (lt_eq_lt_dec k n); auto with coc ecoc core arith sets; intro a0.
-elim a0; intros; auto with coc ecoc core arith sets.
-unfold lift in |- *; auto with ecoc.
+  elim (lt_eq_lt_dec k n); auto with coc ecoc core arith sets; intro a0.
+  elim a0; intros; auto with coc ecoc core arith sets.
+  unfold lift in |- *; auto with ecoc.
 Qed.
 
-Hint Resolve Epar_red1_subst: ecoc.
+Hint Resolve eta_parallel_reduces_once_subst: ecoc.
 
-Lemma inv_Epar_red_abs :
+(** Inversion principle for parallel reduction of a lam. *)
+Lemma inversion_eta_parallel_reduces_lambda :
  forall (P : Prop) (T U x : term),
- Epar_red1 (Abs T U) x ->
- (forall T' U' : term, x = Abs T' U' -> Epar_red1 U U' -> P) -> P.
-do 5 intro.
-inversion_clear H; intros.
-apply H with (Srt prop) M'; auto with ecoc.
-apply H with T' M'; auto with ecoc.
-Qed.
-  
-Lemma Ered1_Epar_red1 : forall M N : term, Ered1 M N -> Epar_red1 M N.
-simple induction 1; eauto with ecoc coc core arith sets; intros.
+ eta_parallel_reduces_once (lam T U) x ->
+ (forall T' U' : term, x = lam T' U' -> eta_parallel_reduces_once U U' -> P) -> P.
+Proof.
+  do 5 intro.
+  inversion_clear H; intros.
+  apply H with (sort_term prop) M'; auto with ecoc.
+  apply H with T' M'; auto with ecoc.
 Qed.
 
-Hint Resolve Ered1_Epar_red1: ecoc.
-
-Lemma Ered_Epar_red : forall M N : term, Ered M N -> Epar_red M N.
-red in |- *; simple induction 1; intros; auto with ecoc coc core arith sets.
-apply t_trans with P; auto with ecoc coc core arith sets.
+(** One-step erasure reduction embeds into parallel erasure reduction. *)
+Lemma eta_reduces_once_parallel_once : forall M N : term, eta_reduces_once M N -> eta_parallel_reduces_once M N.
+Proof.
+  simple induction 1; eauto with ecoc coc core arith sets; intros.
 Qed.
 
-Lemma Ered_Ered_app :
+Hint Resolve eta_reduces_once_parallel_once: ecoc.
+
+(** Erasure reduction embeds into parallel erasure reduction. *)
+Lemma eta_reduces_parallel : forall M N : term, eta_reduces M N -> eta_parallel_reduces M N.
+Proof.
+  intros M N H; red in |- *; induction H; auto with ecoc coc core arith sets.
+  apply t_trans with y; auto with ecoc coc core arith sets.
+Qed.
+
+(** Erasure reduction is compatible with app. *)
+Lemma eta_reduces_application :
  forall u u0 v v0 : term,
- Ered u u0 -> Ered v v0 -> Ered (App u v) (App u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with ecoc coc core arith sets.
-apply Etrans_red with (App u P); auto with ecoc coc core arith sets.
-
-intros; apply Etrans_red with (App P v0); auto with ecoc coc core arith sets.
+ eta_reduces u u0 -> eta_reduces v v0 -> eta_reduces (app u v) (app u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with ecoc coc core arith sets.
+    apply eta_trans_reduces with (app u y); auto with ecoc coc core arith sets.
+  - apply eta_trans_reduces with (app y v0); auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma Ered_Ered_abs :
+(** Erasure reduction is compatible with lam abstraction. *)
+Lemma eta_reduces_lambda :
  forall u u0 v v0 : term,
- Ered u u0 -> Ered v v0 -> Ered (Abs u v) (Abs u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with ecoc coc core arith sets.
-apply Etrans_red with (Abs u P); auto with ecoc coc core arith sets.
-
-intros; apply Etrans_red with (Abs P v0); auto with ecoc coc core arith sets.
+ eta_reduces u u0 -> eta_reduces v v0 -> eta_reduces (lam u v) (lam u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with ecoc coc core arith sets.
+    apply eta_trans_reduces with (lam u y); auto with ecoc coc core arith sets.
+  - apply eta_trans_reduces with (lam y v0); auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma Ered_Ered_prod :
+(** Erasure reduction is compatible with dependent prod. *)
+Lemma eta_reduces_product :
  forall u u0 v v0 : term,
- Ered u u0 -> Ered v v0 -> Ered (Prod u v) (Prod u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with ecoc coc core arith sets.
-apply Etrans_red with (Prod u P); auto with ecoc coc core arith sets.
-
-intros; apply Etrans_red with (Prod P v0); auto with ecoc coc core arith sets.
+ eta_reduces u u0 -> eta_reduces v v0 -> eta_reduces (prod u v) (prod u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with ecoc coc core arith sets.
+    apply eta_trans_reduces with (prod u y); auto with ecoc coc core arith sets.
+  - apply eta_trans_reduces with (prod y v0); auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Ered_Ered_app Ered_Ered_abs Ered_Ered_prod: ecoc.
+Hint Resolve eta_reduces_application eta_reduces_lambda eta_reduces_product: ecoc.
 
-Lemma Epar_red_Ered : forall M N : term, Epar_red M N -> Ered M N.
-simple induction 1.
-simple induction 1; intros; eauto with ecoc coc core arith sets.
-
-intros; apply trans_Ered_Ered with y; auto with ecoc coc core arith sets.
+(** Parallel erasure reduction implies erasure reduction. *)
+Lemma eta_parallel_reduces_reduces : forall M N : term, eta_parallel_reduces M N -> eta_reduces M N.
+Proof.
+  intros M N H; induction H.
+  - induction H; eauto with ecoc coc core arith sets.
+  - apply trans_eta_reduces with y; auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Ered_Epar_red Epar_red_Ered: ecoc.
+Hint Resolve eta_reduces_parallel eta_parallel_reduces_reduces: ecoc.
 
-(* Ered1 *)
-Lemma Ered1_lift :
+(** Erasure one-step reduction is stable under lifting. *)
+Lemma eta_reduces_once_lift :
  forall u v : term,
- Ered1 u v -> forall n k : nat, Ered1 (lift_rec n u k) (lift_rec n v k).
-simple induction 1; simpl in |- *; intros; auto with ecoc coc core arith sets.
-rewrite distr_lift_subst; auto with ecoc coc core arith sets.
+ eta_reduces_once u v -> forall n k : nat, eta_reduces_once (lift_rec n u k) (lift_rec n v k).
+Proof.
+  simple induction 1; simpl in |- *; intros; auto with ecoc coc core arith sets.
+  rewrite distribute_lift_subst; auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Ered1_lift: ecoc.
+Hint Resolve eta_reduces_once_lift: ecoc.
 
-
-Lemma Ered1_subst_r :
+(** Erasure one-step reduction on the body is stable under substitution. *)
+Lemma eta_reduces_once_subst_right :
  forall t u : term,
- Ered1 t u ->
- forall (a : term) (k : nat), Ered1 (subst_rec a t k) (subst_rec a u k).
-simple induction 1; simpl in |- *; intros; auto with ecoc coc core arith sets.
-rewrite distr_subst; auto with ecoc coc core arith sets.
+ eta_reduces_once t u ->
+ forall (a : term) (k : nat), eta_reduces_once (subst_rec a t k) (subst_rec a u k).
+Proof.
+  simple induction 1; simpl in |- *; intros; auto with ecoc coc core arith sets.
+  rewrite distribute_subst; auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma Ered1_subst_l :
+(** Erasure one-step reduction on the substituted term yields multi-step reduction. *)
+Lemma eta_reduces_once_subst_left :
  forall (a t u : term) (k : nat),
- Ered1 t u -> Ered (subst_rec t a k) (subst_rec u a k).
-simple induction a; simpl in |- *; auto with ecoc coc core arith sets.
-intros.
-elim (lt_eq_lt_dec k n);
- [ intro a0 | intro b; auto with ecoc coc core arith sets ].
-elim a0; auto with ecoc coc core arith sets.
-unfold lift in |- *; auto with ecoc coc core arith sets.
+ eta_reduces_once t u -> eta_reduces (subst_rec t a k) (subst_rec u a k).
+Proof.
+  simple induction a; simpl in |- *; auto with ecoc coc core arith sets.
+  intros.
+  elim (lt_eq_lt_dec k n);
+   [ intro a0 | intro b; auto with ecoc coc core arith sets ].
+  elim a0; auto with ecoc coc core arith sets.
+  unfold lift in |- *; auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Ered1_subst_l Ered1_subst_r: ecoc.
+Hint Resolve eta_reduces_once_subst_left eta_reduces_once_subst_right: ecoc.
 
-Lemma subst_rec_Ered1_r :
+(** Substitution preserves erasure one-step reduction on the right. *)
+Lemma subst_rec_eta_reduces_once_right :
  forall N M M' : term,
- Ered1 M M' -> forall k : nat, Ered1 (subst_rec N M k) (subst_rec N M' k).
-simple induction 1; simpl in |- *; intros; auto with ecoc.
-rewrite distr_subst.
-auto with ecoc.
+ eta_reduces_once M M' -> forall k : nat, eta_reduces_once (subst_rec N M k) (subst_rec N M' k).
+Proof.
+  simple induction 1; simpl in |- *; intros; auto with ecoc.
+  rewrite distribute_subst.
+  auto with ecoc.
 Qed.
 
-Lemma subst_Ered1_r :
- forall N M M' : term, Ered1 M M' -> Ered1 (subst N M) (subst N M').
-unfold subst in |- *; intros; apply subst_rec_Ered1_r; trivial.
+(** Top-level substitution preserves erasure one-step reduction. *)
+Lemma subst_eta_reduces_once_right :
+ forall N M M' : term, eta_reduces_once M M' -> eta_reduces_once (subst N M) (subst N M').
+Proof.
+  unfold subst in |- *; intros; apply subst_rec_eta_reduces_once_right; trivial.
 Qed.
 
+(** Strong confluence of parallel erasure reduction. *)
+Lemma strong_confluence_eta_parallel_once : strongly_confluent eta_parallel_reduces_once.
+Proof.
+  red in |- *; red in |- *.
+  simple induction 1; intros.
+  inversion_clear H4.
+  elim H1 with M'0; auto with ecoc coc core arith sets; intros.
+  elim H3 with N'0; auto with ecoc coc core arith sets; intros.
+  split with (subst x1 x0); unfold subst in |- *;
+   auto with coc ecoc core arith sets.
 
+  inversion_clear H5.
+  elim H1 with M'1; auto with ecoc coc core arith sets; intros.
+  elim H3 with N'0; auto with ecoc coc core arith sets; intros.
+  split with (subst x1 x0); auto with ecoc coc core arith sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
+  elim H1 with M'1; auto with ecoc coc core arith sets; intros.
+  elim H3 with N'0; auto with ecoc coc core arith sets; intros.
+  split with (subst x1 x0); auto with ecoc coc core arith sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
+  inversion_clear H2.
+  elim H1 with M'0; auto with ecoc coc core arith sets; intros.
+  split with (lam (sort_term prop) x0); eauto with ecoc coc core arith sets; intros.
 
-(* church_rosser *)
-Lemma str_confluence_Epar_red1 : str_confluent Epar_red1.
-red in |- *; red in |- *.
-simple induction 1; intros.
-inversion_clear H4.
-elim H1 with M'0; auto with ecoc coc core arith sets; intros.
-elim H3 with N'0; auto with ecoc coc core arith sets; intros.
-split with (subst x1 x0); unfold subst in |- *;
- auto with coc ecoc core arith sets.
+  elim H1 with M'0; auto with ecoc coc core arith sets; intros.
+  split with (lam (sort_term prop) x0); eauto with ecoc coc core arith sets.
 
-inversion_clear H5.
-elim H1 with M'1; auto with ecoc coc core arith sets; intros.
-elim H3 with N'0; auto with ecoc coc core arith sets; intros.
-split with (subst x1 x0); auto with ecoc coc core arith sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
+  inversion_clear H0.
+  split with (sort_term s); auto with ecoc coc core arith sets.
 
-elim H1 with M'1; auto with ecoc coc core arith sets; intros.
-elim H3 with N'0; auto with ecoc coc core arith sets; intros.
-split with (subst x1 x0); auto with ecoc coc core arith sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
+  inversion_clear H0.
+  split with (var n); auto with ecoc coc core arith sets.
 
-inversion_clear H2.
-elim H1 with M'0; auto with ecoc coc core arith sets; intros.
-split with (Abs (Srt prop) x0); eauto with ecoc coc core arith sets; intros.
+  inversion_clear H4.
+  elim H1 with M'0; auto with ecoc coc core arith sets; intros.
+  split with (lam (sort_term prop) x0); eauto with ecoc coc core arith sets.
 
-elim H1 with M'0; auto with ecoc coc core arith sets; intros.
-split with (Abs (Srt prop) x0); eauto with ecoc coc core arith sets.
+  elim H1 with M'0; auto with ecoc coc core arith sets; intros.
+  elim H3 with T'0; auto with ecoc coc core arith sets; intros.
+  split with (lam x1 x0); auto with ecoc coc core arith sets.
 
-inversion_clear H0.
-split with (Srt s); auto with ecoc coc core arith sets.
+  generalize H0 H1.
+  clear H0 H1.
+  inversion_clear H4.
+  intro.
+  inversion_clear H4.
+  intros.
+  elim H4 with (lam (sort_term prop) M'0); auto with coc core arith sets; intros.
+  elim H3 with N'0; auto with coc core arith sets; intros.
+  apply inversion_eta_parallel_reduces_lambda with (sort_term prop) M'1 x0; intros;
+   auto with coc core arith sets.
+  rewrite H10 in H7; inversion_clear H7.
+  split with (subst x1 U'); auto with ecoc sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
-inversion_clear H0.
-split with (Ref n); auto with ecoc coc core arith sets.
+  split with (subst x1 U'); auto with ecoc sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
-inversion_clear H4.
-elim H1 with M'0; auto with ecoc coc core arith sets; intros.
-split with (Abs (Srt prop) x0); eauto with ecoc coc core arith sets.
+  auto with ecoc sets.
 
-elim H1 with M'0; auto with ecoc coc core arith sets; intros.
-elim H3 with T'0; auto with ecoc coc core arith sets; intros.
-split with (Abs x1 x0); auto with ecoc coc core arith sets.
+  intros.
+  elim H3 with N'0; auto with ecoc sets; intros.
+  elim H4 with (lam T' M'0); auto with ecoc sets; intros.
+  apply inversion_eta_parallel_reduces_lambda with T' M'0 x1; intros; auto with coc core arith sets.
+  rewrite H11 in H9; inversion_clear H9.
+  split with (subst x0 U'); auto with ecoc sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
-generalize H0 H1.
-clear H0 H1.
-inversion_clear H4.
-intro.
-inversion_clear H4.
-intros.
-elim H4 with (Abs (Srt prop) M'0); auto with coc core arith sets; intros.
-elim H3 with N'0; auto with coc core arith sets; intros.
-apply inv_Epar_red_abs with (Srt prop) M'1 x0; intros;
- auto with coc core arith sets.
-rewrite H10 in H7; inversion_clear H7.
-split with (subst x1 U'); auto with ecoc sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
+  split with (subst x0 U'); auto with ecoc sets.
+  unfold subst in |- *; auto with ecoc coc core arith sets.
 
-split with (subst x1 U'); auto with ecoc sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
+  intros.
+  elim H5 with M'0; auto with ecoc sets; intros.
+  elim H3 with N'0; auto with ecoc sets; intros.
+  split with (app x0 x1); auto with ecoc sets.
 
-auto with ecoc sets.
-
-intros.
-elim H3 with N'0; auto with ecoc sets; intros.
-elim H4 with (Abs T' M'0); auto with ecoc sets; intros.
-apply inv_Epar_red_abs with T' M'0 x1; intros; auto with coc core arith sets.
-rewrite H11 in H9; inversion_clear H9.
-split with (subst x0 U'); auto with ecoc sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
-
-split with (subst x0 U'); auto with ecoc sets.
-unfold subst in |- *; auto with ecoc coc core arith sets.
-
-intros.
-elim H5 with M'0; auto with ecoc sets; intros.
-elim H3 with N'0; auto with ecoc sets; intros.
-split with (App x0 x1); auto with ecoc sets.
-
-inversion_clear H4.
-elim H1 with M'0; auto with coc ecoc sets; intros.
-elim H3 with N'0; auto with coc ecoc sets; intros.
-split with (Prod x0 x1); auto with ecoc sets.
+  inversion_clear H4.
+  elim H1 with M'0; auto with coc ecoc sets; intros.
+  elim H3 with N'0; auto with coc ecoc sets; intros.
+  split with (prod x0 x1); auto with ecoc sets.
 Qed.
 
-Lemma strip_lemma_Epar_red1 : commut _ Epar_red (transp _ Epar_red1).
-unfold commut, Epar_red in |- *; simple induction 1; intros.
-elim str_confluence_Epar_red1 with z x0 y0;
- auto with ecoc coc core arith sets; intros.
-split with x1; auto with ecoc coc core arith sets.
+(** Strip lemma for parallel erasure reduction. *)
+Lemma strip_lemma_eta_parallel_once : commut _ eta_parallel_reduces (transp _ eta_parallel_reduces_once).
+Proof.
+  unfold commut, eta_parallel_reduces in |- *; simple induction 1; intros.
+  elim strong_confluence_eta_parallel_once with z x0 y0;
+   auto with ecoc coc core arith sets; intros.
+  split with x1; auto with ecoc coc core arith sets.
 
-elim H1 with z0; auto with ecoc coc core arith sets; intros.
-elim H3 with x1; intros; auto with ecoc coc core arith sets.
-split with x2; auto with ecoc coc core arith sets.
-apply t_trans with x1; auto with ecoc coc core arith sets.
+  elim H1 with z0; auto with ecoc coc core arith sets; intros.
+  elim H3 with x1; intros; auto with ecoc coc core arith sets.
+  split with x2; auto with ecoc coc core arith sets.
+  apply t_trans with x1; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma confluence_Epar_red : str_confluent Epar_red.
-red in |- *; red in |- *.
-simple induction 1; intros.
-elim strip_lemma_Epar_red1 with z x0 y0; intros;
- auto with ecoc coc core arith sets.
-split with x1; auto with ecoc coc core arith sets.
+(** Confluence of parallel erasure reduction. *)
+Lemma confluence_eta_parallel : strongly_confluent eta_parallel_reduces.
+Proof.
+  red in |- *; red in |- *.
+  simple induction 1; intros.
+  elim strip_lemma_eta_parallel_once with z x0 y0; intros;
+   auto with ecoc coc core arith sets.
+  split with x1; auto with ecoc coc core arith sets.
 
-elim H1 with z0; intros; auto with ecoc coc core arith sets.
-elim H3 with x1; intros; auto with ecoc coc core arith sets.
-split with x2; auto with ecoc coc core arith sets.
-red in |- *; apply t_trans with x1; auto with ecoc coc core arith sets.
+  elim H1 with z0; intros; auto with ecoc coc core arith sets.
+  elim H3 with x1; intros; auto with ecoc coc core arith sets.
+  split with x2; auto with ecoc coc core arith sets.
+  red in |- *; apply t_trans with x1; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma confluence_Ered : str_confluent Ered.
-red in |- *; red in |- *.
-intros.
-elim confluence_Epar_red with x y z; auto with ecoc coc core arith sets;
- intros.
-exists x0; auto with ecoc coc core arith sets.
+(** Confluence of erasure reduction. *)
+Lemma confluence_eta_reduces : strongly_confluent eta_reduces.
+Proof.
+  red in |- *; red in |- *.
+  intros.
+  elim confluence_eta_parallel with x y z; auto with ecoc coc core arith sets;
+   intros.
+  exists x0; auto with ecoc coc core arith sets.
 Qed.
 
-Theorem Econv_church_rosser :
+(** Church-Rosser property for erasure conversion. *)
+Theorem eta_church_rosser :
  forall u v : term,
- Econv u v -> ex2 (fun t : term => Ered u t) (fun t : term => Ered v t).
-simple induction 1; intros.
-exists u; auto with ecoc coc core arith sets.
+ eta_convertible u v -> ex2 (fun t : term => eta_reduces u t) (fun t : term => eta_reduces v t).
+Proof.
+  intros u v H; induction H as [| y z [Hfwd|Hbwd] Huy [x Hux Hyx]].
+  exists u; auto with ecoc coc core arith sets.
 
-elim H1; intros.
-elim confluence_Ered with x P N; auto with ecoc coc core arith sets; intros.
-exists x0; auto with ecoc coc core arith sets.
-apply trans_Ered_Ered with x; auto with ecoc coc core arith sets.
+  elim confluence_eta_reduces with x y z; auto with ecoc coc core arith sets; intros.
+  exists x0; auto with ecoc coc core arith sets.
+  apply trans_eta_reduces with x; auto with ecoc coc core arith sets.
 
-elim H1; intros.
-exists x; auto with ecoc coc core arith sets.
-apply trans_Ered_Ered with P; auto with ecoc coc core arith sets.
+  exists x; auto with ecoc coc core arith sets.
+  apply trans_eta_reduces with y; auto with ecoc coc core arith sets.
 Qed.
 
-(* Econv *)
-
-Lemma one_step_Econv_exp : forall M N : term, Ered1 M N -> Econv N M.
-intros.
-apply Etrans_conv_exp with N; auto with ecoc coc core arith sets.
+(** A single erasure expansion step yields a conversion. *)
+Lemma one_step_eta_convertible_expansion : forall M N : term, eta_reduces_once M N -> eta_convertible N M.
+Proof.
+  intros.
+  apply eta_trans_convertible_expansion with N; auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma Ered_Econv : forall M N : term, Ered M N -> Econv M N.
-simple induction 1; auto with ecoc coc core arith sets.
-intros; apply Etrans_conv_red with P; auto with ecoc coc core arith sets.
+(** Erasure reduction implies erasure conversion. *)
+Lemma eta_reduces_eta_convertible : forall M N : term, eta_reduces M N -> eta_convertible M N.
+Proof.
+  intros M N H; induction H as [| y z Hyz Hmy IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with y; auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve one_step_Econv_exp Ered_Econv: coc.
+Hint Resolve one_step_eta_convertible_expansion eta_reduces_eta_convertible: coc.
 
-Lemma sym_Econv : forall M N : term, Econv M N -> Econv N M.
-simple induction 1; auto with ecoc coc core arith sets.
-simple induction 2; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with P0; auto with ecoc coc core arith sets.
-
-apply Etrans_conv_exp with P0; auto with ecoc coc core arith sets.
-
-simple induction 2; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with P0; auto with ecoc coc core arith sets.
-
-apply Etrans_conv_exp with P0; auto with ecoc coc core arith sets.
+(** Erasure conversion is symmetric. *)
+Lemma sym_eta_convertible : forall M N : term, eta_convertible M N -> eta_convertible N M.
+Proof.
+  intros M N H.
+  change (clos_refl_sym_trans_n1 term eta_reduces_once N M).
+  apply (proj1 (clos_rst_rstn1_iff term eta_reduces_once N M)).
+  apply rst_sym.
+  apply (proj2 (clos_rst_rstn1_iff term eta_reduces_once M N)).
+  exact H.
 Qed.
 
-Hint Immediate sym_Econv: coc.
+Hint Immediate sym_eta_convertible: coc.
 
-Lemma trans_Econv_Econv :
- forall M N P : term, Econv M N -> Econv N P -> Econv M P.
-intros.
-generalize M H; elim H0; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with P0; auto with ecoc coc core arith sets.
-apply Etrans_conv_exp with P0; auto with ecoc coc core arith sets.
+(** Erasure conversion is transitive. *)
+Lemma trans_eta_convertible :
+ forall M N P : term, eta_convertible M N -> eta_convertible N P -> eta_convertible M P.
+Proof.
+  intros M N P H H0.
+  change (clos_refl_sym_trans_n1 term eta_reduces_once M P).
+  apply clos_rstn1_trans with N; assumption.
 Qed.
 
-Lemma Econv_Econv_prod :
- forall a b c d : term, Econv a b -> Econv c d -> Econv (Prod a c) (Prod b d).
-intros.
-apply trans_Econv_Econv with (Prod a d).
-elim H0; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (Prod a P); auto with ecoc coc core arith sets.
+(** Erasure conversion is compatible with dependent prod. *)
+Lemma eta_convertible_product :
+ forall a b c d : term, eta_convertible a b -> eta_convertible c d -> eta_convertible (prod a c) (prod b d).
+Proof.
+  intros.
+  apply trans_eta_convertible with (prod a d).
+  induction H0 as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (prod a y); auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (prod a y); auto with ecoc coc core arith sets.
 
-apply Etrans_conv_exp with (Prod a P); auto with ecoc coc core arith sets.
-
-elim H; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (Prod P d); auto with ecoc coc core arith sets.
-
-apply Etrans_conv_exp with (Prod P d); auto with ecoc coc core arith sets.
+  induction H as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (prod y d); auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (prod y d); auto with ecoc coc core arith sets.
 Qed.
 
-Lemma Econv_Econv_app :
- forall a b c d : term, Econv a b -> Econv c d -> Econv (App a c) (App b d).
-intros.
-apply trans_Econv_Econv with (App a d).
-elim H0; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (App a P); auto with ecoc coc core arith sets.
+(** Erasure conversion is compatible with app. *)
+Lemma eta_convertible_application :
+ forall a b c d : term, eta_convertible a b -> eta_convertible c d -> eta_convertible (app a c) (app b d).
+Proof.
+  intros.
+  apply trans_eta_convertible with (app a d).
+  induction H0 as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (app a y); auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (app a y); auto with ecoc coc core arith sets.
 
-apply Etrans_conv_exp with (App a P); auto with ecoc coc core arith sets.
-
-elim H; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (App P d); auto with ecoc coc core arith sets.
-
-apply Etrans_conv_exp with (App P d); auto with ecoc coc core arith sets.
+  induction H as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (app y d); auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (app y d); auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Econv_Econv_prod Econv_Econv_app: ecoc.
+Hint Resolve eta_convertible_product eta_convertible_application: ecoc.
 
-Lemma Ered_Enormal : forall u v : term, Ered u v -> Enormal u -> u = v.
-simple induction 1; auto with ecoc coc core arith sets; intros.
-absurd (Ered1 u N); auto with ecoc coc core arith sets.
-absurd (Ered1 P N); auto with ecoc coc core arith sets.
-elim (H1 H3).
-unfold not in |- *; intro; apply (H3 N); auto with ecoc coc core arith sets.
+(** An E-normal term is a fixed point of erasure reduction. *)
+Lemma eta_reduces_eta_normal : forall u v : term, eta_reduces u v -> eta_normal u -> u = v.
+Proof.
+  intros u v H Hn; induction H as [| y z Hyz Huy IH]; auto with ecoc coc core arith sets.
+  assert (u = y) as Heq by auto.
+  subst y; elim (Hn z); auto with ecoc coc core arith sets.
 Qed.
 
-Lemma Ered_prod_prod :
+(** Inversion of erasure reduction on a prod. *)
+Lemma eta_reduces_product_product :
  forall u v t : term,
- Ered (Prod u v) t ->
+ eta_reduces (prod u v) t ->
  forall P : Prop,
- (forall a b : term, t = Prod a b -> Ered u a -> Ered v b -> P) -> P.
-simple induction 1; intros.
-apply H0 with u v; auto with ecoc coc core arith sets.
+ (forall a b : term, t = prod a b -> eta_reduces u a -> eta_reduces v b -> P) -> P.
+Proof.
+  intros u v t H; induction H as [| y z Hyz Huy IH]; intros P0 HP.
+  apply HP with u v; auto with ecoc coc core arith sets.
 
-apply H1; intros.
-inversion_clear H4 in H2.
-inversion H2.
-apply H3 with N1 b; auto with ecoc coc core arith sets.
-apply Etrans_red with a; auto with ecoc coc core arith sets.
+  apply IH; intros.
+  match goal with H1 : _ = prod _ _ |- _ => rewrite H1 in Hyz end.
+  inversion Hyz; subst.
+  apply HP with N1 b; auto with ecoc coc core arith sets.
+  apply eta_trans_reduces with a; auto with ecoc coc core arith sets.
 
-apply H3 with a N2; auto with ecoc coc core arith sets.
-apply Etrans_red with b; auto with ecoc coc core arith sets.
+  apply HP with a N2; auto with ecoc coc core arith sets.
+  apply eta_trans_reduces with b; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma Econv_sort_prod :
- forall (s : sort) (t u : term), ~ Econv (Srt s) (Prod t u).
-red in |- *; intros.
-elim Econv_church_rosser with (Srt s) (Prod t u);
- auto with ecoc coc core arith sets.
-do 2 intro.
-elim Ered_Enormal with (Srt s) x; auto with ecoc coc core arith sets.
-intro.
-apply Ered_prod_prod with t u (Srt s); auto with ecoc coc core arith sets;
- intros.
-discriminate H2.
+(** A sort and a prod are never E-convertible. *)
+Lemma eta_convertible_sort_product :
+ forall (s : sort) (t u : term), ~ eta_convertible (sort_term s) (prod t u).
+Proof.
+  red in |- *; intros.
+  elim eta_church_rosser with (sort_term s) (prod t u);
+   auto with ecoc coc core arith sets.
+  do 2 intro.
+  elim eta_reduces_eta_normal with (sort_term s) x; auto with ecoc coc core arith sets.
+  intro.
+  apply eta_reduces_product_product with t u (sort_term s); auto with ecoc coc core arith sets;
+   intros.
+  discriminate H2.
 
-red in |- *; red in |- *; intros.
-inversion_clear H1.
+  red in |- *; red in |- *; intros.
+  inversion_clear H1.
 Qed.
 
-Lemma Econv_abs : forall a b T : term, Econv a b -> Econv (Abs T a) (Abs T b).
-intros.
-elim H; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (Abs T P); auto with ecoc coc core arith sets.
-apply Etrans_conv_exp with (Abs T P); auto with ecoc coc core arith sets.
+(** Erasure conversion is compatible with lam under same type annotation. *)
+Lemma eta_convertible_lambda : forall a b T : term, eta_convertible a b -> eta_convertible (lam T a) (lam T b).
+Proof.
+  intros.
+  induction H as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (lam T y); auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (lam T y); auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve Econv_abs: ecoc.
+Hint Resolve eta_convertible_lambda: ecoc.
 
-Lemma Econv_Type_abs :
- forall a b T T' : term, Econv a b -> Econv (Abs T a) (Abs T' b).
-intros.
-apply trans_Econv_Econv with (Abs (Srt prop) a); eauto with ecoc.
+(** Erasure conversion under lam with possibly different type annotations. *)
+Lemma eta_convertible_type_lambda :
+ forall a b T T' : term, eta_convertible a b -> eta_convertible (lam T a) (lam T' b).
+Proof.
+  intros.
+  apply trans_eta_convertible with (lam (sort_term prop) a); eauto with ecoc.
 Qed.
 
-Hint Resolve Econv_Type_abs: ecoc.
+Hint Resolve eta_convertible_type_lambda: ecoc.
 
-Lemma Econv_Econv_lift :
+(** Erasure conversion is stable under lifting. *)
+Lemma eta_convertible_lift :
  forall (a b : term) (n k : nat),
- Econv a b -> Econv (lift_rec n a k) (lift_rec n b k).
-intros.
-elim H; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (lift_rec n P k);
- auto with ecoc coc core arith sets.
+ eta_convertible a b -> eta_convertible (lift_rec n a k) (lift_rec n b k).
+Proof.
+  intros.
+  induction H as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (lift_rec n y k);
+   auto with ecoc coc core arith sets.
 
-apply Etrans_conv_exp with (lift_rec n P k);
- auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (lift_rec n y k);
+   auto with ecoc coc core arith sets.
 Qed.
- 
-Lemma Econv_Econv_subst :
+
+(** Erasure conversion is stable under substitution. *)
+Lemma eta_convertible_subst :
  forall (a b c d : term) (k : nat),
- Econv a b -> Econv c d -> Econv (subst_rec a c k) (subst_rec b d k).
-intros.
-apply trans_Econv_Econv with (subst_rec a d k).
-elim H0; intros; auto with ecoc coc core arith sets.
-apply Etrans_conv_red with (subst_rec a P k);
- auto with ecoc coc core arith sets.
+ eta_convertible a b -> eta_convertible c d -> eta_convertible (subst_rec a c k) (subst_rec b d k).
+Proof.
+  intros.
+  apply trans_eta_convertible with (subst_rec a d k).
+  induction H0 as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_reduces with (subst_rec a y k);
+   auto with ecoc coc core arith sets.
 
-apply Etrans_conv_exp with (subst_rec a P k);
- auto with ecoc coc core arith sets.
+  apply eta_trans_convertible_expansion with (subst_rec a y k);
+   auto with ecoc coc core arith sets.
 
-elim H; intros; auto with ecoc coc core arith sets.
-apply trans_Econv_Econv with (subst_rec P d k);
- auto with ecoc coc core arith sets.
+  induction H as [| y z [Hfwd|Hbwd] Hay IH]; auto with ecoc coc core arith sets.
+  apply trans_eta_convertible with (subst_rec y d k);
+   auto with ecoc coc core arith sets.
 
-apply trans_Econv_Econv with (subst_rec P d k);
- auto with ecoc coc core arith sets.
-apply sym_Econv; auto with ecoc coc core arith sets.
+  apply trans_eta_convertible with (subst_rec y d k);
+   auto with ecoc coc core arith sets.
+  apply sym_eta_convertible; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma inv_Econv_prod_l :
- forall a b c d : term, Econv (Prod a c) (Prod b d) -> Econv a b.
-intros.
-elim Econv_church_rosser with (Prod a c) (Prod b d); intros;
- auto with ecoc coc core arith sets.
-apply Ered_prod_prod with a c x; intros; auto with ecoc coc core arith sets.
-apply Ered_prod_prod with b d x; intros; auto with ecoc coc core arith sets.
-apply trans_Econv_Econv with a0; auto with ecoc coc core arith sets.
-apply sym_Econv.
-generalize H2.
-rewrite H5; intro.
-injection H8.
-simple induction 2; auto with ecoc coc core arith sets.
+(** Left projection of erasure conversion on products. *)
+Lemma inversion_eta_convertible_product_left :
+ forall a b c d : term, eta_convertible (prod a c) (prod b d) -> eta_convertible a b.
+Proof.
+  intros.
+  elim eta_church_rosser with (prod a c) (prod b d); intros;
+   auto with ecoc coc core arith sets.
+  apply eta_reduces_product_product with a c x; intros; auto with ecoc coc core arith sets.
+  apply eta_reduces_product_product with b d x; intros; auto with ecoc coc core arith sets.
+  apply trans_eta_convertible with a0; auto with ecoc coc core arith sets.
+  apply sym_eta_convertible.
+  generalize H2.
+  rewrite H5; intro.
+  injection H8.
+  simple induction 2; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma inv_Econv_prod_r :
- forall a b c d : term, Econv (Prod a c) (Prod b d) -> Econv c d.
-intros.
-elim Econv_church_rosser with (Prod a c) (Prod b d); intros;
- auto with ecoc coc core arith sets.
-apply Ered_prod_prod with a c x; intros; auto with ecoc coc core arith sets.
-apply Ered_prod_prod with b d x; intros; auto with ecoc coc core arith sets.
-apply trans_Econv_Econv with b0; auto with ecoc coc core arith sets.
-apply sym_Econv.
-generalize H2.
-rewrite H5; intro.
-injection H8.
-simple induction 1; auto with ecoc coc core arith sets.
+(** Right projection of erasure conversion on products. *)
+Lemma inversion_eta_convertible_product_right :
+ forall a b c d : term, eta_convertible (prod a c) (prod b d) -> eta_convertible c d.
+Proof.
+  intros.
+  elim eta_church_rosser with (prod a c) (prod b d); intros;
+   auto with ecoc coc core arith sets.
+  apply eta_reduces_product_product with a c x; intros; auto with ecoc coc core arith sets.
+  apply eta_reduces_product_product with b d x; intros; auto with ecoc coc core arith sets.
+  apply trans_eta_convertible with b0; auto with ecoc coc core arith sets.
+  apply sym_eta_convertible.
+  generalize H2.
+  rewrite H5; intro.
+  injection H8.
+  simple induction 1; auto with ecoc coc core arith sets.
 Qed.
 
-Hint Resolve sym_Econv trans_Econv_Econv Econv_Econv_prod Econv_Econv_lift
-  Econv_Econv_subst: ecoc.
+Hint Resolve sym_eta_convertible trans_eta_convertible eta_convertible_product eta_convertible_lift
+  eta_convertible_subst: ecoc.
 
-Lemma Ered1_Ered_ind :
+(** Well-founded induction principle for erasure reduction. *)
+Lemma eta_reduces_reverse_ind :
  forall (N : term) (P : term -> Prop),
  P N ->
- (forall M R : term, Ered1 M R -> Ered R N -> P R -> P M) ->
- forall M : term, Ered M N -> P M.
-cut
- (forall M N : term,
-  Ered M N ->
-  forall P : term -> Prop,
-  P N -> (forall M R : term, Ered1 M R -> Ered R N -> P R -> P M) -> P M).
-intros.
-apply (H M N); auto with ecoc coc core arith sets.
+ (forall M R : term, eta_reduces_once M R -> eta_reduces R N -> P R -> P M) ->
+ forall M : term, eta_reduces M N -> P M.
+Proof.
+  cut
+   (forall M N : term,
+    eta_reduces M N ->
+    forall P : term -> Prop,
+    P N -> (forall M R : term, eta_reduces_once M R -> eta_reduces R N -> P R -> P M) -> P M).
+  intros.
+  apply (H M N); auto with ecoc coc core arith sets.
 
-simple induction 1; intros; auto with ecoc coc core arith sets.
-apply H1; auto with ecoc coc core arith sets.
-apply H4 with N0; auto with ecoc coc core arith sets.
+  intros M0 N0 H; induction H as [| y z Hyz Hmy IH]; intros P0 HP0 HP1; auto with ecoc coc core arith sets.
+  apply IH; auto with ecoc coc core arith sets.
+  apply HP1 with z; auto with ecoc coc core arith sets.
 
-intros.
-apply H4 with R; auto with ecoc coc core arith sets.
-apply Etrans_red with P; auto with ecoc coc core arith sets.
+  intros.
+  apply HP1 with R; auto with ecoc coc core arith sets.
+  apply eta_trans_reduces with y; auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma inv_Ered_Abs :
+(** Inversion of erasure reduction on a lam. *)
+Lemma inversion_eta_reduces_lambda :
  forall T U x : term,
- Ered (Abs T U) x -> exists T' : term, (exists U' : term, x = Abs T' U').
-simple induction 1.
-split with T; split with U; trivial.
-intros P N H0 (T', (U', H1)) H2.
-rewrite H1 in H2.
-inversion H2.
-split with (Srt prop); split with U'; trivial.
-split with M'; split with U'; trivial.
-split with T'; split with M'; trivial.
+ eta_reduces (lam T U) x -> exists T' : term, (exists U' : term, x = lam T' U').
+Proof.
+  intros T U x H; induction H as [| y z Hyz Hxy [T' [U' Heq]]].
+  split with T; split with U; trivial.
+  rewrite Heq in Hyz.
+  inversion Hyz.
+  split with (sort_term prop); split with U'; trivial.
+  split with M'; split with U'; trivial.
+  split with T'; split with M'; trivial.
 Qed.
 
-Lemma not_Ered_Abs_sort :
- forall (T M : term) (s : sort), ~ Ered (Abs T M) (Srt s).
-unfold not in |- *; intros.
-inversion H.
-generalize (inv_Ered_Abs T M P H0).
-intros (T', (U', H3)).
-rewrite H3 in H1; inversion H1.
+(** A lam cannot E-reduce to a sort. *)
+Lemma not_eta_reduces_lambda_sort :
+ forall (T M : term) (s : sort), ~ eta_reduces (lam T M) (sort_term s).
+Proof.
+  unfold not in |- *; intros.
+  destruct (inversion_eta_reduces_lambda T M (sort_term s) H) as [T' [U' Heq]].
+  discriminate Heq.
 Qed.
 
-
-Lemma Ered1_sort_mem :
- forall (t : term) (s : sort), Ered1 t (Srt s) -> mem_sort s t.
-intros.
-inversion H.
-elim mem_sort_subst with M N 0 s; intros; auto with coc core arith sets.
-unfold subst in H2; rewrite H2.
-auto with coc.
+(** If a term E-reduces to a sort, the sort occurs in the term. *)
+Lemma eta_reduces_once_sort_occurs :
+ forall (t : term) (s : sort), eta_reduces_once t (sort_term s) -> sort_occurs_in s t.
+Proof.
+  intros.
+  inversion H.
+  elim sort_occurs_in_subst with M N 0 s; intros; auto with coc core arith sets.
+  unfold subst in H2; rewrite H2.
+  auto with coc.
 Qed.
 
-Inductive mem_sort2 (s : sort) : term -> Prop :=
-  | mem_eq2 : mem_sort2 s (Srt s)
-  | mem_prod_l2 : forall u v : term, mem_sort2 s u -> mem_sort2 s (Prod u v)
-  | mem_prod_r2 : forall u v : term, mem_sort2 s v -> mem_sort2 s (Prod u v)
-  | mem_abs_r2 : forall u v : term, mem_sort2 s v -> mem_sort2 s (Abs u v)
-  | mem_app_l2 : forall u v : term, mem_sort2 s u -> mem_sort2 s (App u v)
-  | mem_app_r2 : forall u v : term, mem_sort2 s v -> mem_sort2 s (App u v).
+(** Sort membership predicate extended with all term constructors. *)
+Inductive sort_occurs_in_eta (s : sort) : term -> Prop :=
+  | mem_eta_eq : sort_occurs_in_eta s (sort_term s)
+  | mem_eta_prod_l : forall u v : term, sort_occurs_in_eta s u -> sort_occurs_in_eta s (prod u v)
+  | mem_eta_prod_r : forall u v : term, sort_occurs_in_eta s v -> sort_occurs_in_eta s (prod u v)
+  | mem_eta_abs_r : forall u v : term, sort_occurs_in_eta s v -> sort_occurs_in_eta s (lam u v)
+  | mem_eta_app_l : forall u v : term, sort_occurs_in_eta s u -> sort_occurs_in_eta s (app u v)
+  | mem_eta_app_r : forall u v : term, sort_occurs_in_eta s v -> sort_occurs_in_eta s (app u v).
 
-Hint Resolve mem_eq2 mem_prod_l2 mem_prod_r2 mem_abs_r2 mem_app_l2
-  mem_app_r2: ecoc.
+Hint Resolve mem_eta_eq mem_eta_prod_l mem_eta_prod_r mem_eta_abs_r mem_eta_app_l
+  mem_eta_app_r: ecoc.
 
-Lemma mem_sort2_lift :
+(** Extended sort membership is stable under lifting. *)
+Lemma sort_occurs_in_eta_lift :
  forall (t : term) (n k : nat) (s : sort),
- mem_sort2 s (lift_rec n t k) -> mem_sort2 s t.
-simple induction t; simpl in |- *; intros; auto with ecoc coc core arith sets.
-generalize H; elim (le_gt_dec k n); intros;
- auto with ecoc coc core arith sets.
-inversion_clear H0.
+ sort_occurs_in_eta s (lift_rec n t k) -> sort_occurs_in_eta s t.
+Proof.
+  simple induction t; simpl in |- *; intros; auto with ecoc coc core arith sets.
+  generalize H; elim (le_gt_dec k n); intros;
+   auto with ecoc coc core arith sets.
+  inversion_clear H0.
 
-inversion_clear H1.
-apply mem_abs_r2; apply H0 with n (S k); auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  apply mem_eta_abs_r; apply H0 with n (S k); auto with ecoc coc core arith sets.
 
-inversion_clear H1.
-apply mem_app_l2; apply H with n k; auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  apply mem_eta_app_l; apply H with n k; auto with ecoc coc core arith sets.
 
-apply mem_app_r2; apply H0 with n k; auto with ecoc coc core arith sets.
+  apply mem_eta_app_r; apply H0 with n k; auto with ecoc coc core arith sets.
 
-inversion_clear H1.
-apply mem_prod_l2; apply H with n k; auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  apply mem_eta_prod_l; apply H with n k; auto with ecoc coc core arith sets.
 
-apply mem_prod_r2; apply H0 with n (S k); auto with ecoc coc core arith sets.
+  apply mem_eta_prod_r; apply H0 with n (S k); auto with ecoc coc core arith sets.
 Qed.
 
-
-Lemma mem_sort2_subst :
+(** Extended sort membership is stable under substitution. *)
+Lemma sort_occurs_in_eta_subst :
  forall (b a : term) (n : nat) (s : sort),
- mem_sort2 s (subst_rec a b n) -> mem_sort2 s a \/ mem_sort2 s b.
-simple induction b; simpl in |- *; intros; auto with ecoc coc core arith sets.
-generalize H; elim (lt_eq_lt_dec n0 n); [ intro a0 | intro b0 ].
-elim a0; intros.
-inversion_clear H0.
+ sort_occurs_in_eta s (subst_rec a b n) -> sort_occurs_in_eta s a \/ sort_occurs_in_eta s b.
+Proof.
+  simple induction b; simpl in |- *; intros; auto with ecoc coc core arith sets.
+  generalize H; elim (lt_eq_lt_dec n0 n); [ intro a0 | intro b0 ].
+  elim a0; intros.
+  inversion_clear H0.
 
-left.
-apply mem_sort2_lift with n0 0; auto with ecoc coc core arith sets.
+  left.
+  apply sort_occurs_in_eta_lift with n0 0; auto with ecoc coc core arith sets.
 
-intros.
-inversion_clear H0.
+  intros.
+  inversion_clear H0.
 
-inversion_clear H1.
-elim H0 with a (S n) s; auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  elim H0 with a (S n) s; auto with ecoc coc core arith sets.
 
-inversion_clear H1.
-elim H with a n s; auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  elim H with a n s; auto with ecoc coc core arith sets.
 
-elim H0 with a n s; auto with ecoc coc core arith sets.
+  elim H0 with a n s; auto with ecoc coc core arith sets.
 
-inversion_clear H1.
-elim H with a n s; auto with ecoc coc core arith sets.
+  inversion_clear H1.
+  elim H with a n s; auto with ecoc coc core arith sets.
 
-elim H0 with a (S n) s; intros; auto with ecoc coc core arith sets.
+  elim H0 with a (S n) s; intros; auto with ecoc coc core arith sets.
 Qed.
 
-Lemma Ered_sort_mem2 :
- forall (t : term) (s : sort), Ered t (Srt s) -> mem_sort2 s t.
-intros.
-pattern t in |- *.
-apply Ered1_Ered_ind with (Srt s); auto with ecoc coc core arith sets.
-do 4 intro.
-elim H0; intros.
-elim mem_sort2_subst with M0 N 0 s; intros;
- auto with ecoc coc core arith sets.
+(** If a term E-reduces to a sort, the sort occurs in the term (extended). *)
+Lemma eta_reduces_sort_occurs_eta :
+ forall (t : term) (s : sort), eta_reduces t (sort_term s) -> sort_occurs_in_eta s t.
+Proof.
+  intros.
+  pattern t in |- *.
+  apply eta_reduces_reverse_ind with (sort_term s); auto with ecoc coc core arith sets.
+  do 4 intro.
+  elim H0; intros.
+  elim sort_occurs_in_eta_subst with M0 N 0 s; intros;
+   auto with ecoc coc core arith sets.
 
-inversion H2; auto with ecoc.
+  inversion H2; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 
-inversion H4; auto with ecoc.
+  inversion H4; auto with ecoc.
 Qed.
 
-Lemma mem_sort2_mem_sort :
- forall (t : term) (s : sort), mem_sort2 s t -> mem_sort s t.
-simple induction 1; auto with coc.
+(** Extended sort membership implies standard sort membership. *)
+Lemma sort_occurs_in_eta_sort_occurs :
+ forall (t : term) (s : sort), sort_occurs_in_eta s t -> sort_occurs_in s t.
+Proof.
+  simple induction 1; auto with coc.
 Qed.
 
-Lemma Ered_sort_mem :
- forall (t : term) (s : sort), Ered t (Srt s) -> mem_sort s t.
-intros; apply mem_sort2_mem_sort; apply Ered_sort_mem2; trivial.
+(** If a term E-reduces to a sort, the sort occurs in the term (standard). *)
+Lemma eta_reduces_sort_occurs :
+ forall (t : term) (s : sort), eta_reduces t (sort_term s) -> sort_occurs_in s t.
+Proof.
+  intros; apply sort_occurs_in_eta_sort_occurs; apply eta_reduces_sort_occurs_eta; trivial.
 Qed.
-
- 

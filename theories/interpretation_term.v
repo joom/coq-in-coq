@@ -14,61 +14,64 @@
 (* 02110-1301 USA                                                     *)
 
 
+From CoqInCoq Require Import terms.
 
-Require Import Termes.
+(** Type of interpretations mapping naturals to terms. *)
+Definition term_interpretation := nat -> term.
 
-  Definition intt := nat -> term.
+(** Extends an interpretation with a new binding at index 0. *)
+Definition shift_term_interpretation (i : term_interpretation) (t : term) : term_interpretation :=
+  fun n : nat => match n with
+                 | O => t
+                 | S k => i k
+                 end.
 
-  Definition shift_intt (i : intt) (t : term) : intt :=
-    fun n : nat => match n with
-                   | O => t
-                   | S k => i k
-                   end.
+(** Interprets a term under an interpretation and a depth counter. *)
+Fixpoint interpret_term (t : term) : term_interpretation -> nat -> term :=
+  fun (I : term_interpretation) (k : nat) =>
+  match t with
+  | sort_term s => sort_term s
+  | var n =>
+      match le_gt_dec k n with
+      | left _ => lift k (I (n - k))
+      | right _ => var n
+      end
+  | lam A t => lam (interpret_term A I k) (interpret_term t I (S k))
+  | app u v => app (interpret_term u I k) (interpret_term v I k)
+  | prod A B => prod (interpret_term A I k) (interpret_term B I (S k))
+  end.
 
+Opaque le_gt_dec.
 
-  Fixpoint int_term (t : term) : intt -> nat -> term :=
-    fun (I : intt) (k : nat) =>
-    match t with
-    | Srt s => Srt s
-    | Ref n =>
-        match le_gt_dec k n with
-        | left _ => lift k (I (n - k))
-        | right _ => Ref n
-        end
-    | Abs A t => Abs (int_term A I k) (int_term t I (S k))
-    | App u v => App (int_term u I k) (int_term v I k)
-    | Prod A B => Prod (int_term A I k) (int_term B I (S k))
-    end.
+(** Substitution commutes with term interpretation. *)
+Lemma interpret_term_subst :
+ forall (t : term) (it : term_interpretation) (k : nat) (x : term),
+ subst_rec x (interpret_term t it (S k)) k = interpret_term t (shift_term_interpretation it x) k.
+Proof.
+  simple induction t; simpl in |- *; intros; auto with coc core arith sets.
+  elim (le_gt_dec (S k) n); intros.
+  elim (le_gt_dec k n); intros.
+  rewrite simplify_subst; auto with coc core arith sets.
+  replace (n - k) with (S (n - S k)); auto with coc core arith sets.
+  lia.
 
-  Opaque le_gt_dec.
+  elim (lt_eq_lt_dec k n); [ intro Hlt_eq | intro Hlt ].
+  elim Hlt_eq; clear Hlt_eq. lia.
 
-  Lemma int_term_subst :
-   forall (t : term) (it : intt) (k : nat) (x : term),
-   subst_rec x (int_term t it (S k)) k = int_term t (shift_intt it x) k.
-simple induction t; simpl in |- *; intros; auto with coc core arith sets.
-elim (le_gt_dec (S k) n); intros.
-elim (le_gt_dec k n); intros.
-rewrite simpl_subst; auto with coc core arith sets.
-replace (n - k) with (S (n - S k)); auto with coc core arith sets.
-lia.
+  intros ?; subst.
+  replace (n - n) with 0; auto with coc core arith sets. simpl.
+  elim (le_gt_dec n n); [ intro Hle | intro Hgt ];
+   auto with coc core arith sets; try lia.
+  elim (lt_eq_lt_dec n n); [|];
+   auto with coc core arith sets; try lia.
+  intuition lia.
+  elim (le_gt_dec k n); intros; auto with coc core arith sets; [lia|].
+  simpl.
+  elim (lt_eq_lt_dec k n); try intuition lia.
 
-elim (lt_eq_lt_dec k n); [ intro Hlt_eq | intro Hlt ].
-elim Hlt_eq; clear Hlt_eq. lia.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 
-intros ?; subst.
-replace (n - n) with 0; auto with coc core arith sets. simpl.
-elim (le_gt_dec n n); [ intro Hle | intro Hgt ];
- auto with coc core arith sets; try lia.
-elim (lt_eq_lt_dec n n); [|];
- auto with coc core arith sets; try lia.
-intuition lia.
-elim (le_gt_dec k n); intros; auto with coc core arith sets; [lia|].
-simpl.
-elim (lt_eq_lt_dec k n); try intuition lia.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 
-rewrite H; rewrite H0; auto with coc core arith sets.
-
-rewrite H; rewrite H0; auto with coc core arith sets.
-
-rewrite H; rewrite H0; auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 Qed.

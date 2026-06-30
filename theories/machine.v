@@ -14,891 +14,817 @@
 (* 02110-1301 USA                                                     *)
 
 
+From CoqInCoq Require Import terms.
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import decidable_conversion.
+From CoqInCoq Require Import inference.
+From CoqInCoq Require Import expressions.
 
-Require Import Termes.
-Require Import Conv.
-Require Import Types.
-Require Import Conv_Dec.
-Require Import Infer.
-Require Import Expr.
 
-
-  Record state : Set := 
-    {glob_ctx : env;
-     glob_names : prt_names;
-     glob_wf_ctx : wf glob_ctx;
+(** Machine state: global context with names, well-formedness proof, and uniqueness *)
+  Record state : Set :=
+    {glob_ctx : environment;
+     glob_names : partial_names;
+     glob_wf_ctx : well_formed glob_ctx;
      glob_length : length glob_ctx = length glob_names;
      glob_unique : name_unique glob_names}.
 
   Hint Resolve glob_wf_ctx glob_unique: coc.
 
 
+(** The empty initial state with no declarations *)
   Definition empty_state : state.
-refine (Build_state nil nil _ _ _); auto with coc core arith datatypes.
-exact wf_nil.
+  Proof.
+    refine (Build_state nil nil _ _ _); auto with coc core arith datatypes.
+    exact wf_nil.
 
-red in |- *; intros.
-inversion H.
-Defined.
+    red in |- *; intros.
+    destruct m; simpl in H; discriminate H.
+  Defined.
 
 
-  Record state_ext (x : name) (t : term) (s0 s1 : state) : Prop := 
+(** Witness that state s1 extends s0 with a new binding (x : t) *)
+  Record state_extend (x : name) (t : term) (s0 s1 : state) : Prop :=
     {cons_env : glob_ctx s1 = t :: glob_ctx s0;
      cons_names : glob_names s1 = x :: glob_names s0}.
 
 
-
-  (* internal level *)
+(** Internal commands operating on de Bruijn terms *)
   Inductive command : Set :=
-    | INFER : term -> command
-    | CHECK : term -> term -> command
-    | AXIOM : name -> term -> command
-    | DELETE : command
-    | LIST : command
-    | QUIT : command.
+    | cmd_infer : term -> command
+    | cmd_check : term -> term -> command
+    | cmd_axiom : name -> term -> command
+    | cmd_delete : command
+    | cmd_list : command
+    | cmd_quit : command.
 
+(** Messages returned after successful command execution *)
   Inductive message : Set :=
-    | New_axiom : name -> message
-    | Infered_type : term -> message
-    | Correct : message
-    | Delete_axiom : name -> message
-    | Context_listing : prt_names -> message
-    | Exiting : message.
+    | msg_new_axiom : name -> message
+    | msg_inferred_type : term -> message
+    | msg_correct : message
+    | msg_delete_axiom : name -> message
+    | msg_context_listing : partial_names -> message
+    | msg_exiting : message.
 
+(** Errors produced by failed command execution *)
   Inductive error : Set :=
-    | Name_clash : name -> error
-    | Type_error : type_error -> error
-    | Cannot_delete : error.
+    | name_clash : name -> error
+    | type_error_err : type_error -> error
+    | cannot_delete : error.
 
 
-  (* external level *)
+(** User-facing AST with named variables *)
   Inductive ast : Set :=
-    | AST_INFER : expr -> ast
-    | AST_CHECK : expr -> expr -> ast
-    | AST_AXIOM : name -> expr -> ast
-    | AST_DELETE : ast
-    | AST_LIST : ast
-    | AST_QUIT : ast.
+    | ast_infer : expr -> ast
+    | ast_check : expr -> expr -> ast
+    | ast_axiom : name -> expr -> ast
+    | ast_delete : ast
+    | ast_list : ast
+    | ast_quit : ast.
 
+(** Extracts sub-expressions from an AST node *)
   Inductive expr_of_ast : ast -> expr -> Prop :=
-    | ea_inf : forall e : expr, expr_of_ast (AST_INFER e) e
-    | ea_chk1 : forall e1 e2 : expr, expr_of_ast (AST_CHECK e1 e2) e1
-    | ea_chk2 : forall e1 e2 : expr, expr_of_ast (AST_CHECK e1 e2) e2
-    | ea_ax : forall (x : name) (e : expr), expr_of_ast (AST_AXIOM x e) e.
+    | ea_inf : forall e : expr, expr_of_ast (ast_infer e) e
+    | ea_chk1 : forall e1 e2 : expr, expr_of_ast (ast_check e1 e2) e1
+    | ea_chk2 : forall e1 e2 : expr, expr_of_ast (ast_check e1 e2) e2
+    | ea_ax : forall (x : name) (e : expr), expr_of_ast (ast_axiom x e) e.
 
   Hint Resolve ea_inf ea_chk1 ea_chk2 ea_ax: coc.
 
-  (* printable messages *)
+(** Printable messages for user display *)
   Inductive pmessage : Set :=
-    | Pnew_axiom : name -> pmessage
-    | Pinfered_type : expr -> pmessage
-    | Pcorrect : pmessage
-    | Pcontext_listing : prt_names -> pmessage
-    | Pdelete_axiom : name -> pmessage
-    | Pexiting : pmessage.
+    | pmsg_new_axiom : name -> pmessage
+    | pmsg_inferred_type : expr -> pmessage
+    | pmsg_correct : pmessage
+    | pmsg_context_listing : partial_names -> pmessage
+    | pmsg_delete_axiom : name -> pmessage
+    | pmsg_exiting : pmessage.
 
 
-  (* printable type errors *)
+(** Printable type errors with named variables *)
   Inductive ptype_error : Set :=
-    | Punder : name -> expr -> ptype_error -> ptype_error
-    | Pexpected_type : expr -> expr -> expr -> ptype_error
-    | Pkind_ill_typed : ptype_error
-    | Pdb_error : nat -> ptype_error
-    | Plambda_kind : expr -> ptype_error
-    | Pnot_a_type : expr -> expr -> ptype_error
-    | Pnot_a_fun : expr -> expr -> ptype_error
-    | Papply_err : expr -> expr -> expr -> expr -> ptype_error.
+    | perr_under : name -> expr -> ptype_error -> ptype_error
+    | perr_expected_type : expr -> expr -> expr -> ptype_error
+    | perr_kind_ill_typed : ptype_error
+    | perr_db : nat -> ptype_error
+    | perr_lambda_kind : expr -> ptype_error
+    | perr_not_a_type : expr -> expr -> ptype_error
+    | perr_not_a_fun : expr -> expr -> ptype_error
+    | perr_apply : expr -> expr -> expr -> expr -> ptype_error.
 
-  (* printable errors *)
+(** Printable errors for user display *)
   Inductive perror : Set :=
-    | Punbound_vars : prt_names -> perror
-    | Pname_clash : name -> perror
-    | Ptype_error : ptype_error -> perror
-    | Pcannot_delete : perror.
+    | perr_unbound_vars : partial_names -> perror
+    | perr_name_clash : name -> perror
+    | perr_type_error : ptype_error -> perror
+    | perr_cannot_delete : perror.
 
 
-  (* command translated to the internal level *)
+(** Translation of an AST command to an internal command using name resolution *)
   Inductive synthesis_trans (s : state) : ast -> command -> Prop :=
-    | Sy_infer :
+    | sy_infer :
         forall (e : expr) (t : term),
-        term_expr_equiv (glob_names s) t e ->
-        synthesis_trans s (AST_INFER e) (INFER t)
-    | Sy_check :
+        term_expression_equivalent (glob_names s) t e ->
+        synthesis_trans s (ast_infer e) (cmd_infer t)
+    | sy_check :
         forall (e1 e2 : expr) (m t : term),
-        term_expr_equiv (glob_names s) m e1 ->
-        term_expr_equiv (glob_names s) t e2 ->
-        synthesis_trans s (AST_CHECK e1 e2) (CHECK m t)
-    | Sy_axiom :
+        term_expression_equivalent (glob_names s) m e1 ->
+        term_expression_equivalent (glob_names s) t e2 ->
+        synthesis_trans s (ast_check e1 e2) (cmd_check m t)
+    | sy_axiom :
         forall (x : name) (e : expr) (t : term),
-        term_expr_equiv (glob_names s) t e ->
-        synthesis_trans s (AST_AXIOM x e) (AXIOM x t)
-    | Sy_delete : synthesis_trans s AST_DELETE DELETE
-    | Sy_list : synthesis_trans s AST_LIST LIST
-    | Sy_quit : synthesis_trans s AST_QUIT QUIT.
+        term_expression_equivalent (glob_names s) t e ->
+        synthesis_trans s (ast_axiom x e) (cmd_axiom x t)
+    | sy_delete : synthesis_trans s ast_delete cmd_delete
+    | sy_list : synthesis_trans s ast_list cmd_list
+    | sy_quit : synthesis_trans s ast_quit cmd_quit.
 
-  Hint Resolve Sy_infer Sy_check Sy_axiom Sy_delete Sy_list Sy_quit: coc.
+  Hint Resolve sy_infer sy_check sy_axiom sy_delete sy_list sy_quit: coc.
 
 
-  (* commands *)
+(** State transitions for internal commands *)
   Inductive transition (s1 : state) : command -> state -> message -> Prop :=
-    | Tr_infer :
+    | tr_infer :
         forall m t : term,
-        typ (glob_ctx s1) m t -> transition s1 (INFER m) s1 (Infered_type t)
-    | Tr_check :
+        has_type (glob_ctx s1) m t -> transition s1 (cmd_infer m) s1 (msg_inferred_type t)
+    | tr_check :
         forall m t : term,
-        typ (glob_ctx s1) m t -> transition s1 (CHECK m t) s1 Correct
-    | Tr_axiom :
+        has_type (glob_ctx s1) m t -> transition s1 (cmd_check m t) s1 msg_correct
+    | tr_axiom :
         forall (x : name) (t : term) (s2 : state),
         glob_ctx s2 = t :: glob_ctx s1 ->
         glob_names s2 = x :: glob_names s1 ->
-        transition s1 (AXIOM x t) s2 (New_axiom x)
-    | Tr_delete :
+        transition s1 (cmd_axiom x t) s2 (msg_new_axiom x)
+    | tr_delete :
         forall (x : name) (s2 : state),
         x :: glob_names s2 = glob_names s1 ->
-        transition s1 DELETE s2 (Delete_axiom x)
-    | Tr_list : transition s1 LIST s1 (Context_listing (glob_names s1))
-    | Tr_quit : transition s1 QUIT s1 Exiting.
+        transition s1 cmd_delete s2 (msg_delete_axiom x)
+    | tr_list : transition s1 cmd_list s1 (msg_context_listing (glob_names s1))
+    | tr_quit : transition s1 cmd_quit s1 msg_exiting.
 
-  Hint Resolve Tr_infer Tr_check Tr_axiom Tr_delete Tr_list Tr_quit: coc.
+  Hint Resolve tr_infer tr_check tr_axiom tr_delete tr_list tr_quit: coc.
 
 
-
-  (* translation of messages *)
-  Inductive transl_msg (s : state) : message -> pmessage -> Prop :=
-    | Tm_infer :
+(** Translation of internal messages to printable messages *)
+  Inductive translate_message (s : state) : message -> pmessage -> Prop :=
+    | tm_infer :
         forall (t : term) (e : expr),
-        term_expr_equiv (glob_names s) t e ->
-        transl_msg s (Infered_type t) (Pinfered_type e)
-    | Tm_check : transl_msg s Correct Pcorrect
-    | Tm_axiom : forall x : name, transl_msg s (New_axiom x) (Pnew_axiom x)
-    | Tm_delete :
-        forall x : name, transl_msg s (Delete_axiom x) (Pdelete_axiom x)
-    | Tm_listing :
-        forall l : prt_names,
-        transl_msg s (Context_listing l) (Pcontext_listing l)
-    | Tm_exit : transl_msg s Exiting Pexiting.
+        term_expression_equivalent (glob_names s) t e ->
+        translate_message s (msg_inferred_type t) (pmsg_inferred_type e)
+    | tm_check : translate_message s msg_correct pmsg_correct
+    | tm_axiom : forall x : name, translate_message s (msg_new_axiom x) (pmsg_new_axiom x)
+    | tm_delete :
+        forall x : name, translate_message s (msg_delete_axiom x) (pmsg_delete_axiom x)
+    | tm_listing :
+        forall l : partial_names,
+        translate_message s (msg_context_listing l) (pmsg_context_listing l)
+    | tm_exit : translate_message s msg_exiting pmsg_exiting.
 
-  Hint Resolve Tm_infer Tm_check Tm_axiom Tm_delete Tm_listing Tm_exit: coc.
-
-
+  Hint Resolve tm_infer tm_check tm_axiom tm_delete tm_listing tm_exit: coc.
 
 
   (* ERRORS *)
 
-  (* errors occuring during synthesis *)
-  Inductive synth_error (s : state) : ast -> perror -> Prop :=
+(** Errors during synthesis from AST to internal command *)
+  Inductive synthesis_error (s : state) : ast -> perror -> Prop :=
       Syf_db_failed :
-        forall (a : ast) (e : expr) (undef : prt_names),
+        forall (a : ast) (e : expr) (undef : partial_names),
         expr_of_ast a e ->
         undef_vars e (glob_names s) undef ->
-        undef <> nil -> synth_error s a (Punbound_vars undef).
+        undef <> nil -> synthesis_error s a (perr_unbound_vars undef).
 
 
-  (* errors of internal commands *)
-  Inductive com_error (s : state) : command -> error -> Prop :=
-    | Ce_inf_error :
+(** Errors from internal command execution *)
+  Inductive command_error (s : state) : command -> error -> Prop :=
+    | ce_inf_error :
         forall (m : term) (err : type_error),
-        inf_error m err ->
-        expln (glob_ctx s) err -> com_error s (INFER m) (Type_error err)
-    | Ce_chk_error :
+        infer_error m err ->
+        explanation (glob_ctx s) err -> command_error s (cmd_infer m) (type_error_err err)
+    | ce_chk_error :
         forall (m t : term) (err : type_error),
-        chk_error m t err ->
-        expln (glob_ctx s) err -> com_error s (CHECK m t) (Type_error err)
-    | Ce_decl_error :
+        check_error m t err ->
+        explanation (glob_ctx s) err -> command_error s (cmd_check m t) (type_error_err err)
+    | ce_decl_error :
         forall (x : name) (m : term) (err : type_error),
-        decl_error m err ->
-        expln (glob_ctx s) err -> com_error s (AXIOM x m) (Type_error err)
-    | Ce_axiom :
+        declare_error m err ->
+        explanation (glob_ctx s) err -> command_error s (cmd_axiom x m) (type_error_err err)
+    | ce_axiom :
         forall (x : name) (t : term),
-        In _ x (glob_names s) -> com_error s (AXIOM x t) (Name_clash x)
-    | Ce_delete : glob_names s = nil -> com_error s DELETE Cannot_delete.
+        In x (glob_names s) -> command_error s (cmd_axiom x t) (name_clash x)
+    | ce_delete : glob_names s = nil -> command_error s cmd_delete cannot_delete.
 
-  Hint Resolve Ce_inf_error Ce_chk_error Ce_decl_error Ce_axiom Ce_delete:
+  Hint Resolve ce_inf_error ce_chk_error ce_decl_error ce_axiom ce_delete:
     coc.
 
 
-  (* translation of type_errors *)
-  Inductive transl_type_error :
-  prt_names -> ptype_error -> type_error -> Prop :=
-    | Tpe_under :
-        forall (l : prt_names) (x : name) (t : term) (e : expr),
-        ~ In name x l ->
-        term_expr_equiv l t e ->
+(** Translation of type errors to printable type errors *)
+  Inductive translate_type_error :
+  partial_names -> ptype_error -> type_error -> Prop :=
+    | tpe_under :
+        forall (l : partial_names) (x : name) (t : term) (e : expr),
+        ~ In x l ->
+        term_expression_equivalent l t e ->
         forall (perr : ptype_error) (err : type_error),
-        transl_type_error (x :: l) perr err ->
-        transl_type_error l (Punder x e perr) (Under t err)
-    | Tpe_exp_type :
-        forall (l : prt_names) (t0 t1 t2 : term) (e0 e1 e2 : expr),
-        term_expr_equiv l t0 e0 ->
-        term_expr_equiv l t1 e1 ->
-        term_expr_equiv l t2 e2 ->
-        transl_type_error l (Pexpected_type e0 e1 e2)
-          (Expected_type t0 t1 t2)
-    | Tpe_is_kind :
-        forall l : prt_names,
-        transl_type_error l Pkind_ill_typed Kind_ill_typed
-    | Tpe_db_error :
-        forall (l : prt_names) (n : nat),
-        transl_type_error l (Pdb_error n) (Db_error n)
-    | Tpe_lam_kind :
-        forall (l : prt_names) (t : term) (e : expr),
-        term_expr_equiv l t e ->
-        transl_type_error l (Plambda_kind e) (Lambda_kind t)
-    | Tpe_not_a_type :
-        forall (l : prt_names) (t0 t1 : term) (e0 e1 : expr),
-        term_expr_equiv l t0 e0 ->
-        term_expr_equiv l t1 e1 ->
-        transl_type_error l (Pnot_a_type e0 e1) (Not_a_type t0 t1)
-    | Tpe_not_a_fun :
-        forall (l : prt_names) (t0 t1 : term) (e0 e1 : expr),
-        term_expr_equiv l t0 e0 ->
-        term_expr_equiv l t1 e1 ->
-        transl_type_error l (Pnot_a_fun e0 e1) (Not_a_fun t0 t1)
-    | Tpe_apply_err :
-        forall (l : prt_names) (t0 t1 t2 t3 : term) (e0 e1 e2 e3 : expr),
-        term_expr_equiv l t0 e0 ->
-        term_expr_equiv l t1 e1 ->
-        term_expr_equiv l t2 e2 ->
-        term_expr_equiv l t3 e3 ->
-        transl_type_error l (Papply_err e0 e1 e2 e3) (Apply_err t0 t1 t2 t3).
+        translate_type_error (x :: l) perr err ->
+        translate_type_error l (perr_under x e perr) (err_under t err)
+    | tpe_exp_type :
+        forall (l : partial_names) (t0 t1 t2 : term) (e0 e1 e2 : expr),
+        term_expression_equivalent l t0 e0 ->
+        term_expression_equivalent l t1 e1 ->
+        term_expression_equivalent l t2 e2 ->
+        translate_type_error l (perr_expected_type e0 e1 e2)
+          (err_expected_type t0 t1 t2)
+    | tpe_is_kind :
+        forall l : partial_names,
+        translate_type_error l perr_kind_ill_typed err_kind_ill_typed
+    | tpe_db_error :
+        forall (l : partial_names) (n : nat),
+        translate_type_error l (perr_db n) (err_db n)
+    | tpe_lam_kind :
+        forall (l : partial_names) (t : term) (e : expr),
+        term_expression_equivalent l t e ->
+        translate_type_error l (perr_lambda_kind e) (err_lambda_kind t)
+    | tpe_not_a_type :
+        forall (l : partial_names) (t0 t1 : term) (e0 e1 : expr),
+        term_expression_equivalent l t0 e0 ->
+        term_expression_equivalent l t1 e1 ->
+        translate_type_error l (perr_not_a_type e0 e1) (err_not_a_type t0 t1)
+    | tpe_not_a_fun :
+        forall (l : partial_names) (t0 t1 : term) (e0 e1 : expr),
+        term_expression_equivalent l t0 e0 ->
+        term_expression_equivalent l t1 e1 ->
+        translate_type_error l (perr_not_a_fun e0 e1) (Not_a_fun t0 t1)
+    | tpe_apply_err :
+        forall (l : partial_names) (t0 t1 t2 t3 : term) (e0 e1 e2 e3 : expr),
+        term_expression_equivalent l t0 e0 ->
+        term_expression_equivalent l t1 e1 ->
+        term_expression_equivalent l t2 e2 ->
+        term_expression_equivalent l t3 e3 ->
+        translate_type_error l (perr_apply e0 e1 e2 e3) (err_apply t0 t1 t2 t3).
 
-  Hint Resolve Tpe_exp_type Tpe_is_kind Tpe_db_error Tpe_lam_kind
-    Tpe_not_a_type Tpe_not_a_fun Tpe_apply_err: coc.
+  Hint Resolve tpe_exp_type tpe_is_kind tpe_db_error tpe_lam_kind
+    tpe_not_a_type tpe_not_a_fun tpe_apply_err: coc.
 
 
-  (* translation of internal errors to the external level *)
-  Inductive transl_err (s : state) : error -> perror -> Prop :=
-    | Te_name_clash :
-        forall x : name, transl_err s (Name_clash x) (Pname_clash x)
-    | Te_type_error :
+(** Translation of internal errors to printable errors *)
+  Inductive translate_error (s : state) : error -> perror -> Prop :=
+    | te_name_clash :
+        forall x : name, translate_error s (name_clash x) (perr_name_clash x)
+    | te_type_error :
         forall (e : type_error) (pe : ptype_error),
-        transl_type_error (glob_names s) pe e ->
-        transl_err s (Type_error e) (Ptype_error pe)
-    | Te_cannot_delete : transl_err s Cannot_delete Pcannot_delete.
+        translate_type_error (glob_names s) pe e ->
+        translate_error s (type_error_err e) (perr_type_error pe)
+    | te_cannot_delete : translate_error s cannot_delete perr_cannot_delete.
 
-  Hint Resolve Te_name_clash Te_type_error Te_cannot_delete: coc.
-
-
+  Hint Resolve te_name_clash te_type_error te_cannot_delete: coc.
 
 
   (* global architecture *)
 
+(** A successful transition and a command error cannot coexist *)
   Lemma trans_error_no_confusion :
    forall (si sf : state) (c : command) (m : message) (err : error),
-   transition si c sf m -> com_error si c err -> False.
-simple induction 1; intros.
-inversion_clear H1.
-elim inf_error_no_type with m0 err0 (glob_ctx si) t;
- auto with coc core arith datatypes.
+   transition si c sf m -> command_error si c err -> False.
+  Proof.
+    simple induction 1; intros.
+    inversion_clear H1.
+    elim infer_error_no_type with m0 err0 (glob_ctx si) t;
+     auto with coc core arith datatypes.
 
-inversion_clear H1.
-elim chk_error_no_type with (glob_ctx si) m0 t err0;
- auto with coc core arith datatypes.
+    inversion_clear H1.
+    elim check_error_no_type with (glob_ctx si) m0 t err0;
+     auto with coc core arith datatypes.
 
-inversion_clear H2.
-elim decl_err_not_wf with (glob_ctx si) t err0;
- auto with coc core arith datatypes.
-elim H0.
-apply glob_wf_ctx.
+    inversion_clear H2.
+    elim declare_error_not_well_formed with (glob_ctx si) t err0;
+     auto with coc core arith datatypes.
+    elim H0.
+    apply glob_wf_ctx.
 
-cut (exists n : nat, item _ x (glob_names si) n); intros.
-inversion_clear H2.
-absurd (0 = S x0); auto with coc core arith datatypes.
-generalize (glob_unique s2).
-unfold name_unique in |- *; intros.
-apply H2 with x.
-rewrite H1; auto with coc core arith datatypes.
+    assert (exists n : nat, nth_error (glob_names si) n = Some x) as [x0 Hx0].
+    { revert H3; set (gl := glob_names si).
+      induction gl as [|gh gt IHgt]; simpl; intro H3.
+      exact (match H3 with end).
+      destruct H3 as [<- | H3].
+      exists 0; reflexivity.
+      destruct (IHgt H3) as [n Hn]; exists (S n); exact Hn. }
+    absurd (0 = S x0); auto with coc core arith datatypes.
+    generalize (glob_unique s2).
+    unfold name_unique in |- *; intros.
+    apply H2 with x.
+    rewrite H1; reflexivity.
+    rewrite H1; simpl; exact Hx0.
 
-rewrite H1; auto with coc core arith datatypes.
+    inversion_clear H1.
+    rewrite H2 in H0.
+    discriminate H0.
 
-elim H3; intros.
-split with 0; auto with coc core arith datatypes.
+    inversion_clear H0.
 
-inversion_clear H4.
-split with (S x0); auto with coc core arith datatypes.
-
-inversion_clear H1.
-rewrite H2 in H0.
-discriminate H0.
-
-inversion_clear H0.
-
-inversion_clear H0.
-Qed.
-
+    inversion_clear H0.
+  Qed.
 
 
-  Inductive top_trans (si : state) (a : ast) (sf : state) 
+(** Top-level successful transition: synthesis, execution, and message translation *)
+  Inductive top_transition (si : state) (a : ast) (sf : state)
   (m : pmessage) : Prop :=
       Top_int :
         forall (c : command) (im : message),
         synthesis_trans si a c ->
         transition si c sf im
         (* the message should be understandable in initial state! *)
-         -> transl_msg si im m -> top_trans si a sf m.
+         -> translate_message si im m -> top_transition si a sf m.
 
 
-  Inductive top_error (si : state) (a : ast) (e : perror) : Prop :=
-    | Te_sy : synth_error si a e -> top_error si a e
-    | Te_int :
+(** Top-level error: either a synthesis error or an internal command error *)
+  Inductive top_transition_error (si : state) (a : ast) (e : perror) : Prop :=
+    | te_sy : synthesis_error si a e -> top_transition_error si a e
+    | te_int :
         forall (c : command) (ie : error),
         synthesis_trans si a c ->
-        com_error si c ie -> transl_err si ie e -> top_error si a e.
+        command_error si c ie -> translate_error si ie e -> top_transition_error si a e.
 
-  Hint Resolve Te_sy: coc.
+  Hint Resolve te_sy: coc.
 
 
-  Lemma synth_no_confusion :
+(** Synthesis and synthesis error are mutually exclusive *)
+  Lemma synthesis_no_confusion :
    forall (si : state) (a : ast) (c : command) (e : perror),
-   synthesis_trans si a c -> synth_error si a e -> False.
-simple induction 1; intros.
-inversion_clear H1.
-apply H4.
-apply equiv_no_undef with (glob_names si) t e0;
- auto with coc core arith datatypes.
-inversion_clear H2; auto with coc core arith datatypes.
+   synthesis_trans si a c -> synthesis_error si a e -> False.
+  Proof.
+    simple induction 1; intros.
+    inversion_clear H1.
+    apply H4.
+    apply equivalent_no_undefined with (glob_names si) t e0;
+     auto with coc core arith datatypes.
+    inversion_clear H2; auto with coc core arith datatypes.
 
-inversion_clear H2.
-apply H5.
-generalize H0 H1.
-inversion_clear H3; intros.
-apply equiv_no_undef with (glob_names si) m e0;
- auto with coc core arith datatypes.
+    inversion_clear H2.
+    apply H5.
+    generalize H0 H1.
+    inversion_clear H3; intros.
+    apply equivalent_no_undefined with (glob_names si) m e0;
+     auto with coc core arith datatypes.
 
-apply equiv_no_undef with (glob_names si) t e0;
- auto with coc core arith datatypes.
+    apply equivalent_no_undefined with (glob_names si) t e0;
+     auto with coc core arith datatypes.
 
-inversion_clear H1.
-apply H4.
-apply equiv_no_undef with (glob_names si) t e0;
- auto with coc core arith datatypes.
-inversion_clear H2; auto with coc core arith datatypes.
+    inversion_clear H1.
+    apply H4.
+    apply equivalent_no_undefined with (glob_names si) t e0;
+     auto with coc core arith datatypes.
+    inversion_clear H2; auto with coc core arith datatypes.
 
-inversion_clear H0.
-inversion_clear H1.
+    inversion_clear H0.
+    inversion_clear H1.
 
-inversion_clear H0.
-inversion_clear H1.
+    inversion_clear H0.
+    inversion_clear H1.
 
-inversion_clear H0.
-inversion_clear H1.
-Qed.
+    inversion_clear H0.
+    inversion_clear H1.
+  Qed.
 
 
-  Lemma synth_deterministic :
+(** Synthesis is deterministic: same AST yields same command *)
+  Lemma synthesis_deterministic :
    forall (si : state) (a : ast) (c d : command),
    synthesis_trans si a c -> synthesis_trans si a d -> c = d.
-simple induction 1; intros.
-inversion_clear H1.
-elim equiv_unique with (glob_names si) t e t0;
- auto with coc core arith datatypes.
+  Proof.
+    simple induction 1; intros.
+    inversion_clear H1.
+    elim equivalent_unique with (glob_names si) t e t0;
+     auto with coc core arith datatypes.
 
-inversion_clear H2.
-elim equiv_unique with (glob_names si) m e1 m0;
- auto with coc core arith datatypes.
-elim equiv_unique with (glob_names si) t e2 t0;
- auto with coc core arith datatypes.
+    inversion_clear H2.
+    elim equivalent_unique with (glob_names si) m e1 m0;
+     auto with coc core arith datatypes.
+    elim equivalent_unique with (glob_names si) t e2 t0;
+     auto with coc core arith datatypes.
 
-inversion_clear H1.
-elim equiv_unique with (glob_names si) t e t0;
- auto with coc core arith datatypes.
+    inversion_clear H1.
+    elim equivalent_unique with (glob_names si) t e t0;
+     auto with coc core arith datatypes.
 
-inversion_clear H0; auto with coc core arith datatypes.
+    inversion_clear H0; auto with coc core arith datatypes.
 
-inversion_clear H0; auto with coc core arith datatypes.
+    inversion_clear H0; auto with coc core arith datatypes.
 
-inversion_clear H0; auto with coc core arith datatypes.
-Qed.
+    inversion_clear H0; auto with coc core arith datatypes.
+  Qed.
 
 
-
+(** Top-level success and top-level error are mutually exclusive *)
   Lemma top_trans_error_no_confusion :
    forall (si sf : state) (a : ast) (m : pmessage) (perr : perror),
-   top_trans si a sf m -> top_error si a perr -> False.
-simple induction 1; intros.
-inversion_clear H3.
-apply synth_no_confusion with si a c perr; auto with coc core arith datatypes.
+   top_transition si a sf m -> top_transition_error si a perr -> False.
+  Proof.
+    simple induction 1; intros.
+    inversion_clear H3.
+    apply synthesis_no_confusion with si a c perr; auto with coc core arith datatypes.
 
-apply trans_error_no_confusion with si sf c im ie;
- auto with coc core arith datatypes.
-elim synth_deterministic with si a c0 c; auto with coc core arith datatypes.
-Qed.
+    apply trans_error_no_confusion with si sf c im ie;
+     auto with coc core arith datatypes.
+    elim synthesis_deterministic with si a c0 c; auto with coc core arith datatypes.
+  Qed.
 
 
+(** Result type for top-level interpretation: success or error *)
   Definition answer (si : state) (a : ast) : Set :=
     ({p : state * pmessage |
      match p with
-     | (sf, m) => top_trans si a sf m
-     end} + {err : perror | top_error si a err})%type.
+     | (sf, m) => top_transition si a sf m
+     end} + {err : perror | top_transition_error si a err})%type.
 
 
-
-
-  Definition synth_answer (si : state) (a : ast) : Set :=
+(** Result type for synthesis: internal command or error *)
+  Definition synthesis_answer (si : state) (a : ast) : Set :=
     ({c : command | synthesis_trans si a c} +
-     {err : perror | synth_error si a err})%type.
+     {err : perror | synthesis_error si a err})%type.
 
-  Definition synthesis : forall (si : state) (a : ast), synth_answer si a.
-(*
-Realizer [si:state][a:ast]
-  Cases a of
-    (AST_INFER e) => Cases (term_of_expr e (glob_names si)) of
-            (inl t) => (inl ? perror (INFER t))
-          | (inr u) => (inr command ? (Punbound_vars u))
-          end
-  | (AST_CHECK e1 e2) => Cases (term_of_expr e1 (glob_names si))
-                               (term_of_expr e2 (glob_names si)) of
-            (inl m) (inl t) => (inl ? perror (CHECK m t))
-          | (inr u1) _ => (inr command ? (Punbound_vars u1))
-          | _ (inr u2) => (inr command ? (Punbound_vars u2))
-          end
-  | (AST_AXIOM x e) => Cases (term_of_expr e (glob_names si)) of
-            (inl t) => (inl ? perror (AXIOM x t))
-          | (inr u) => (inr command ? (Punbound_vars u))
-          end
-  | AST_DELETE => (inl ? perror DELETE)
-  | AST_LIST => (inl ? perror LIST)
-  | AST_QUIT => (inl ? perror QUIT)
-  end.
-*)
-simple destruct a; intros.
-elim (term_of_expr e (glob_names si)); intros.
-left.
-inversion_clear a0.
-exists (INFER x); auto with coc core arith datatypes.
+(** Synthesize an AST into an internal command or report an error *)
+  Definition synthesis : forall (si : state) (a : ast), synthesis_answer si a.
+  Proof.
+    simple destruct a; intros.
+    elim (term_of_expression e (glob_names si)); intros.
+    left.
+    inversion_clear a0.
+    exists (cmd_infer x); auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists (Punbound_vars x); auto with coc core arith datatypes.
-apply Syf_db_failed with e; auto with coc core arith datatypes.
+    right.
+    inversion_clear b.
+    exists (perr_unbound_vars x); auto with coc core arith datatypes.
+    apply Syf_db_failed with e; auto with coc core arith datatypes.
 
-elim (term_of_expr e (glob_names si)); intros.
-inversion_clear a0.
-elim (term_of_expr e0 (glob_names si)); intros.
-left.
-inversion_clear a0.
-exists (CHECK x x0); auto with coc core arith datatypes.
+    elim (term_of_expression e (glob_names si)); intros.
+    inversion_clear a0.
+    elim (term_of_expression e0 (glob_names si)); intros.
+    left.
+    inversion_clear a0.
+    exists (cmd_check x x0); auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists (Punbound_vars x0); auto with coc core arith datatypes.
-apply Syf_db_failed with e0; auto with coc core arith datatypes.
+    right.
+    inversion_clear b.
+    exists (perr_unbound_vars x0); auto with coc core arith datatypes.
+    apply Syf_db_failed with e0; auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists (Punbound_vars x); auto with coc core arith datatypes.
-apply Syf_db_failed with e; auto with coc core arith datatypes.
+    right.
+    inversion_clear b.
+    exists (perr_unbound_vars x); auto with coc core arith datatypes.
+    apply Syf_db_failed with e; auto with coc core arith datatypes.
 
-elim (term_of_expr e (glob_names si)); intros.
-left.
-inversion_clear a0.
-exists (AXIOM n x); auto with coc core arith datatypes.
+    elim (term_of_expression e (glob_names si)); intros.
+    left.
+    inversion_clear a0.
+    exists (cmd_axiom n x); auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists (Punbound_vars x); auto with coc core arith datatypes.
-apply Syf_db_failed with e; auto with coc core arith datatypes.
+    right.
+    inversion_clear b.
+    exists (perr_unbound_vars x); auto with coc core arith datatypes.
+    apply Syf_db_failed with e; auto with coc core arith datatypes.
 
-left.
-exists DELETE; auto with coc core arith datatypes.
+    left.
+    exists cmd_delete; auto with coc core arith datatypes.
 
-left.
-exists LIST; auto with coc core arith datatypes.
+    left.
+    exists cmd_list; auto with coc core arith datatypes.
 
-left.
-exists QUIT; auto with coc core arith datatypes.
-Defined.
+    left.
+    exists cmd_quit; auto with coc core arith datatypes.
+  Defined.
 
 
-
-  Definition com_answer (si : state) (c : command) : Set :=
+(** Result type for command execution: success with new state and message, or error *)
+  Definition command_answer (si : state) (c : command) : Set :=
     ({p : state * message |
      match p with
      | (sf, m) => transition si c sf m
-     end} + {e : error | com_error si c e})%type.
+     end} + {e : error | command_error si c e})%type.
 
 
-  Definition exec_infer : forall (s : state) (m : term), com_answer s (INFER m).
-(*
-Realizer
-  [s:state][m:term]Cases (infer (glob_ctx s) m) of
-    (inl t) => (inl ? error (s,(Infered_type t)))
-  | (inr err) => (inr state*message ? (Type_error err))
-  end.
-*)
-intros.
-elim infer with (glob_ctx s) m; intros; auto with coc core arith datatypes.
-elim a.
-intros t H.
-left.
-exists (s, Infered_type t).
-apply Tr_infer; auto with coc core arith datatypes.
+(** Execute the cmd_infer command: infer the type of a term *)
+  Definition execute_infer : forall (s : state) (m : term), command_answer s (cmd_infer m).
+  Proof.
+    intros.
+    elim infer with (glob_ctx s) m; intros; auto with coc core arith datatypes.
+    elim a.
+    intros t H.
+    left.
+    exists (s, msg_inferred_type t).
+    apply tr_infer; auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists (Type_error x); auto with coc core arith datatypes.
-Defined.
+    right.
+    inversion_clear b.
+    exists (type_error_err x); auto with coc core arith datatypes.
+  Defined.
 
 
-  Definition exec_check :
-   forall (s : state) (m t : term), com_answer s (CHECK m t).
-(*
-Realizer
-  [s:state][m,t:term]Cases (check_typ (glob_ctx s) m t) of
-    (inleft err) => (inr state*message ? (Type_error err))
-  | inright => (inl ? error (s,Correct))
-  end.
-*)
-intros.
-elim check_typ with (glob_ctx s) m t; intros;
- auto with coc core arith datatypes.
-right.
-inversion_clear a.
-exists (Type_error x); auto with coc core arith datatypes.
+(** Execute the cmd_check command: check a term against a type *)
+  Definition execute_check :
+   forall (s : state) (m t : term), command_answer s (cmd_check m t).
+  Proof.
+    intros.
+    elim check_type with (glob_ctx s) m t; intros;
+     auto with coc core arith datatypes.
+    right.
+    inversion_clear a.
+    exists (type_error_err x); auto with coc core arith datatypes.
 
-left.
-exists (s, Correct); auto with coc core arith datatypes.
-Defined.
+    left.
+    exists (s, msg_correct); auto with coc core arith datatypes.
+  Defined.
 
 
-  Definition exec_axiom :
-   forall (s : state) (x : name) (t : term), com_answer s (AXIOM x t).
-(*
-Realizer
-  [s:state][x:name][t:term]Cases (add_typ (glob_ctx s) t)
-                                 (list_index ? name_dec x (glob_names s)) of
-    left inright => (NewState 
-                           (Build_state (cons (Ax t) (glob_ctx s))
-                                        (cons x (glob_names s)))
-                           (Pnew_axiom x))
-  | left (inleft _) => (Failed (Pname_clash x))
-  | right _ => (Failed (Ptype_error terr))
-  end.
-*)
-intros.
-elim (add_typ (glob_ctx s) t); intros; auto with coc core arith datatypes.
-right.
-inversion_clear a.
-exists (Type_error x0); auto with coc core arith datatypes.
+(** Execute the cmd_axiom command: add a new axiom to the context *)
+  Definition execute_axiom :
+   forall (s : state) (x : name) (t : term), command_answer s (cmd_axiom x t).
+  Proof.
+    intros.
+    elim (add_type (glob_ctx s) t); intros; auto with coc core arith datatypes.
+    right.
+    inversion_clear a.
+    exists (type_error_err x0); auto with coc core arith datatypes.
 
-elim (list_index _ name_dec x (glob_names s)); intros.
-right.
-exists (Name_clash x); auto with coc core arith datatypes.
-inversion_clear a.
-apply Ce_axiom.
-elim H; auto with coc core arith datatypes.
+    elim (list_index name_dec x (glob_names s)); intros.
+    right.
+    exists (name_clash x); auto with coc core arith datatypes.
+    destruct a as [n Hfi].
+    apply ce_axiom.
+    unfold first_item in Hfi; destruct Hfi as [Hnth _].
+    exact (nth_error_In _ n Hnth).
 
-left.
-(*
-Refine (exist state*message
-    [p:?]
-     Cases p of 
-     
-       (pair dum_sf dum_m)  => (transition s (AXIOM x t) dum_sf dum_m)
-     end
-    ((Build_state (cons term t (glob_ctx s))
-       (cons x (glob_names s)) ? ? ?),(New_axiom x)) ?).
-*)
-cut (name_unique (x :: glob_names s)); intros.
-cut (length (t :: glob_ctx s) = length (x :: glob_names s)); intros.
-exists
- (Build_state (t :: glob_ctx s) (x :: glob_names s) b H0 H, New_axiom x);
- auto with coc core arith datatypes.
+    left.
+    cut (name_unique (x :: glob_names s)); intros.
+    cut (length (t :: glob_ctx s) = length (x :: glob_names s)); intros.
+    exists
+     (Build_state (t :: glob_ctx s) (x :: glob_names s) b H0 H, msg_new_axiom x);
+     auto with coc core arith datatypes.
 
-simpl in |- *.
-elim glob_length with s; auto with coc core arith datatypes.
+    simpl in |- *.
+    elim glob_length with s; auto with coc core arith datatypes.
 
-apply fv_ext; auto with coc core arith datatypes.
-Defined.
+    apply free_var_extension; auto with coc core arith datatypes.
+  Defined.
 
 
+(** Execute the cmd_delete command: remove the most recent axiom *)
+  Definition execute_delete : forall s : state, command_answer s cmd_delete.
+  Proof.
+    intros.
+    generalize (refl_equal (glob_names s)).
+    pattern (glob_names s) at 1 in |- *.
+    case (glob_names s); intros.
+    right.
+    exists cannot_delete; auto with coc core arith datatypes.
 
-  Definition exec_delete : forall s : state, com_answer s DELETE.
-(*
-Realizer [s:state]Cases (glob_ctx s) (glob_names s) of
-    (cons _ e) (cons x l) => (NewState (Build_state e l) (Delete_axiom x))
-  | _          _          => (Failed Pcannot_delete)
-  end.
-*)
-intros.
-generalize (refl_equal (glob_names s)).
-pattern (glob_names s) at 1 in |- *.
-case (glob_names s); intros.
-right.
-exists Cannot_delete; auto with coc core arith datatypes.
+    generalize (refl_equal (glob_ctx s)).
+    pattern (glob_ctx s) at 1 in |- *.
+    case (glob_ctx s); intros.
+    generalize (glob_length s).
+    elim H.
+    elim H0; simpl in |- *; intros.
+    discriminate H1.
 
-generalize (refl_equal (glob_ctx s)).
-pattern (glob_ctx s) at 1 in |- *.
-case (glob_ctx s); intros.
-generalize (glob_length s).
-elim H.
-elim H0; simpl in |- *; intros.
-discriminate H1.
+    cut (length l0 = length l); intros.
+    cut (name_unique l); intros.
+    cut (well_formed l0); intros.
+    left.
+    exists (Build_state l0 l H3 H1 H2, msg_delete_axiom n);
+     auto with coc core arith datatypes.
 
-cut (length l0 = length l); intros.
-cut (name_unique l); intros.
-cut (wf l0); intros.
-left.
-exists (Build_state l0 l H3 H1 H2, Delete_axiom n);
- auto with coc core arith datatypes.
+    generalize (glob_wf_ctx s).
+    elim H0; intros.
+    inversion_clear H3.
+    apply has_type_well_formed with t (sort_term s0); auto with coc core arith datatypes.
 
-generalize (glob_wf_ctx s).
-elim H0; intros.
-inversion_clear H3.
-apply typ_wf with t (Srt s0); auto with coc core arith datatypes.
+    generalize (glob_unique s).
+    elim H.
+    unfold name_unique in |- *; intros.
+    cut (S m = S n0); intros.
+    injection H5; auto with coc core arith datatypes.
 
-generalize (glob_unique s).
-elim H.
-unfold name_unique in |- *; intros.
-cut (S m = S n0); intros.
-injection H5; auto with coc core arith datatypes.
+    apply H2 with x; auto with coc core arith datatypes.
 
-apply H2 with x; auto with coc core arith datatypes.
-
-generalize (glob_length s).
-elim H.
-elim H0; simpl in |- *; intros.
-injection H1; auto with coc core arith datatypes.
-Defined.
+    generalize (glob_length s).
+    elim H.
+    elim H0; simpl in |- *; intros.
+    injection H1; auto with coc core arith datatypes.
+  Defined.
 
 
-
-  Definition interp_command : forall (si : state) (c : command), com_answer si c.
-simple induction c.
-exact (exec_infer si).
-exact (exec_check si).
-exact (exec_axiom si).
-exact (exec_delete si).
-left; exists (si, Context_listing (glob_names si)); auto with coc.
-left; exists (si, Exiting); auto with coc.
-
-(*
-Realizer [si:state][c:command]
-  Cases c of
-    (INFER t) => (exec_infer si t)
-  | (CHECK m t) => (exec_check si m t)
-  | (AXIOM x t) => (exec_axiom si x t)
-  | DELETE => (exec_delete si)
-  | LIST => (inl ? error (si,(Context_listing (glob_names si))))
-  | QUIT => (inl ? error (si,Exiting))
-  end.
-Program_all. 
-*)
-Defined.
+(** Dispatch a command to the appropriate executor *)
+  Definition interpret_command : forall (si : state) (c : command), command_answer si c.
+  Proof.
+    simple induction c.
+    exact (execute_infer si).
+    exact (execute_check si).
+    exact (execute_axiom si).
+    exact (execute_delete si).
+    left; exists (si, msg_context_listing (glob_names si)); auto with coc.
+    left; exists (si, msg_exiting); auto with coc.
+  Defined.
 
 
-  Definition transl_message :
+(** Translate an internal message to a printable message *)
+  Definition translate_message_string :
    forall (s : state) (im : message),
    (exists c : command, (exists sf : state, transition s c sf im)) ->
-   {m : pmessage | transl_msg s im m}.
-simple induction im.
-intro x; exists (Pnew_axiom x); auto with coc.
-intros t H; elim (expr_of_term t (glob_names s)); auto with coc.
-intros; exists (Pinfered_type x); auto with coc.
-inversion_clear H.
-inversion_clear H0.
-inversion_clear H.
-elim glob_length.
-apply type_free_db with m; auto.
-exists Pcorrect; auto with coc.
-intro x; exists (Pdelete_axiom x); auto with coc.
-intro l; exists (Pcontext_listing l); auto with coc.
-exists Pexiting; auto with coc.
-Defined.
+   {m : pmessage | translate_message s im m}.
+  Proof.
+    simple induction im.
+    intro x; exists (pmsg_new_axiom x); auto with coc.
+    intros t H; elim (expression_of_term t (glob_names s)); auto with coc.
+    intros; exists (pmsg_inferred_type x); auto with coc.
+    inversion_clear H.
+    inversion_clear H0.
+    inversion_clear H.
+    elim glob_length.
+    apply type_free_db_below with m; auto.
+    exists pmsg_correct; auto with coc.
+    intro x; exists (pmsg_delete_axiom x); auto with coc.
+    intro l; exists (pmsg_context_listing l); auto with coc.
+    exists pmsg_exiting; auto with coc.
+  Defined.
 
 
-
-  Definition transl_ty_error :
+(** Translate a type error to a printable type error *)
+  Definition translate_type_error_string :
    forall (err : type_error) (s : state),
-   expln (glob_ctx s) err ->
-   {perr : ptype_error | transl_type_error (glob_names s) perr err}.
-simple induction err; intros.
-elim find_free_var with (glob_names s); intros.
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-cut {si : state | state_ext x t s si}; [intros H'; elim H' | ]; intros.
-elim H with x1; intros.
-exists (Punder x x0 x2).
-apply Tpe_under; auto with coc core arith datatypes.
-elim cons_names with x t s x1; auto with coc core arith datatypes.
+   explanation (glob_ctx s) err ->
+   {perr : ptype_error | translate_type_error (glob_names s) perr err}.
+  Proof.
+    simple induction err; intros.
+    elim find_free_var with (glob_names s); intros.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    cut {si : state | state_extend x t s si}; [intros H'; elim H' | ]; intros.
+    elim H with x1; intros.
+    exists (perr_under x x0 x2).
+    apply tpe_under; auto with coc core arith datatypes.
+    elim cons_names with x t s x1; auto with coc core arith datatypes.
 
-inversion_clear H0.
-rewrite (cons_env x t s x1); auto with coc core arith datatypes.
+    inversion_clear H0.
+    rewrite (cons_env x t s x1); auto with coc core arith datatypes.
 
-cut (wf (t :: glob_ctx s)); intros.
-cut (S (length (glob_ctx s)) = S (length (glob_names s))); intros.
-cut (name_unique (x :: glob_names s)); intros.
-exists (Build_state (t :: glob_ctx s) (x :: glob_names s) H1 H2 H3).
-split; auto with coc core arith datatypes.
+    cut (well_formed (t :: glob_ctx s)); intros.
+    cut (S (length (glob_ctx s)) = S (length (glob_names s))); intros.
+    cut (name_unique (x :: glob_names s)); intros.
+    exists (Build_state (t :: glob_ctx s) (x :: glob_names s) H1 H2 H3).
+    split; auto with coc core arith datatypes.
 
-apply fv_ext; auto with coc core arith datatypes.
+    apply free_var_extension; auto with coc core arith datatypes.
 
-elim glob_length with s; auto with coc core arith datatypes.
+    elim glob_length with s; auto with coc core arith datatypes.
 
-inversion_clear H0; auto with coc core arith datatypes.
-apply expln_wf with t0; auto with coc core arith datatypes.
+    inversion_clear H0; auto with coc core arith datatypes.
+    apply explanation_well_formed with t0; auto with coc core arith datatypes.
 
-inversion_clear H0.
-elim glob_length with s; auto with coc core arith datatypes.
-cut (wf (t :: glob_ctx s)); intros.
-inversion_clear H0.
-apply typ_free_db with (Srt s0); auto with coc core arith datatypes.
+    inversion_clear H0.
+    elim glob_length with s; auto with coc core arith datatypes.
+    cut (well_formed (t :: glob_ctx s)); intros.
+    inversion_clear H0.
+    apply has_type_free_db_below with (sort_term s0); auto with coc core arith datatypes.
 
-apply expln_wf with t0; auto with coc core arith datatypes.
+    apply explanation_well_formed with t0; auto with coc core arith datatypes.
 
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t0 (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t1 (glob_names s); intros;
- auto with coc core arith datatypes.
-exists (Pexpected_type x x0 x1); auto with coc core arith datatypes.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t0 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t1 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    exists (perr_expected_type x x0 x1); auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply type_free_db with t; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply type_free_db_below with t; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply typ_free_db with t0; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply has_type_free_db_below with t0; auto with coc core arith datatypes.
 
-exists Pkind_ill_typed; auto with coc core arith datatypes.
+    exists perr_kind_ill_typed; auto with coc core arith datatypes.
 
-exists (Pdb_error n); auto with coc core arith datatypes.
+    exists (perr_db n); auto with coc core arith datatypes.
 
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-exists (Plambda_kind x); auto with coc core arith datatypes.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    exists (perr_lambda_kind x); auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply db_abs.
-cut (wf (t0 :: glob_ctx s)); intros.
-inversion_clear H.
-apply typ_free_db with (Srt s0); auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply db_lam.
+    cut (well_formed (t0 :: glob_ctx s)); intros.
+    inversion_clear H.
+    apply has_type_free_db_below with (sort_term s0); auto with coc core arith datatypes.
 
-apply typ_wf with m (Srt kind); auto with coc core arith datatypes.
+    apply has_type_well_formed with m (sort_term kind); auto with coc core arith datatypes.
 
-change (free_db (length (t0 :: glob_ctx s)) m) in |- *.
-apply typ_free_db with (Srt kind); auto with coc core arith datatypes.
+    change (free_db_below (length (t0 :: glob_ctx s)) m) in |- *.
+    apply has_type_free_db_below with (sort_term kind); auto with coc core arith datatypes.
 
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t0 (glob_names s); intros;
- auto with coc core arith datatypes.
-exists (Pnot_a_type x x0); auto with coc core arith datatypes.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t0 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    exists (perr_not_a_type x x0); auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply type_free_db with t; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply type_free_db_below with t; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply typ_free_db with t0; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply has_type_free_db_below with t0; auto with coc core arith datatypes.
 
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t0 (glob_names s); intros;
- auto with coc core arith datatypes.
-exists (Pnot_a_fun x x0); auto with coc core arith datatypes.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t0 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    exists (perr_not_a_fun x x0); auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply type_free_db with t; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply type_free_db_below with t; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply typ_free_db with t0; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply has_type_free_db_below with t0; auto with coc core arith datatypes.
 
-elim expr_of_term with t (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t0 (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t1 (glob_names s); intros;
- auto with coc core arith datatypes.
-elim expr_of_term with t2 (glob_names s); intros;
- auto with coc core arith datatypes.
-exists (Papply_err x x0 x1 x2); auto with coc core arith datatypes.
+    elim expression_of_term with t (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t0 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t1 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    elim expression_of_term with t2 (glob_names s); intros;
+     auto with coc core arith datatypes.
+    exists (perr_apply x x0 x1 x2); auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply type_free_db with t1; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply type_free_db_below with t1; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply typ_free_db with t2; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply has_type_free_db_below with t2; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply type_free_db with t; auto with coc core arith datatypes.
+    inversion_clear H.
+    elim glob_length with s.
+    apply type_free_db_below with t; auto with coc core arith datatypes.
 
-inversion_clear H.
-elim glob_length with s.
-apply typ_free_db with (Prod a b); auto with coc core arith datatypes.
-Defined.
+    inversion_clear H.
+    elim glob_length with s.
+    apply has_type_free_db_below with (prod a b); auto with coc core arith datatypes.
+  Defined.
 
 
-  Definition transl_error :
+(** Translate an internal error to a printable error *)
+  Definition translate_error_string :
    forall (s : state) (err : error),
    (forall terr : type_error,
-    err = Type_error terr -> expln (glob_ctx s) terr) ->
-   {perr : perror | transl_err s err perr}.
-Proof.
-simple induction err.
-intro x; exists (Pname_clash x); auto with coc.
-intros er H; elim (transl_ty_error er s); auto with coc.
-intros terr H0; exists (Ptype_error terr); auto with coc.
-exists Pcannot_delete; auto with coc.
-
-(* 
-Realizer [s:state][err:error]
-  Cases err of
-    (Name_clash x) => (Pname_clash x)
-  | (Type_error er) => (Ptype_error (transl_ty_error er s)) 
-  | Cannot_delete => Pcannot_delete
-  end.
-Program_all.
-*)
-Defined.
+    err = type_error_err terr -> explanation (glob_ctx s) terr) ->
+   {perr : perror | translate_error s err perr}.
+  Proof.
+    simple induction err.
+    intro x; exists (perr_name_clash x); auto with coc.
+    intros er H; elim (translate_type_error_string er s); auto with coc.
+    intros terr H0; exists (perr_type_error terr); auto with coc.
+    exists perr_cannot_delete; auto with coc.
+  Defined.
 
 
-  Definition interp_ast : forall (si : state) (a : ast), answer si a.
-(*
-Realizer [si:state][a:ast]
-  Cases (synthesis si a) of
-    (inl c) => Cases (interp_command si c) of
-                 (inl (sf,im)) => (inl ? perror (sf, (transl_message si im))) 
-               | (inr ie) => (inr state*pmessage ? (transl_error si ie))
-               end
-  | (inr err) => (inr state*pmessage ? err)
-  end.
-*)
-intros.
-elim synthesis with si a; intros.
-elim a0; intros c H.
-elim interp_command with si c; intros.
-elim a1; simple destruct x; intros.
-elim transl_message with si m; intros.
-left.
-exists (s, x0); auto with coc core arith datatypes.
-apply Top_int with c m; auto with coc core arith datatypes.
+(** Top-level interpreter: synthesize, execute, and translate the result *)
+  Definition interpret_ast : forall (si : state) (a : ast), answer si a.
+  Proof.
+    intros.
+    elim synthesis with si a; intros.
+    elim a0; intros c H.
+    elim interpret_command with si c; intros.
+    elim a1; simple destruct x; intros.
+    elim translate_message_string with si m; intros.
+    left.
+    exists (s, x0); auto with coc core arith datatypes.
+    apply Top_int with c m; auto with coc core arith datatypes.
 
-exists c; exists s; auto with coc core arith datatypes.
+    exists c; exists s; auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-elim transl_error with si x; intros.
-exists x0.
-apply Te_int with c x; auto with coc core arith datatypes.
+    right.
+    inversion_clear b.
+    elim translate_error_string with si x; intros.
+    exists x0.
+    apply te_int with c x; auto with coc core arith datatypes.
 
-rewrite H1 in H0.
-inversion_clear H0; auto with coc core arith datatypes.
+    rewrite H1 in H0.
+    inversion_clear H0; auto with coc core arith datatypes.
 
-right.
-inversion_clear b.
-exists x; auto with coc core arith datatypes.
-Defined.
+    right.
+    inversion_clear b.
+    exists x; auto with coc core arith datatypes.
+  Defined.

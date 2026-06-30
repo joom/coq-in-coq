@@ -14,732 +14,684 @@
 (* 02110-1301 USA                                                     *)
 
 
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import strong_normalization.
+From CoqInCoq Require Import decidable_conversion.
+From CoqInCoq Require Import terms.
 
-Require Import Termes.
-Require Import Conv.
-Require Import Types.
-Require Import Strong_Norm.
-Require Import Conv_Dec.
+Load "implicit_variables".
 
-Load "ImpVar".
-
-  Definition red_to_sort :
+(** Decide whether a strongly normalizing term reduces to a sort. *)
+  Definition reduces_to_sort :
    forall t,
-   sn t -> {s : sort | red t (Srt s)} + {(forall s, ~ conv t (Srt s))}.
-intros t snt.
-elim compute_nf with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
-left.
-exists s; trivial.
+   strongly_normalizing t -> {s : sort | reduces t (sort_term s)} + {(forall s, ~ convertible t (sort_term s))}.
+  Proof.
+    intros t snt.
+    elim compute_normal_form with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
+    left.
+    exists s; trivial.
 
-right; red in |- *; intros.
-elim church_rosser with (Srt s) (Ref n); intros.
-generalize H0.
-elim (red_normal (Ref n) x); auto with coc; intros.
-apply red_sort_sort with s (Ref n); auto with coc.
-discriminate.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (sort_term s) (var n); intros.
+    generalize H0.
+    elim (reduces_normal (var n) x); auto with coc; intros.
+    apply reduces_sort_sort with s (var n); auto with coc.
+    discriminate.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Srt s) (Abs T b); intros.
-generalize H0.
-elim (red_normal (Abs T b) x); auto with coc; intros.
-apply red_sort_sort with s (Abs T b); auto with coc.
-discriminate.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (sort_term s) (lam T b); intros.
+    generalize H0.
+    elim (reduces_normal (lam T b) x); auto with coc; intros.
+    apply reduces_sort_sort with s (lam T b); auto with coc.
+    discriminate.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Srt s) (App u v); intros.
-generalize H0.
-elim (red_normal (App u v) x); auto with coc; intros.
-apply red_sort_sort with s (App u v); auto with coc.
-discriminate.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (sort_term s) (app u v); intros.
+    generalize H0.
+    elim (reduces_normal (app u v) x); auto with coc; intros.
+    apply reduces_sort_sort with s (app u v); auto with coc.
+    discriminate.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Srt s) (Prod T U); intros.
-generalize H0.
-elim (red_normal (Prod T U) x); auto with coc; intros.
-apply red_sort_sort with s (Prod T U); auto with coc.
-discriminate.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (sort_term s) (prod T U); intros.
+    generalize H0.
+    elim (reduces_normal (prod T U) x); auto with coc; intros.
+    apply reduces_sort_sort with s (prod T U); auto with coc.
+    discriminate.
 
-apply trans_conv_conv with t; auto with coc.
-Defined.
+    apply trans_convertible_convertible with t; auto with coc.
+  Defined.
 
 
-  Definition red_to_prod :
+(** Decide whether a strongly normalizing term reduces to a prod. *)
+  Definition reduces_to_prod :
    forall t,
-   sn t ->
+   strongly_normalizing t ->
    {p : term * term | match p with
-                      | (u, v) => red t (Prod u v)
-                      end} + {(forall u v, ~ conv t (Prod u v))}.
-intros t snt.
-elim compute_nf with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
-right; red in |- *; intros.
-elim church_rosser with (Prod u v) (Srt s); intros.
-generalize H0.
-elim (red_normal (Srt s) x); auto with coc; intros.
-apply red_prod_prod with u v (Srt s); auto with coc; intros.
-discriminate H3.
+                      | (u, v) => reduces t (prod u v)
+                      end} + {(forall u v, ~ convertible t (prod u v))}.
+  Proof.
+    intros t snt.
+    elim compute_normal_form with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (prod u v) (sort_term s); intros.
+    generalize H0.
+    elim (reduces_normal (sort_term s) x); auto with coc; intros.
+    apply reduces_product_product with u v (sort_term s); auto with coc; intros.
+    discriminate H3.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Prod u v) (Ref n); intros.
-generalize H0.
-elim (red_normal (Ref n) x); auto with coc; intros.
-apply red_prod_prod with u v (Ref n); auto with coc; intros.
-discriminate H3.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (prod u v) (var n); intros.
+    generalize H0.
+    elim (reduces_normal (var n) x); auto with coc; intros.
+    apply reduces_product_product with u v (var n); auto with coc; intros.
+    discriminate H3.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Prod u v) (Abs T b); intros.
-generalize H0.
-elim (red_normal (Abs T b) x); auto with coc; intros.
-apply red_prod_prod with u v (Abs T b); auto with coc; intros.
-discriminate H3.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (prod u v) (lam T b); intros.
+    generalize H0.
+    elim (reduces_normal (lam T b) x); auto with coc; intros.
+    apply reduces_product_product with u v (lam T b); auto with coc; intros.
+    discriminate H3.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-right; red in |- *; intros.
-elim church_rosser with (Prod u0 v0) (App u v); intros.
-generalize H0.
-elim (red_normal (App u v) x); auto with coc; intros.
-apply red_prod_prod with u0 v0 (App u v); auto with coc; intros.
-discriminate H3.
+    right; red in |- *; intros.
+    elim church_rosser_theorem with (prod u0 v0) (app u v); intros.
+    generalize H0.
+    elim (reduces_normal (app u v) x); auto with coc; intros.
+    apply reduces_product_product with u0 v0 (app u v); auto with coc; intros.
+    discriminate H3.
 
-apply trans_conv_conv with t; auto with coc.
+    apply trans_convertible_convertible with t; auto with coc.
 
-left; exists (T, U); trivial.
-Defined.
+    left; exists (T, U); trivial.
+  Defined.
 
 Section TypeChecker.
 
 
+(** Type errors returned by the type checker. *)
   Inductive type_error : Set :=
-    | Under : term -> type_error -> type_error
-    | Expected_type : term -> term -> term -> type_error
-    | Kind_ill_typed : type_error
-    | Db_error : nat -> type_error
-    | Lambda_kind : term -> type_error
-    | Not_a_type : term -> term -> type_error
+    | err_under : term -> type_error -> type_error
+    | err_expected_type : term -> term -> term -> type_error
+    | err_kind_ill_typed : type_error
+    | err_db : nat -> type_error
+    | err_lambda_kind : term -> type_error
+    | err_not_a_type : term -> term -> type_error
     | Not_a_fun : term -> term -> type_error
-    | Apply_err : term -> term -> term -> term -> type_error.
+    | err_apply : term -> term -> term -> term -> type_error.
 
 
+(** Semantic explanation of type errors in an environment. *)
 (* meaning of errors *)
-  Inductive expln : env -> type_error -> Prop :=
-    | Exp_under :
+  Inductive explanation : environment -> type_error -> Prop :=
+    | expl_under :
         forall e t (err : type_error),
-        expln (t :: e) err -> expln e (Under t err)
-    | Exp_exp_type :
+        explanation (t :: e) err -> explanation e (err_under t err)
+    | expl_expected_type :
         forall e (m at_ et : term),
-        typ e m at_ ->
-        ~ typ e m et ->
-        free_db (length e) et -> expln e (Expected_type m at_ et)
-    | Exp_kind :
+        has_type e m at_ ->
+        ~ has_type e m et ->
+        free_db_below (length e) et -> explanation e (err_expected_type m at_ et)
+    | expl_kind :
         forall e,
-        wf e -> (forall t, ~ typ e (Srt kind) t) -> expln e Kind_ill_typed
-    | Exp_db : forall e n, wf e -> length e <= n -> expln e (Db_error n)
-    | Exp_lam_kind :
+        well_formed e -> (forall t, ~ has_type e (sort_term kind) t) -> explanation e err_kind_ill_typed
+    | expl_db : forall e n, well_formed e -> length e <= n -> explanation e (err_db n)
+    | expl_lam_kind :
         forall e (m : term) t,
-        typ (t :: e) m (Srt kind) -> expln e (Lambda_kind (Abs t m))
-    | Exp_type :
+        has_type (t :: e) m (sort_term kind) -> explanation e (err_lambda_kind (lam t m))
+    | expl_type :
         forall e (m : term) t,
-        typ e m t ->
-        (forall s, ~ typ e m (Srt s)) -> expln e (Not_a_type m t)
+        has_type e m t ->
+        (forall s, ~ has_type e m (sort_term s)) -> explanation e (err_not_a_type m t)
     | Exp_fun :
         forall e (m : term) t,
-        typ e m t ->
-        (forall a b : term, ~ typ e m (Prod a b)) -> expln e (Not_a_fun m t)
-    | Exp_appl_err :
+        has_type e m t ->
+        (forall a b : term, ~ has_type e m (prod a b)) -> explanation e (Not_a_fun m t)
+    | expl_apply :
         forall e u v (a b tv : term),
-        typ e u (Prod a b) ->
-        typ e v tv -> ~ typ e v a -> expln e (Apply_err u (Prod a b) v tv).
+        has_type e u (prod a b) ->
+        has_type e v tv -> ~ has_type e v a -> explanation e (err_apply u (prod a b) v tv).
 
-  Hint Resolve Exp_under Exp_exp_type Exp_kind Exp_db Exp_lam_kind Exp_type
-    Exp_fun Exp_appl_err: coc.
+  Hint Resolve expl_under expl_expected_type expl_kind expl_db expl_lam_kind expl_type
+    Exp_fun expl_apply: coc.
 
-  Lemma expln_wf : forall e (err : type_error), expln e err -> wf e.
-simple induction 1; intros; auto with coc arith.
-inversion_clear H1.
-apply typ_wf with t (Srt s); auto with coc arith.
+(** Well-formedness of the environment follows from an explained error. *)
+  Lemma explanation_well_formed : forall e (err : type_error), explanation e err -> well_formed e.
+  Proof.
+    simple induction 1; intros; auto with coc arith.
+    inversion_clear H1.
+    apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
-apply typ_wf with m at_; auto with coc arith.
+    apply has_type_well_formed with m at_; auto with coc arith.
 
-cut (wf (t :: e0)); intros.
-inversion_clear H1.
-apply typ_wf with t (Srt s); auto with coc arith.
+    cut (well_formed (t :: e0)); intros.
+    inversion_clear H1.
+    apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
-apply typ_wf with m (Srt kind); auto with coc arith.
+    apply has_type_well_formed with m (sort_term kind); auto with coc arith.
 
-apply typ_wf with m t; auto with coc arith.
+    apply has_type_well_formed with m t; auto with coc arith.
 
-apply typ_wf with m t; auto with coc arith.
+    apply has_type_well_formed with m t; auto with coc arith.
 
-apply typ_wf with v tv; auto with coc arith.
-Qed.
+    apply has_type_well_formed with v tv; auto with coc arith.
+  Qed.
 
-  Inductive inf_error : term -> type_error -> Prop :=
-    | Infe_subt :
+(** Structural relation between a term and its inference error. *)
+  Inductive infer_error : term -> type_error -> Prop :=
+    | infer_err_sub :
         forall (m n : term) (err : type_error),
-        subt_nobind m n -> inf_error m err -> inf_error n err
-    | Infe_under :
+        subterm_no_binder m n -> infer_error m err -> infer_error n err
+    | infer_err_under :
         forall (m n : term) T (err : type_error),
-        subt_bind T m n -> inf_error m err -> inf_error n (Under T err)
-    | Infe_kind : inf_error (Srt kind) Kind_ill_typed
-    | Infe_db : forall n, inf_error (Ref n) (Db_error n)
-    | Infe_lam_kind : forall M T, inf_error (Abs T M) (Lambda_kind (Abs T M))
-    | Infe_type_abs :
-        forall (m n : term) t, inf_error (Abs m n) (Not_a_type m t)
-    | Infe_fun : forall (m n : term) t, inf_error (App m n) (Not_a_fun m t)
-    | Infe_appl_err :
-        forall m n tf ta : term, inf_error (App m n) (Apply_err m tf n ta)
-    | Infe_type_prod_l :
-        forall (m n : term) t, inf_error (Prod m n) (Not_a_type m t)
-    | Infe_type_prod_r :
+        subterm_under_binder T m n -> infer_error m err -> infer_error n (err_under T err)
+    | infer_err_kind : infer_error (sort_term kind) err_kind_ill_typed
+    | infer_err_db : forall n, infer_error (var n) (err_db n)
+    | infer_err_lam_kind : forall M T, infer_error (lam T M) (err_lambda_kind (lam T M))
+    | infer_err_type_abs :
+        forall (m n : term) t, infer_error (lam m n) (err_not_a_type m t)
+    | Infe_fun : forall (m n : term) t, infer_error (app m n) (Not_a_fun m t)
+    | infer_err_apply :
+        forall m n tf ta : term, infer_error (app m n) (err_apply m tf n ta)
+    | infer_err_type_prod_l :
+        forall (m n : term) t, infer_error (prod m n) (err_not_a_type m t)
+    | infer_err_type_prod_r :
         forall (m n : term) t,
-        inf_error (Prod m n) (Under m (Not_a_type n t)).
+        infer_error (prod m n) (err_under m (err_not_a_type n t)).
 
-  Hint Resolve Infe_kind Infe_db Infe_lam_kind Infe_type_abs Infe_fun
-    Infe_appl_err Infe_type_prod_l Infe_type_prod_r: coc.
+  Hint Resolve infer_err_kind infer_err_db infer_err_lam_kind infer_err_type_abs Infe_fun
+    infer_err_apply infer_err_type_prod_l infer_err_type_prod_r: coc.
 
 
-  Lemma inf_error_no_type :
+(** An inference error implies the term has no type. *)
+  Lemma infer_error_no_type :
    forall (m : term) (err : type_error),
-   inf_error m err -> forall e, expln e err -> forall t, ~ typ e m t.
-simple induction 1; intros.
-inversion_clear H0; red in |- *; intros.
-apply inv_typ_abs with e m0 n0 t; intros; auto with coc arith.
-elim H2 with e (Srt s1); auto with coc arith.
+   infer_error m err -> forall e, explanation e err -> forall t, ~ has_type e m t.
+  Proof.
+    simple induction 1; intros.
+    inversion_clear H0; red in |- *; intros.
+    apply inversion_has_type_abs with e m0 n0 t; intros; auto with coc arith.
+    elim H2 with e (sort_term s1); auto with coc arith.
 
-apply inv_typ_app with e m0 v t; intros; auto with coc arith.
-elim H2 with e (Prod V Ur); auto with coc arith.
+    apply inversion_has_type_app with e m0 v t; intros; auto with coc arith.
+    elim H2 with e (prod V Ur); auto with coc arith.
 
-apply inv_typ_app with e u m0 t; intros; auto with coc arith.
-elim H2 with e V; auto with coc arith.
+    apply inversion_has_type_app with e u m0 t; intros; auto with coc arith.
+    elim H2 with e V; auto with coc arith.
 
-apply inv_typ_prod with e m0 n0 t; intros; auto with coc arith.
-elim H2 with e (Srt s1); auto with coc arith.
+    apply inversion_has_type_prod with e m0 n0 t; intros; auto with coc arith.
+    elim H2 with e (sort_term s1); auto with coc arith.
 
-inversion_clear H3.
-inversion_clear H0; red in |- *; intros.
-apply inv_typ_abs with e T m0 t; intros; auto with coc arith.
-elim H2 with (T :: e) T0; auto with coc arith.
+    inversion_clear H3.
+    inversion_clear H0; red in |- *; intros.
+    apply inversion_has_type_abs with e T m0 t; intros; auto with coc arith.
+    elim H2 with (T :: e) T0; auto with coc arith.
 
-apply inv_typ_prod with e T m0 t; intros; auto with coc arith.
-elim H2 with (T :: e) (Srt s2); auto with coc arith.
+    apply inversion_has_type_prod with e T m0 t; intros; auto with coc arith.
+    elim H2 with (T :: e) (sort_term s2); auto with coc arith.
 
-inversion_clear H0; auto with coc arith.
+    inversion_clear H0; auto with coc arith.
 
-red in |- *; intros.
-apply inv_typ_ref with e t n; intros; auto with coc arith.
-inversion_clear H0.
-generalize H5.
-elim H2; simpl in |- *; intros; auto with coc arith.
-inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_ref with e t n; intros; auto with coc arith.
+    match goal with H : explanation _ (err_db _) |- _ => inversion_clear H end.
+    match goal with Hle : _ <= _, Hnth : nth_error _ _ = Some _ |- _ =>
+      apply nth_error_None in Hle; congruence end.
 
-inversion_clear H0.
-red in |- *; intros.
-apply inv_typ_abs with e T M t; intros; auto with coc arith.
-elim inv_typ_conv_kind with (T :: e) T0 (Srt s2); auto with coc arith.
-apply typ_unique with (T :: e) M; auto with coc arith.
+    inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_abs with e T M t; intros; auto with coc arith.
+    elim inversion_has_type_convertible_kind with (T :: e) T0 (sort_term s2); auto with coc arith.
+    apply has_type_unique_sort with (T :: e) M; auto with coc arith.
 
-inversion_clear H0.
-red in |- *; intros.
-apply inv_typ_abs with e m0 n t0; intros; auto with coc arith.
-elim H2 with s1; auto with coc arith.
+    inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_abs with e m0 n t0; intros; auto with coc arith.
+    elim H2 with s1; auto with coc arith.
 
-inversion_clear H0.
-red in |- *; intros.
-apply inv_typ_app with e m0 n t0; intros; auto with coc arith.
-elim H2 with V Ur; auto with coc arith.
+    inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_app with e m0 n t0; intros; auto with coc arith.
+    elim H2 with V Ur; auto with coc arith.
 
-inversion_clear H0.
-red in |- *; intros.
-apply inv_typ_app with e m0 n t; intros; auto with coc arith.
-elim type_case with e m0 (Prod a b); intros; auto with coc arith.
-inversion_clear H7.
-apply inv_typ_prod with e a b (Srt x); intros; auto with coc arith.
-apply H3.
-apply type_conv with V s1; auto with coc arith.
-apply inv_conv_prod_l with Ur b.
-apply typ_unique with e m0; auto with coc arith.
+    inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_app with e m0 n t; intros; auto with coc arith.
+    elim type_case with e m0 (prod a b); intros; auto with coc arith.
+    inversion_clear H7.
+    apply inversion_has_type_prod with e a b (sort_term x); intros; auto with coc arith.
+    apply H3.
+    apply type_conv with V s1; auto with coc arith.
+    apply inversion_convertible_product_left with Ur b.
+    apply has_type_unique_sort with e m0; auto with coc arith.
 
-discriminate H7.
+    discriminate H7.
 
-inversion_clear H0.
-red in |- *; intros.
-apply inv_typ_prod with e m0 n t0; intros; auto with coc arith.
-elim H2 with s1; auto with coc arith.
+    inversion_clear H0.
+    red in |- *; intros.
+    apply inversion_has_type_prod with e m0 n t0; intros; auto with coc arith.
+    elim H2 with s1; auto with coc arith.
 
-inversion_clear H0.
-inversion_clear H1.
-red in |- *; intros.
-apply inv_typ_prod with e m0 n t0; intros; auto with coc arith.
-elim H2 with s2; auto with coc arith.
-Qed.
+    inversion_clear H0.
+    inversion_clear H1.
+    red in |- *; intros.
+    apply inversion_has_type_prod with e m0 n t0; intros; auto with coc arith.
+    elim H2 with s2; auto with coc arith.
+  Qed.
 
 
+(** Bidirectional type inference for a term in a well-formed environment. *)
   Definition infer :
    forall e t,
-   wf e ->
-   {T : term | typ e t T} +
-   {err : type_error | expln e err &  inf_error t err}.
-(*Realizer [e:env][m:term]
-  (Fix inf_rec {inf_rec/1: term->env->(sum term ty_err) :=
-     [m:term][e:env]Cases m of
-       (Srt kind) => (fail (Ill_typed (Srt kind)))
-     | (Srt prop) => (ok (Srt kind))
-     | (Ref n) => Cases (list_item term e n) of
-                    (inleft T) => (ok (lift (S n) T))
-                  | _          => (fail (Ill_typed (Ref n)))
-                  end
-     | (Abs t b) => Cases (inf_rec t e) of
-              (inl T) => Cases (red_to_sort T)
-                                  (inf_rec b (cons t e)) of
-                  (inleft _) (inl B) => if (eqterm (Srt kind) B)
-                                           then (fail (Topsorted b))
-                                           else (ok (Prod t B))
-                | inright     _          => (fail (Not_a_type t))
-                | (inleft _)  (inr err) => (bind t err)
-                end
-            | (inr err) =>(inr term ? err)
-            end
-     | (App t b) => Cases (inf_rec t e) of
-              (inl T) => Cases (red_to_prod T) of
-                    (inleft (V,Ur)) => Cases (inf_rec b e) of
-                              (inl B) => if (is_conv V B)
-                                            then (ok (subst b Ur))
-                                            else (fail (Expected_type b B V))
-                            | (inr err) => (inr term ? err)
-                            end
-                  | _ => (fail (Not_a_fun t T))
-                  end
-            | (inr err) => (inr term ? err)
-            end
-     | (Prod t b) => Cases (inf_rec t e) of
-              (inl T) => Cases (red_to_sort T)
-                                  (inf_rec b (cons t e)) of
-                  (inleft _) (inl B) => Cases (red_to_sort B) of
-                        (inleft s) => (ok (Srt s))
-                      | _          =>(fail (Not_a_type b))
-                      end
-                | inright    _  => (fail (Not_a_type t))
-                | (inleft _) (inr err) => (bind t err)
-                end
-            | (inr err) => (inr term ? err)
-            end
-     end} m e).
-*)
-do 2 intro.
-generalize t e.
-clear e t.
-fix infer 1.
-intros t e wfe.
-case t.
-simple destruct s.
-right.
-exists Kind_ill_typed; auto with coc arith.
-apply Exp_kind; intros; auto with coc arith.
-apply inv_typ_kind.
+   well_formed e ->
+   {T : term | has_type e t T} +
+   {err : type_error | explanation e err &  infer_error t err}.
+  Proof.
+    do 2 intro.
+    generalize t e.
+    clear e t.
+    fix infer 1.
+    intros t e wfe.
+    case t.
+    simple destruct s.
+    right.
+    exists err_kind_ill_typed; auto with coc arith.
+    apply expl_kind; intros; auto with coc arith.
+    apply inversion_has_type_kind.
 
-left.
-exists (Srt kind).
-apply type_prop; auto with coc arith.
+    left.
+    exists (sort_term kind).
+    apply type_prop; auto with coc arith.
 
-left.
-exists (Srt kind).
-apply type_set; auto with coc arith.
+    left.
+    exists (sort_term kind).
+    apply type_set; auto with coc arith.
 
-intros.
-generalize (list_item term e n); intros [(T, H0)| b].
-left.
-exists (lift (S n) T).
-apply type_var; auto with coc arith.
-exists T; auto with coc arith.
+    intros.
+    destruct (nth_error e n) as [T|] eqn:Hn.
+    left.
+    exists (lift (S n) T).
+    apply type_var; auto with coc arith.
+    exists T; auto with coc arith.
 
-right.
-exists (Db_error n); auto with coc arith.
-apply Exp_db; auto with coc arith.
-generalize n b.
-elim e; simpl in |- *; auto with coc arith.
-simple destruct n0; intros.
-elim b0 with a; auto with coc arith.
+    right.
+    exists (err_db n); auto with coc arith.
+    apply expl_db; auto with coc arith.
+    apply nth_error_None in Hn. lia.
 
-cut (length l <= n1); auto with coc arith.
-apply H.
-red in |- *; intros.
-elim b0 with t0; auto with coc arith.
+    intros a b.
+    elim (infer a e); trivial with coc arith.
+    intros (T, ty_a).
+    elim (reduces_to_sort T); trivial with coc arith.
+    intros (s, srt_T).
+    cut (well_formed (a :: e)); intros.
+    elim (infer b (a :: e)); trivial with coc arith.
+    intros (B, ty_b).
+    elim (term_eq_dec (sort_term kind) B).
+    intro eq_kind.
+    right.
+    exists (err_lambda_kind (lam a b)); auto with coc arith.
+    apply expl_lam_kind; auto with coc arith.
+    rewrite eq_kind; auto with coc arith.
 
-intros a b.
-elim (infer a e); trivial with coc arith.
-intros (T, ty_a).
-elim (red_to_sort T); trivial with coc arith.
-intros (s, srt_T).
-cut (wf (a :: e)); intros.
-elim (infer b (a :: e)); trivial with coc arith.
-intros (B, ty_b).
-elim (eqterm (Srt kind) B).
-intro eq_kind.
-right.
-exists (Lambda_kind (Abs a b)); auto with coc arith.
-apply Exp_lam_kind; auto with coc arith.
-rewrite eq_kind; auto with coc arith.
+    intro not_kind.
+    left.
+    exists (prod a B).
+    elim type_case with (1 := ty_b).
+    intros (s2, knd_b).
+    apply type_abs with s s2; auto with coc arith.
+    apply type_reduction with T; auto with coc arith.
 
-intro not_kind.
-left.
-exists (Prod a B).
-elim type_case with (1 := ty_b).
-intros (s2, knd_b).
-apply type_abs with s s2; auto with coc arith.
-apply type_reduction with T; auto with coc arith.
+    intros; elim not_kind; auto.
 
-intros; elim not_kind; auto.
+    intros (err, expl_err, inf_err).
+    right.
+    exists (err_under a err); auto with coc arith.
+    apply infer_err_under with b; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-right.
-exists (Under a err); auto with coc arith.
-apply Infe_under with b; auto with coc arith.
+    apply wf_var with s.
+    apply type_reduction with T; auto with coc arith.
 
-apply wf_var with s.
-apply type_reduction with T; auto with coc arith.
+    intro not_type.
+    right.
+    exists (err_not_a_type a T); auto with coc arith.
+    apply expl_type; auto with coc arith.
+    red in |- *; intros.
+    elim not_type with s.
+    apply has_type_unique_sort with e a; auto with coc arith.
 
-intro not_type.
-right.
-exists (Not_a_type a T); auto with coc arith.
-apply Exp_type; auto with coc arith.
-red in |- *; intros.
-elim not_type with s.
-apply typ_unique with e a; auto with coc arith.
+    apply type_strongly_normalizing with e a; auto with coc arith.
 
-apply type_sn with e a; auto with coc arith.
+    intros (err, expl_err, inf_err).
+    right.
+    exists err; auto with coc arith.
+    apply infer_err_sub with a; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-right.
-exists err; auto with coc arith.
-apply Infe_subt with a; auto with coc arith.
+    intros u v.
+    elim infer with u e; trivial with coc arith.
+    intros (T, ty_u).
+    elim reduces_to_prod with T.
+    intros ((V, Ur), red_prod).
+    cut (has_type e u (prod V Ur)); intros.
+    elim infer with v e; trivial with coc arith.
+    intros (B, ty_v).
+    elim is_convertible with V B.
+    intros domain_conv.
+    left.
+    exists (subst v Ur).
+    apply type_app with V; auto with coc arith.
+    elim type_case with e u (prod V Ur); auto with coc arith.
+    intros (s, ty_prod).
+    apply inversion_has_type_prod with (1 := ty_prod); auto with coc arith; intros.
+    apply type_conv with B s1; auto with coc arith.
 
-intros u v.
-elim infer with u e; trivial with coc arith.
-intros (T, ty_u).
-elim red_to_prod with T.
-intros ((V, Ur), red_prod).
-cut (typ e u (Prod V Ur)); intros.
-elim infer with v e; trivial with coc arith.
-intros (B, ty_v).
-elim is_conv with V B.
-intros domain_conv.
-left.
-exists (subst v Ur).
-apply type_app with V; auto with coc arith.
-elim type_case with e u (Prod V Ur); auto with coc arith.
-intros (s, ty_prod).
-apply inv_typ_prod with (1 := ty_prod); auto with coc arith; intros.
-apply type_conv with B s1; auto with coc arith.
+    intro not_prod; discriminate not_prod.
 
-intro not_prod; discriminate not_prod.
+    intro dom_not_conv.
+    right.
+    exists (err_apply u (prod V Ur) v B); auto with coc arith.
+    apply expl_apply; auto with coc arith.
+    red in |- *; intros.
+    apply dom_not_conv.
+    apply has_type_unique_sort with e v; auto with coc arith.
 
-intro dom_not_conv.
-right.
-exists (Apply_err u (Prod V Ur) v B); auto with coc arith.
-apply Exp_appl_err; auto with coc arith.
-red in |- *; intros.
-apply dom_not_conv.
-apply typ_unique with e v; auto with coc arith.
+    apply subterm_sn with (prod V Ur); auto with coc arith.
+    apply strongly_normalizing_reduces with T; auto with coc arith.
+    apply type_strongly_normalizing with e u; auto with coc arith.
 
-apply subterm_sn with (Prod V Ur); auto with coc arith.
-apply sn_red_sn with T; auto with coc arith.
-apply type_sn with e u; auto with coc arith.
+    apply type_strongly_normalizing with e v; auto with coc arith.
 
-apply type_sn with e v; auto with coc arith.
+    intros (err, expl_err, inf_err).
+    right.
+    exists err; auto with coc arith.
+    apply infer_err_sub with v; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-right.
-exists err; auto with coc arith.
-apply Infe_subt with v; auto with coc arith.
+    apply type_reduction with T; auto with coc arith.
 
-apply type_reduction with T; auto with coc arith.
+    intros not_prod.
+    right.
+    exists (Not_a_fun u T); auto with coc arith.
+    apply Exp_fun; auto with coc arith.
+    red in |- *; intros.
+    elim not_prod with a b.
+    apply has_type_unique_sort with e u; auto with coc arith.
 
-intros not_prod.
-right.
-exists (Not_a_fun u T); auto with coc arith.
-apply Exp_fun; auto with coc arith.
-red in |- *; intros.
-elim not_prod with a b.
-apply typ_unique with e u; auto with coc arith.
+    apply type_strongly_normalizing with e u; auto with coc arith.
 
-apply type_sn with e u; auto with coc arith.
+    intros (err, expl_err, inf_err).
+    right.
+    exists err; auto with coc arith.
+    apply infer_err_sub with u; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-right.
-exists err; auto with coc arith.
-apply Infe_subt with u; auto with coc arith.
+    intros a b.
+    elim infer with a e; trivial with coc arith.
+    intros (T, ty_a).
+    elim reduces_to_sort with T.
+    intros (s, red_sort).
+    cut (well_formed (a :: e)); intros.
+    elim infer with b (a :: e); trivial with coc arith.
+    intros (B, ty_b).
+    elim reduces_to_sort with B.
+    intros (s2, red_s2).
+    left.
+    exists (sort_term s2).
+    apply type_prod with s; auto with coc arith.
+    apply type_reduction with T; auto with coc arith.
 
-intros a b.
-elim infer with a e; trivial with coc arith.
-intros (T, ty_a).
-elim red_to_sort with T.
-intros (s, red_sort).
-cut (wf (a :: e)); intros.
-elim infer with b (a :: e); trivial with coc arith.
-intros (B, ty_b).
-elim red_to_sort with B.
-intros (s2, red_s2).
-left.
-exists (Srt s2).
-apply type_prod with s; auto with coc arith.
-apply type_reduction with T; auto with coc arith.
+    apply type_reduction with B; auto with coc arith.
 
-apply type_reduction with B; auto with coc arith.
+    intros b_not_type.
+    right.
+    exists (err_under a (err_not_a_type b B)); auto with coc arith.
+    apply expl_under; auto with coc arith.
+    apply expl_type; auto with coc arith.
+    red in |- *; intros.
+    elim b_not_type with s0.
+    apply has_type_unique_sort with (a :: e) b; auto with coc arith.
 
-intros b_not_type.
-right.
-exists (Under a (Not_a_type b B)); auto with coc arith.
-apply Exp_under; auto with coc arith.
-apply Exp_type; auto with coc arith.
-red in |- *; intros.
-elim b_not_type with s0.
-apply typ_unique with (a :: e) b; auto with coc arith.
+    apply type_strongly_normalizing with (a :: e) b; auto with coc arith.
 
-apply type_sn with (a :: e) b; auto with coc arith.
+    intros (err, expl_err, inf_err).
+    right.
+    exists (err_under a err); auto with coc arith.
+    apply infer_err_under with b; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-right.
-exists (Under a err); auto with coc arith.
-apply Infe_under with b; auto with coc arith.
+    apply wf_var with s.
+    apply type_reduction with T; auto with coc arith.
 
-apply wf_var with s.
-apply type_reduction with T; auto with coc arith.
+    intros a_not_type.
+    right.
+    exists (err_not_a_type a T); auto with coc arith.
+    apply expl_type; auto with coc arith.
+    red in |- *; intros.
+    elim a_not_type with s.
+    apply has_type_unique_sort with e a; auto with coc arith.
 
-intros a_not_type.
-right.
-exists (Not_a_type a T); auto with coc arith.
-apply Exp_type; auto with coc arith.
-red in |- *; intros.
-elim a_not_type with s.
-apply typ_unique with e a; auto with coc arith.
+    apply type_strongly_normalizing with e a; auto with coc arith.
 
-apply type_sn with e a; auto with coc arith.
-
-intros (err, expl_err, inf_err).
-right.
-exists err; auto with coc arith.
-apply Infe_subt with a; auto with coc arith.
-Defined.
+    intros (err, expl_err, inf_err).
+    right.
+    exists err; auto with coc arith.
+    apply infer_err_sub with a; auto with coc arith.
+  Defined.
 
 
-
-  Inductive chk_error (m : term) t : type_error -> Prop :=
-    | Chke_subj :
-        forall err : type_error, inf_error m err -> chk_error m t err
-    | Chke_type :
+(** Check errors: inference failure, type-of-type failure, or type mismatch. *)
+  Inductive check_error (m : term) t : type_error -> Prop :=
+    | check_err_subj :
+        forall err : type_error, infer_error m err -> check_error m t err
+    | check_err_type :
         forall err : type_error,
-        inf_error t err -> t <> Srt kind -> chk_error m t err
-    | Chke_exp : forall at_ : term, chk_error m t (Expected_type m at_ t).
+        infer_error t err -> t <> sort_term kind -> check_error m t err
+    | check_err_expected : forall at_ : term, check_error m t (err_expected_type m at_ t).
 
-  Hint Resolve Chke_subj Chke_type Chke_exp: coc.
+  Hint Resolve check_err_subj check_err_type check_err_expected: coc.
 
 
-  Lemma chk_error_no_type :
+(** A check error implies the term does not have the given type. *)
+  Lemma check_error_no_type :
    forall e (m : term) t (err : type_error),
-   chk_error m t err -> expln e err -> ~ typ e m t.
-simple destruct 1; intros.
-apply inf_error_no_type with err0; auto with coc arith.
+   check_error m t err -> explanation e err -> ~ has_type e m t.
+  Proof.
+    simple destruct 1; intros.
+    apply infer_error_no_type with err0; auto with coc arith.
 
-red in |- *; intros.
-elim type_case with e m t; intros; auto with coc arith.
-inversion_clear H4.
-elim inf_error_no_type with t err0 e (Srt x); auto with coc arith.
+    red in |- *; intros.
+    elim type_case with e m t; intros; auto with coc arith.
+    inversion_clear H4.
+    elim infer_error_no_type with t err0 e (sort_term x); auto with coc arith.
 
-inversion_clear H0; auto with coc arith.
-Qed.
+    inversion_clear H0; auto with coc arith.
+  Qed.
 
 
-  Definition check_typ :
+(** Type-check a term against an expected type in a well-formed environment. *)
+  Definition check_type :
    forall e t (tp : term),
-   wf e ->
-   {err : type_error | expln e err &  chk_error t tp err} + {typ e t tp}.
-(*
-Realizer [e:env][t,tp:term]
-  Cases (infer e t) (eqterm (Srt kind) tp) of
-    (inl tp') inleft => if (eqterm (Srt kind) tp')
-                        then (inright type_error)
-                        else (inleft ? (fail t (nil ?)
-                                     (Expected_type t tp' (Srt kind))))
-  | (inl tp') inright => Cases (infer e tp) of
-                           (inl k) => if (is_conv tp tp')
-                                      then (inright type_error)
-                                      else (inleft ? (fail t (nil ?)
-                                              (Expected_type t tp' tp)))
-                         | (inr err) => (inleft type_error err)
-                         end
-  | (inr err) _ => (inleft type_error err)
-  end.
-*)
-intros.
-elim infer with e t; auto with coc arith.
-intros (tp', typ_t).
-elim eqterm with (Srt kind) tp.
-intros cast_kind.
-elim eqterm with (Srt kind) tp'.
-intros inf_kind.
-right.
-elim cast_kind; rewrite inf_kind; trivial.
+   well_formed e ->
+   {err : type_error | explanation e err &  check_error t tp err} + {has_type e t tp}.
+  Proof.
+    intros.
+    elim infer with e t; auto with coc arith.
+    intros (tp', typ_t).
+    elim term_eq_dec with (sort_term kind) tp.
+    intros cast_kind.
+    elim term_eq_dec with (sort_term kind) tp'.
+    intros inf_kind.
+    right.
+    elim cast_kind; rewrite inf_kind; trivial.
 
-intros inf_not_kind.
-left.
-exists (Expected_type t tp' tp); auto with coc.
-apply Exp_exp_type; auto with coc arith.
-red in |- *; intros; apply inf_not_kind.
-symmetry  in |- *.
-apply type_kind_not_conv with e t; auto with coc arith.
-rewrite cast_kind; trivial.
+    intros inf_not_kind.
+    left.
+    exists (err_expected_type t tp' tp); auto with coc.
+    apply expl_expected_type; auto with coc arith.
+    red in |- *; intros; apply inf_not_kind.
+    symmetry  in |- *.
+    apply type_kind_not_convertible with e t; auto with coc arith.
+    rewrite cast_kind; trivial.
 
-elim cast_kind; auto with coc.
+    elim cast_kind; auto with coc.
 
-intros cast_not_kind.
-elim infer with e tp; auto with coc.
-intros (k, ty_tp).
-elim is_conv with tp tp'.
-intros cast_ok.
-right.
-elim red_to_sort with k; auto with coc.
-intros (s, red_sort).
-apply type_conv with tp' s; auto with coc.
-apply type_reduction with k; auto with coc.
+    intros cast_not_kind.
+    elim infer with e tp; auto with coc.
+    intros (k, ty_tp).
+    elim is_convertible with tp tp'.
+    intros cast_ok.
+    right.
+    elim reduces_to_sort with k; auto with coc.
+    intros (s, red_sort).
+    apply type_conv with tp' s; auto with coc.
+    apply type_reduction with k; auto with coc.
 
-intros not_sort.
-elim type_case with (1 := typ_t).
-intros (s, kind_inf).
-elim not_sort with s.
-apply typ_conv_conv with e tp tp'; auto with coc arith.
+    intros not_sort.
+    elim type_case with (1 := typ_t).
+    intros (s, kind_inf).
+    elim not_sort with s.
+    apply has_type_convertible_convertible with e tp tp'; auto with coc arith.
 
-intros is_kind.
-elim inv_typ_conv_kind with e tp k; auto with coc arith.
-elim is_kind; auto with coc arith.
+    intros is_kind.
+    elim inversion_has_type_convertible_kind with e tp k; auto with coc arith.
+    elim is_kind; auto with coc arith.
 
-apply type_sn with e tp; auto with coc arith.
+    apply type_strongly_normalizing with e tp; auto with coc arith.
 
-intros cast_err.
-left.
-exists (Expected_type t tp' tp); auto with coc arith.
-apply Exp_exp_type; auto with coc arith.
-red in |- *; intros; apply cast_err; apply typ_unique with e t;
- auto with coc arith.
+    intros cast_err.
+    left.
+    exists (err_expected_type t tp' tp); auto with coc arith.
+    apply expl_expected_type; auto with coc arith.
+    red in |- *; intros; apply cast_err; apply has_type_unique_sort with e t;
+     auto with coc arith.
 
-apply typ_free_db with k; auto with coc arith.
+    apply has_type_free_db_below with k; auto with coc arith.
 
-apply str_norm with e k; auto with coc arith.
+    apply strong_normalization with e k; auto with coc arith.
 
-apply type_sn with e t; auto with coc arith.
+    apply type_strongly_normalizing with e t; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-left.
-exists err; auto with coc arith.
+    intros (err, expl_err, inf_err).
+    left.
+    exists err; auto with coc arith.
 
-intros (err, expl_err, inf_err).
-left.
-exists err; auto with coc arith.
-Defined.
+    intros (err, expl_err, inf_err).
+    left.
+    exists err; auto with coc arith.
+  Defined.
 
 
+(** Declaration errors: inference failure or the term is not a type. *)
+  Inductive declare_error (m : term) : type_error -> Prop :=
+    | decl_err_ill :
+        forall err : type_error, infer_error m err -> declare_error m err
+    | decl_err_type : forall t, declare_error m (err_not_a_type m t).
 
-  Inductive decl_error (m : term) : type_error -> Prop :=
-    | Decax_ill :
-        forall err : type_error, inf_error m err -> decl_error m err
-    | Decax_type : forall t, decl_error m (Not_a_type m t).
-
-  Hint Resolve Decax_ill Decax_type: coc.
+  Hint Resolve decl_err_ill decl_err_type: coc.
 
 
-  Lemma decl_err_not_wf :
+(** A declaration error prevents extending the environment. *)
+  Lemma declare_error_not_well_formed :
    forall e t (err : type_error),
-   decl_error t err -> expln e err -> ~ wf (t :: e).
-red in |- *.
-simple destruct 1; intros.
-inversion_clear H2.
-elim inf_error_no_type with t err0 e (Srt s); auto with coc arith.
+   declare_error t err -> explanation e err -> ~ well_formed (t :: e).
+  Proof.
+    red in |- *.
+    simple destruct 1; intros.
+    inversion_clear H2.
+    elim infer_error_no_type with t err0 e (sort_term s); auto with coc arith.
 
-inversion_clear H0.
-inversion_clear H1.
-elim H3 with s; auto with coc arith.
-Qed.
+    inversion_clear H0.
+    inversion_clear H1.
+    elim H3 with s; auto with coc arith.
+  Qed.
 
 
-  Definition add_typ :
+(** Try to extend an environment with a new declaration. *)
+  Definition add_type :
    forall e t,
-   wf e ->
-   {err : type_error | expln e err &  decl_error t err} + {wf (t :: e)}.
-intros.
-elim infer with e t; auto with coc.
-intros (T, typ_t).
-elim red_to_sort with T.
-intros (s, red_sort).
-right.
-apply wf_var with s.
-apply type_reduction with T; auto with coc.
+   well_formed e ->
+   {err : type_error | explanation e err &  declare_error t err} + {well_formed (t :: e)}.
+  Proof.
+    intros.
+    elim infer with e t; auto with coc.
+    intros (T, typ_t).
+    elim reduces_to_sort with T.
+    intros (s, red_sort).
+    right.
+    apply wf_var with s.
+    apply type_reduction with T; auto with coc.
 
-intros not_sort.
-left.
-exists (Not_a_type t T); auto with coc.
-apply Exp_type; auto with coc.
-red in |- *; intros.
-elim not_sort with s.
-apply typ_unique with e t; auto with coc.
+    intros not_sort.
+    left.
+    exists (err_not_a_type t T); auto with coc.
+    apply expl_type; auto with coc.
+    red in |- *; intros.
+    elim not_sort with s.
+    apply has_type_unique_sort with e t; auto with coc.
 
-apply type_sn with e t; auto with coc.
+    apply type_strongly_normalizing with e t; auto with coc.
 
-intros (err, expl_err, inf_err).
-left.
-exists err; auto with coc arith.
-Defined.
+    intros (err, expl_err, inf_err).
+    left.
+    exists err; auto with coc arith.
+  Defined.
 
 
 End TypeChecker.
 
 Section Decidabilite_typage.
 
-  Lemma decide_wf : forall e, {wf e} + {~ wf e}.
-simple induction e; intros.
-left.
-apply wf_nil.
+(** Decidability of well-formedness for environments. *)
+  Lemma decide_well_formed : forall e, {well_formed e} + {~ well_formed e}.
+  Proof.
+    simple induction e; intros.
+    left.
+    apply wf_nil.
 
-elim H.
-intros wf_l.
-elim add_typ with l a; trivial.
-intros (err, expl_err, decl_err).
-right.
-apply decl_err_not_wf with (1 := decl_err) (2 := expl_err).
+    elim H.
+    intros wf_l.
+    elim add_type with l a; trivial.
+    intros (err, expl_err, decl_err).
+    right.
+    apply declare_error_not_well_formed with (1 := decl_err) (2 := expl_err).
 
-left; trivial.
+    left; trivial.
 
-intros not_wf_l.
-right; red in |- *; intros.
-apply not_wf_l.
-inversion_clear H0.
-apply typ_wf with (1 := H1).
-Qed.
+    intros not_wf_l.
+    right; red in |- *; intros.
+    apply not_wf_l.
+    inversion_clear H0.
+    apply has_type_well_formed with (1 := H1).
+  Qed.
 
 
-  Lemma decide_typ : forall e t (tp : term), {typ e t tp} + {~ typ e t tp}.
-intros.
-elim decide_wf with e.
-intros wf_e.
-elim check_typ with e t tp; trivial.
-intros (err, expl_err, chk_err).
-right.
-apply chk_error_no_type with (1 := chk_err) (2 := expl_err).
+(** Decidability of typing judgments. *)
+  Lemma decide_type : forall e t (tp : term), {has_type e t tp} + {~ has_type e t tp}.
+  Proof.
+    intros.
+    elim decide_well_formed with e.
+    intros wf_e.
+    elim check_type with e t tp; trivial.
+    intros (err, expl_err, chk_err).
+    right.
+    apply check_error_no_type with (1 := chk_err) (2 := expl_err).
 
-left; trivial.
+    left; trivial.
 
-intros not_wf_e.
-right; red in |- *; intros.
-apply not_wf_e.
-apply typ_wf with (1 := H).
-Qed.
+    intros not_wf_e.
+    right; red in |- *; intros.
+    apply not_wf_e.
+    apply has_type_well_formed with (1 := H).
+  Qed.
 
 End Decidabilite_typage.

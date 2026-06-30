@@ -13,17 +13,20 @@
 (* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA *)
 (* 02110-1301 USA                                                     *)
 
+(** Syntax of the Calculus of Constructions: terms, de Bruijn operations
+    (lifting and substitution), beta-reduction, conversion, and strong
+    normalization. *)
 
-
-Require Export PeanoNat.
-Require Export Compare_dec.
-Require Export Relations.
-Require Export Lia.
+From Stdlib Require Export PeanoNat.
+From Stdlib Require Export Compare_dec.
+From Stdlib Require Export Relations.
+From Stdlib Require Export Lia.
 
 Implicit Types i k m n p : nat.
 
-Section Termes.
+Section terms.
 
+  (** The three sorts of the Calculus of Constructions. *)
   Inductive sort : Set :=
     | kind : sort
     | prop : sort
@@ -31,967 +34,966 @@ Section Termes.
 
   Implicit Type s : sort.
 
+  (** A sort is a "proposition-level" sort if it is [prop] or [set]. *)
   Definition is_prop s := s = prop \/ s = set.
 
-(* Scheme to split between kind and the lower level sorts *)
-  Lemma sort_level_ind :
-   forall P : sort -> Prop,
-   P kind -> (forall s, is_prop s -> P s) -> forall s, P s.
-Proof.
-unfold is_prop in |- *.
-simple destruct s; auto.
-Qed.
+  (** Induction principle that splits [kind] from the proposition-level sorts. *)
+  Lemma sort_induction :
+    forall P : sort -> Prop,
+    P kind -> (forall s, is_prop s -> P s) -> forall s, P s.
+  Proof.
+    unfold is_prop in |- *.
+    simple destruct s; auto.
+  Qed.
 
+  (** Terms of the Calculus of Constructions in de Bruijn notation. *)
   Inductive term : Set :=
-    | Srt : sort -> term
-    | Ref : nat -> term
-    | Abs : term -> term -> term
-    | App : term -> term -> term
-    | Prod : term -> term -> term.
+    | sort_term : sort -> term
+    | var : nat -> term
+    | lam : term -> term -> term
+    | app : term -> term -> term
+    | prod : term -> term -> term.
 
   Implicit Types A B M N T t u v : term.
 
+  (** Lifts free variables >= [k] in [t] by [n]. *)
   Fixpoint lift_rec n t {struct t} : nat -> term :=
     fun k =>
     match t with
-    | Srt s => Srt s
-    | Ref i =>
+    | sort_term s => sort_term s
+    | var i =>
         match le_gt_dec k i with
-        | left _ => Ref (n + i)
-        | right _ => Ref i
+        | left _ => var (n + i)
+        | right _ => var i
         end
-    | Abs T M => Abs (lift_rec n T k) (lift_rec n M (S k))
-    | App u v => App (lift_rec n u k) (lift_rec n v k)
-    | Prod A B => Prod (lift_rec n A k) (lift_rec n B (S k))
+    | lam T M => lam (lift_rec n T k) (lift_rec n M (S k))
+    | app u v => app (lift_rec n u k) (lift_rec n v k)
+    | prod A B => prod (lift_rec n A k) (lift_rec n B (S k))
     end.
 
+  (** Lifts all free variables in [t] by [n]. *)
   Definition lift n t := lift_rec n t 0.
 
+  (** Substitutes [N] for variable [k] in [M], adjusting indices. *)
   Fixpoint subst_rec N M {struct M} : nat -> term :=
     fun k =>
     match M with
-    | Srt s => Srt s
-    | Ref i =>
+    | sort_term s => sort_term s
+    | var i =>
         match lt_eq_lt_dec k i with
         | inleft C =>
             match C with
-            | left _ => Ref (pred i)
+            | left _ => var (pred i)
             | right _ => lift k N
             end
-        | inright _ => Ref i
+        | inright _ => var i
         end
-    | Abs A B => Abs (subst_rec N A k) (subst_rec N B (S k))
-    | App u v => App (subst_rec N u k) (subst_rec N v k)
-    | Prod T U => Prod (subst_rec N T k) (subst_rec N U (S k))
+    | lam A B => lam (subst_rec N A k) (subst_rec N B (S k))
+    | app u v => app (subst_rec N u k) (subst_rec N v k)
+    | prod T U => prod (subst_rec N T k) (subst_rec N U (S k))
     end.
 
+  (** Substitutes [N] for variable 0 in [M]. *)
   Definition subst N M := subst_rec N M 0.
 
-
-  Inductive free_db : nat -> term -> Prop :=
-    | db_srt : forall n s, free_db n (Srt s)
-    | db_ref : forall k n, k > n -> free_db k (Ref n)
-    | db_abs :
-        forall k A M, free_db k A -> free_db (S k) M -> free_db k (Abs A M)
+  (** [free_db_below n t] holds when all free variables in [t] are < [n]. *)
+  Inductive free_db_below : nat -> term -> Prop :=
+    | db_sort : forall n s, free_db_below n (sort_term s)
+    | db_var : forall k n, k > n -> free_db_below k (var n)
+    | db_lam :
+        forall k A M, free_db_below k A -> free_db_below (S k) M -> free_db_below k (lam A M)
     | db_app :
-        forall k u v, free_db k u -> free_db k v -> free_db k (App u v)
+        forall k u v, free_db_below k u -> free_db_below k v -> free_db_below k (app u v)
     | db_prod :
-        forall k A B, free_db k A -> free_db (S k) B -> free_db k (Prod A B).
+        forall k A B, free_db_below k A -> free_db_below (S k) B -> free_db_below k (prod A B).
 
+  (** [subterm_under_binder T M t] holds when [t] is a binder ([lam] or [prod]) with
+      type annotation [T] and body [M]. *)
+  Inductive subterm_under_binder T M : term -> Prop :=
+    | sub_binder_lam : subterm_under_binder T M (lam T M)
+    | sub_binder_prod : subterm_under_binder T M (prod T M).
 
-  Inductive subt_bind T M : term -> Prop :=
-    | Bsbt_abs : subt_bind T M (Abs T M)
-    | Bsbt_prod : subt_bind T M (Prod T M).
+  (** [subterm_no_binder m t] holds when [m] is an immediate non-binding subterm of [t]. *)
+  Inductive subterm_no_binder (m : term) : term -> Prop :=
+    | sub_no_binder_lam : forall n : term, subterm_no_binder m (lam m n)
+    | sub_no_binder_app_l : forall v, subterm_no_binder m (app m v)
+    | sub_no_binder_app_r : forall u, subterm_no_binder m (app u m)
+    | sub_no_binder_prod : forall n : term, subterm_no_binder m (prod m n).
 
-  Inductive subt_nobind (m : term) : term -> Prop :=
-    | Nbsbt_abs : forall n : term, subt_nobind m (Abs m n)
-    | Nbsbt_app_l : forall v, subt_nobind m (App m v)
-    | Nbsbt_app_r : forall u, subt_nobind m (App u m)
-    | Nbsbt_prod : forall n : term, subt_nobind m (Prod m n).
-
+  (** [subterm m n] holds when [m] is an immediate subterm of [n]. *)
   Inductive subterm (m n : term) : Prop :=
-    | Sbtrm_bind : forall t, subt_bind t m n -> subterm m n
-    | Sbtrm_nobind : subt_nobind m n -> subterm m n.
+    | sub_bind : forall t, subterm_under_binder t m n -> subterm m n
+    | sub_no_bind : subterm_no_binder m n -> subterm m n.
 
+  (** [sort_occurs_in s t] holds when the sort [s] occurs syntactically in [t]. *)
+  Inductive sort_occurs_in s : term -> Prop :=
+    | mem_eq : sort_occurs_in s (sort_term s)
+    | mem_prod_l : forall u v, sort_occurs_in s u -> sort_occurs_in s (prod u v)
+    | mem_prod_r : forall u v, sort_occurs_in s v -> sort_occurs_in s (prod u v)
+    | mem_abs_l : forall u v, sort_occurs_in s u -> sort_occurs_in s (lam u v)
+    | mem_abs_r : forall u v, sort_occurs_in s v -> sort_occurs_in s (lam u v)
+    | mem_app_l : forall u v, sort_occurs_in s u -> sort_occurs_in s (app u v)
+    | mem_app_r : forall u v, sort_occurs_in s v -> sort_occurs_in s (app u v).
 
-(*
-  Definition mem_sort := [s:sort][t:term](clos_refl_trans ? subterm (Srt s) t).
-*)
+End terms.
 
-  Inductive mem_sort s : term -> Prop :=
-    | mem_eq : mem_sort s (Srt s)
-    | mem_prod_l : forall u v, mem_sort s u -> mem_sort s (Prod u v)
-    | mem_prod_r : forall u v, mem_sort s v -> mem_sort s (Prod u v)
-    | mem_abs_l : forall u v, mem_sort s u -> mem_sort s (Abs u v)
-    | mem_abs_r : forall u v, mem_sort s v -> mem_sort s (Abs u v)
-    | mem_app_l : forall u v, mem_sort s u -> mem_sort s (App u v)
-    | mem_app_r : forall u v, mem_sort s v -> mem_sort s (App u v).
+Implicit Type s : sort.
+Implicit Types A B M N T t u v : term.
 
-End Termes.
-
-  Implicit Type s : sort.
-  Implicit Types A B M N T t u v : term.
-
-  Hint Resolve db_srt db_ref db_abs db_app db_prod: coc.
-  Hint Resolve Bsbt_abs Bsbt_prod Nbsbt_abs Nbsbt_app_l Nbsbt_app_r
-    Nbsbt_prod: coc.
-  Hint Resolve Sbtrm_nobind: coc.
-
-(*
-  Hints Unfold  mem_sort : coc.
-*)
-  Hint Resolve mem_eq mem_prod_l mem_prod_r mem_abs_l mem_abs_r mem_app_l
-    mem_app_r: coc.
+Hint Resolve db_sort db_var db_lam db_app db_prod: coc.
+Hint Resolve sub_binder_lam sub_binder_prod sub_no_binder_lam sub_no_binder_app_l sub_no_binder_app_r
+  sub_no_binder_prod: coc.
+Hint Resolve sub_no_bind: coc.
+Hint Resolve mem_eq mem_prod_l mem_prod_r mem_abs_l mem_abs_r mem_app_l
+  mem_app_r: coc.
 
 
 Section Beta_Reduction.
 
-  Inductive red1 : term -> term -> Prop :=
-    | beta : forall M N T, red1 (App (Abs T M) N) (subst N M)
-    | abs_red_l :
-        forall M M', red1 M M' -> forall N, red1 (Abs M N) (Abs M' N)
-    | abs_red_r :
-        forall M M', red1 M M' -> forall N, red1 (Abs N M) (Abs N M')
-    | app_red_l :
-        forall M1 N1, red1 M1 N1 -> forall M2, red1 (App M1 M2) (App N1 M2)
-    | app_red_r :
-        forall M2 N2, red1 M2 N2 -> forall M1, red1 (App M1 M2) (App M1 N2)
-    | prod_red_l :
-        forall M1 N1, red1 M1 N1 -> forall M2, red1 (Prod M1 M2) (Prod N1 M2)
-    | prod_red_r :
-        forall M2 N2, red1 M2 N2 -> forall M1, red1 (Prod M1 M2) (Prod M1 N2).
+  (** One-step beta reduction. *)
+  Inductive reduces_once : term -> term -> Prop :=
+    | beta : forall M N T, reduces_once (app (lam T M) N) (subst N M)
+    | abs_reduces_left :
+        forall M M', reduces_once M M' -> forall N, reduces_once (lam M N) (lam M' N)
+    | abs_reduces_right :
+        forall M M', reduces_once M M' -> forall N, reduces_once (lam N M) (lam N M')
+    | app_reduces_left :
+        forall M1 N1, reduces_once M1 N1 -> forall M2, reduces_once (app M1 M2) (app N1 M2)
+    | app_reduces_right :
+        forall M2 N2, reduces_once M2 N2 -> forall M1, reduces_once (app M1 M2) (app M1 N2)
+    | prod_reduces_left :
+        forall M1 N1, reduces_once M1 N1 -> forall M2, reduces_once (prod M1 M2) (prod N1 M2)
+    | prod_reduces_right :
+        forall M2 N2, reduces_once M2 N2 -> forall M1, reduces_once (prod M1 M2) (prod M1 N2).
 
-  Inductive red M : term -> Prop :=
-    | refl_red : red M M
-    | trans_red : forall (P : term) N, red M P -> red1 P N -> red M N.
+  (** Reflexive-transitive closure of [reduces_once], via stdlib. *)
+  Definition reduces := clos_refl_trans_n1 term reduces_once.
 
-  Inductive conv M : term -> Prop :=
-    | refl_conv : conv M M
-    | trans_conv_red : forall (P : term) N, conv M P -> red1 P N -> conv M N
-    | trans_conv_exp : forall (P : term) N, conv M P -> red1 N P -> conv M N.
+  Definition refl_reduces : forall M, reduces M M := @rtn1_refl term reduces_once.
 
-  Inductive par_red1 : term -> term -> Prop :=
+  Lemma trans_red : forall M (P : term) N, reduces M P -> reduces_once P N -> reduces M N.
+  Proof.
+    intros M P N H1 H2; exact (@Relation_Operators.rtn1_trans term reduces_once M P N H2 H1).
+  Qed.
+
+  (** Induction principle with the same case structure as the former inductive. *)
+  Lemma reduces_ind : forall M (P : term -> Prop),
+    P M ->
+    (forall (Q : term) N, reduces M Q -> reduces_once Q N -> P Q -> P N) ->
+    forall t, reduces M t -> P t.
+  Proof.
+    intros M P Hbase Hstep t Hred.
+    induction Hred; auto.
+    apply Hstep with y; auto.
+  Qed.
+
+  (** Conversion: reflexive-symmetric-transitive closure of [reduces_once], via stdlib. *)
+  Definition convertible := clos_refl_sym_trans_n1 term reduces_once.
+
+  Definition refl_convertible : forall M, convertible M M := @rstn1_refl term reduces_once.
+
+  Lemma trans_conv_red : forall M (P : term) N, convertible M P -> reduces_once P N -> convertible M N.
+  Proof.
+    intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term reduces_once M P N (or_introl H2) H1).
+  Qed.
+
+  Lemma trans_conv_exp : forall M (P : term) N, convertible M P -> reduces_once N P -> convertible M N.
+  Proof.
+    intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term reduces_once M P N (or_intror H2) H1).
+  Qed.
+
+  (** Induction principle with the same 3-case structure as the former inductive. *)
+  Lemma convertible_ind : forall M (P : term -> Prop),
+    P M ->
+    (forall (Q : term) N, convertible M Q -> reduces_once Q N -> P Q -> P N) ->
+    (forall (Q : term) N, convertible M Q -> reduces_once N Q -> P Q -> P N) ->
+    forall t, convertible M t -> P t.
+  Proof.
+    intros M P Hbase Hfwd Hbwd t Hconv.
+    induction Hconv; auto.
+    destruct H as [Hred | Hexp].
+    - apply Hfwd with y; auto.
+    - apply Hbwd with y; auto.
+  Qed.
+
+  (** One-step parallel beta reduction. *)
+  Inductive parallel_reduces_once : term -> term -> Prop :=
     | par_beta :
         forall M M',
-        par_red1 M M' ->
+        parallel_reduces_once M M' ->
         forall N N',
-        par_red1 N N' -> forall T, par_red1 (App (Abs T M) N) (subst N' M')
-    | sort_par_red : forall s, par_red1 (Srt s) (Srt s)
-    | ref_par_red : forall n, par_red1 (Ref n) (Ref n)
+        parallel_reduces_once N N' -> forall T, parallel_reduces_once (app (lam T M) N) (subst N' M')
+    | sort_par_red : forall s, parallel_reduces_once (sort_term s) (sort_term s)
+    | ref_par_red : forall n, parallel_reduces_once (var n) (var n)
     | abs_par_red :
         forall M M',
-        par_red1 M M' ->
-        forall T T', par_red1 T T' -> par_red1 (Abs T M) (Abs T' M')
+        parallel_reduces_once M M' ->
+        forall T T', parallel_reduces_once T T' -> parallel_reduces_once (lam T M) (lam T' M')
     | app_par_red :
         forall M M',
-        par_red1 M M' ->
-        forall N N', par_red1 N N' -> par_red1 (App M N) (App M' N')
+        parallel_reduces_once M M' ->
+        forall N N', parallel_reduces_once N N' -> parallel_reduces_once (app M N) (app M' N')
     | prod_par_red :
         forall M M',
-        par_red1 M M' ->
-        forall N N', par_red1 N N' -> par_red1 (Prod M N) (Prod M' N').
+        parallel_reduces_once M M' ->
+        forall N N', parallel_reduces_once N N' -> parallel_reduces_once (prod M N) (prod M' N').
 
-  Definition par_red := clos_trans term par_red1.
+  (** Transitive closure of parallel reduction. *)
+  Definition parallel_reduces := clos_trans term parallel_reduces_once.
 
 End Beta_Reduction.
 
-
-  Hint Resolve beta abs_red_l abs_red_r app_red_l app_red_r prod_red_l
-    prod_red_r: coc.
-  Hint Resolve refl_red refl_conv: coc.
-  Hint Resolve par_beta sort_par_red ref_par_red abs_par_red app_par_red
-    prod_par_red: coc.
-
-  Hint Unfold par_red: coc.
+Hint Resolve beta abs_reduces_left abs_reduces_right app_reduces_left app_reduces_right prod_reduces_left
+  prod_reduces_right: coc.
+Hint Resolve refl_reduces refl_convertible: coc.
+Hint Resolve par_beta sort_par_red ref_par_red abs_par_red app_par_red
+  prod_par_red: coc.
+Hint Unfold parallel_reduces: coc.
 
 
-Section Normalisation_Forte.
+Section Strong_Normalization.
 
-  Definition normal t : Prop := forall u, ~ red1 t u.
+  (** A term is normal when no reduction step is possible. *)
+  Definition normal t : Prop := forall u, ~ reduces_once t u.
 
-  Definition sn : term -> Prop := Acc (transp _ red1).
+  (** Strong normalization: well-foundedness of reverse [reduces_once]. *)
+  Definition strongly_normalizing : term -> Prop := Acc (transp _ reduces_once).
 
-End Normalisation_Forte.
+End Strong_Normalization.
 
-  Hint Unfold sn: coc.
+Hint Unfold strongly_normalizing: coc.
 
 
-
-  Lemma lift_ref_ge :
-   forall k n p, p <= n -> lift_rec k (Ref n) p = Ref (k + n).
-intros; simpl in |- *.
-elim (le_gt_dec p n); auto with coc core arith sets.
-intro; absurd (p <= n); auto with coc core arith sets.
+(** Lifting a variable reference at or above the cutoff increases the index. *)
+Lemma lift_ref_ge :
+  forall k n p, p <= n -> lift_rec k (var n) p = var (k + n).
+Proof.
+  intros; simpl in |- *.
+  elim (le_gt_dec p n); auto with coc core arith sets.
+  intro; absurd (p <= n); auto with coc core arith sets.
 Qed.
 
-
-  Lemma lift_ref_lt : forall k n p, p > n -> lift_rec k (Ref n) p = Ref n.
-intros; simpl in |- *.
-elim (le_gt_dec p n); auto with coc core arith sets.
-intro; absurd (p <= n); auto with coc core arith sets.
+(** Lifting a variable reference below the cutoff is the identity. *)
+Lemma lift_ref_lt : forall k n p, p > n -> lift_rec k (var n) p = var n.
+Proof.
+  intros; simpl in |- *.
+  elim (le_gt_dec p n); auto with coc core arith sets.
+  intro; absurd (p <= n); auto with coc core arith sets.
 Qed.
 
-
-  Lemma subst_ref_lt : forall u n k, k > n -> subst_rec u (Ref n) k = Ref n.
-simpl in |- *; intros.
-elim (lt_eq_lt_dec k n); [ intro a | intro b; auto with coc core arith sets ].
-intuition lia.
+(** Substituting into a variable below the substitution point is the identity. *)
+Lemma subst_ref_lt : forall u n k, k > n -> subst_rec u (var n) k = var n.
+Proof.
+  simpl in |- *; intros.
+  elim (lt_eq_lt_dec k n); [ intro a | intro b; auto with coc core arith sets ].
+  intuition lia.
 Qed.
 
-
-  Lemma subst_ref_gt :
-   forall u n k, n > k -> subst_rec u (Ref n) k = Ref (pred n).
-    simpl in |- *; intros.
-elim (lt_eq_lt_dec k n); intuition lia.
+(** Substituting into a variable above the substitution point decrements the index. *)
+Lemma subst_ref_gt :
+  forall u n k, n > k -> subst_rec u (var n) k = var (pred n).
+Proof.
+  simpl in |- *; intros.
+  elim (lt_eq_lt_dec k n); intuition lia.
 Qed.
 
-
-  Lemma subst_ref_eq : forall u n, subst_rec u (Ref n) n = lift n u.
-intros; simpl in |- *.
-elim (lt_eq_lt_dec n n); intuition lia.
+(** Substituting at the exact variable index lifts the substituted term. *)
+Lemma subst_ref_eq : forall u n, subst_rec u (var n) n = lift n u.
+Proof.
+  intros; simpl in |- *.
+  elim (lt_eq_lt_dec n n); intuition lia.
 Qed.
 
-
-
-  Lemma lift_rec0 : forall M k, lift_rec 0 M k = M.
-simple induction M; simpl in |- *; intros; auto with coc core arith sets.
-elim (le_gt_dec k n); auto with coc core arith sets.
-
-rewrite H; rewrite H0; auto with coc core arith sets.
-
-rewrite H; rewrite H0; auto with coc core arith sets.
-
-rewrite H; rewrite H0; auto with coc core arith sets.
+(** Lifting by 0 is the identity. *)
+Lemma lift_rec_zero : forall M k, lift_rec 0 M k = M.
+Proof.
+  simple induction M; simpl in |- *; intros; auto with coc core arith sets.
+  elim (le_gt_dec k n); auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 Qed.
 
-
-  Lemma lift0 : forall M, lift 0 M = M.
-intros; unfold lift in |- *.
-apply lift_rec0; auto with coc core arith sets.
+(** [lift 0] is the identity. *)
+Lemma lift_zero : forall M, lift 0 M = M.
+Proof.
+  intros; unfold lift in |- *.
+  apply lift_rec_zero; auto with coc core arith sets.
 Qed.
 
-
-  Lemma simpl_lift_rec :
-   forall M n k p i,
-   i <= k + n ->
-   k <= i -> lift_rec p (lift_rec n M k) i = lift_rec (p + n) M k.
-simple induction M; simpl in |- *; intros; auto with coc core arith sets.
-elim (le_gt_dec k n); intros. 
-rewrite lift_ref_ge; solve [auto with coc core arith sets | lia].
-rewrite lift_ref_lt; auto with coc core arith sets. lia.
-
-all : rewrite H; auto with coc core arith sets; rewrite H0; simpl in |- *;
- auto with coc core arith sets.
+(** Two consecutive lifts can be combined into one. *)
+Lemma simplify_lift_rec :
+  forall M n k p i,
+  i <= k + n ->
+  k <= i -> lift_rec p (lift_rec n M k) i = lift_rec (p + n) M k.
+Proof.
+  simple induction M; simpl in |- *; intros; auto with coc core arith sets.
+  elim (le_gt_dec k n); intros.
+  rewrite lift_ref_ge; solve [auto with coc core arith sets | lia].
+  rewrite lift_ref_lt; auto with coc core arith sets. lia.
+  all : rewrite H; auto with coc core arith sets; rewrite H0; simpl in |- *;
+    auto with coc core arith sets.
 Qed.
 
-
-  Lemma simpl_lift : forall M n, lift (S n) M = lift 1 (lift n M).
-intros; unfold lift in |- *.
-rewrite simpl_lift_rec; auto with coc core arith sets.
+(** [lift (S n)] decomposes as [lift 1] after [lift n]. *)
+Lemma simplify_lift : forall M n, lift (S n) M = lift 1 (lift n M).
+Proof.
+  intros; unfold lift in |- *.
+  rewrite simplify_lift_rec; auto with coc core arith sets.
 Qed.
 
-
-  Lemma permute_lift_rec :
-   forall M n k p i,
-   i <= k ->
-   lift_rec p (lift_rec n M k) i = lift_rec n (lift_rec p M i) (p + k).
-simple induction M; simpl in |- *; intros; auto with coc core arith sets.
-elim (le_gt_dec k n); elim (le_gt_dec i n); intros.
-rewrite lift_ref_ge; auto with coc core arith sets.
-rewrite lift_ref_ge; auto with coc core arith sets.
-f_equal. lia.
-
-apply Nat.le_trans with n; auto with coc core arith sets.
-
-absurd (i <= n); auto with coc core arith sets.
-apply Nat.le_trans with k; auto with coc core arith sets.
-
-rewrite lift_ref_ge; auto with coc core arith sets.
-rewrite lift_ref_lt; auto with coc core arith sets.
-
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite lift_ref_lt; auto with coc core arith sets.
-lia.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-rewrite plus_n_Sm; auto with coc core arith sets.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-rewrite plus_n_Sm; auto with coc core arith sets.
+(** Lifting commutes with itself under appropriate index conditions. *)
+Lemma permute_lift_rec :
+  forall M n k p i,
+  i <= k ->
+  lift_rec p (lift_rec n M k) i = lift_rec n (lift_rec p M i) (p + k).
+Proof.
+  simple induction M; simpl in |- *; intros; auto with coc core arith sets.
+  elim (le_gt_dec k n); elim (le_gt_dec i n); intros.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  f_equal. lia.
+  apply Nat.le_trans with n; auto with coc core arith sets.
+  absurd (i <= n); auto with coc core arith sets.
+  apply Nat.le_trans with k; auto with coc core arith sets.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  lia.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  rewrite plus_n_Sm; auto with coc core arith sets.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  rewrite plus_n_Sm; auto with coc core arith sets.
 Qed.
 
-
-  Lemma permute_lift :
-   forall M k, lift 1 (lift_rec 1 M k) = lift_rec 1 (lift 1 M) (S k).
-intros.
-change (lift_rec 1 (lift_rec 1 M k) 0 = lift_rec 1 (lift_rec 1 M 0) (1 + k))
- in |- *.
-apply permute_lift_rec; auto with coc core arith sets.
+(** Special case of [permute_lift_rec] for lifts by 1. *)
+Lemma permute_lift :
+  forall M k, lift 1 (lift_rec 1 M k) = lift_rec 1 (lift 1 M) (S k).
+Proof.
+  intros.
+  change (lift_rec 1 (lift_rec 1 M k) 0 = lift_rec 1 (lift_rec 1 M 0) (1 + k))
+    in |- *.
+  apply permute_lift_rec; auto with coc core arith sets.
 Qed.
 
-
-  Lemma simpl_subst_rec :
-   forall N M n p k,
-   p <= n + k ->
-   k <= p -> subst_rec N (lift_rec (S n) M k) p = lift_rec n M k.
-simple induction M; simpl in |- *; intros; auto with coc core arith sets.
-elim (le_gt_dec k n); intros.
-rewrite subst_ref_gt; auto with coc core arith sets.
-red in |- *; red in |- *.
-apply Nat.le_trans with (S (n0 + k)); auto with coc core arith sets.
-
-rewrite subst_ref_lt; auto with coc core arith sets.
-lia.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-elim plus_n_Sm with n k; auto with coc core arith sets.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-elim plus_n_Sm with n k; auto with coc core arith sets.
+(** Substituting into a sufficiently-lifted term cancels the lift. *)
+Lemma simplify_subst_rec :
+  forall N M n p k,
+  p <= n + k ->
+  k <= p -> subst_rec N (lift_rec (S n) M k) p = lift_rec n M k.
+Proof.
+  simple induction M; simpl in |- *; intros; auto with coc core arith sets.
+  elim (le_gt_dec k n); intros.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  red in |- *; red in |- *.
+  apply Nat.le_trans with (S (n0 + k)); auto with coc core arith sets.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  lia.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  elim plus_n_Sm with n k; auto with coc core arith sets.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  elim plus_n_Sm with n k; auto with coc core arith sets.
 Qed.
 
-
-  Lemma simpl_subst :
-   forall N M n p, p <= n -> subst_rec N (lift (S n) M) p = lift n M.
-intros; unfold lift in |- *.
-apply simpl_subst_rec; auto with coc core arith sets.
+(** Substituting into a lifted term yields the original lift. *)
+Lemma simplify_subst :
+  forall N M n p, p <= n -> subst_rec N (lift (S n) M) p = lift n M.
+Proof.
+  intros; unfold lift in |- *.
+  apply simplify_subst_rec; auto with coc core arith sets.
 Qed.
 
-
-  Lemma commut_lift_subst_rec :
-   forall M N n p k,
-   k <= p ->
-   lift_rec n (subst_rec N M p) k = subst_rec N (lift_rec n M k) (n + p).
-simple induction M; intros; auto with coc core arith sets.
-unfold subst_rec at 1, lift_rec at 2 in |- *.
-elim (lt_eq_lt_dec p n);
- [ intro Hlt_eq; elim (le_gt_dec k n); [ intro Hle | intro Hgt ]
- | intro Hlt; elim (le_gt_dec k n); [ intro Hle | intro Hgt ] ].
-elim Hlt_eq; clear Hlt_eq.
-case n; [ intro Hlt | intros ].
-inversion_clear Hlt.
-
-unfold pred in |- *.
-rewrite lift_ref_ge; auto with coc core arith sets.
-rewrite subst_ref_gt; auto with coc core arith sets.
-elim plus_n_Sm with n0 n1.
-auto with coc core arith sets.
-
-apply Nat.le_trans with p; auto with coc core arith sets.
-
-simple induction 1.
-rewrite subst_ref_eq.
-unfold lift in |- *.
-rewrite simpl_lift_rec; auto with coc core arith sets.
-
-absurd (k <= n); auto with coc core arith sets.
-apply Nat.le_trans with p; auto with coc core arith sets.
-elim Hlt_eq; auto with coc core arith sets.
-simple induction 1; auto with coc core arith sets.
-
-rewrite lift_ref_ge; auto with coc core arith sets.
-rewrite subst_ref_lt; auto with coc core arith sets.
-
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_lt; auto with coc core arith sets.
-lia.
-
-simpl in |- *.
-rewrite plus_n_Sm.
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-
-simpl in |- *; rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-
-simpl in |- *; rewrite plus_n_Sm.
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
+(** Lifting commutes with substitution. *)
+Lemma commute_lift_subst_rec :
+  forall M N n p k,
+  k <= p ->
+  lift_rec n (subst_rec N M p) k = subst_rec N (lift_rec n M k) (n + p).
+Proof.
+  simple induction M; intros; auto with coc core arith sets.
+  unfold subst_rec at 1, lift_rec at 2 in |- *.
+  elim (lt_eq_lt_dec p n);
+    [ intro Hlt_eq; elim (le_gt_dec k n); [ intro Hle | intro Hgt ]
+    | intro Hlt; elim (le_gt_dec k n); [ intro Hle | intro Hgt ] ].
+  elim Hlt_eq; clear Hlt_eq.
+  case n; [ intro Hlt | intros ].
+  inversion_clear Hlt.
+  unfold pred in |- *.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  elim plus_n_Sm with n0 n1.
+  auto with coc core arith sets.
+  apply Nat.le_trans with p; auto with coc core arith sets.
+  simple induction 1.
+  rewrite subst_ref_eq.
+  unfold lift in |- *.
+  rewrite simplify_lift_rec; auto with coc core arith sets.
+  absurd (k <= n); auto with coc core arith sets.
+  apply Nat.le_trans with p; auto with coc core arith sets.
+  elim Hlt_eq; auto with coc core arith sets.
+  simple induction 1; auto with coc core arith sets.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  lia.
+  simpl in |- *.
+  rewrite plus_n_Sm.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  simpl in |- *; rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  simpl in |- *; rewrite plus_n_Sm.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
 Qed.
 
-
-  Lemma commut_lift_subst :
-   forall M N k, subst_rec N (lift 1 M) (S k) = lift 1 (subst_rec N M k).
-intros; unfold lift in |- *.
-rewrite commut_lift_subst_rec; auto with coc core arith sets.
+(** Special case: lifting by 1 commutes with substitution at successor index. *)
+Lemma commute_lift_subst :
+  forall M N k, subst_rec N (lift 1 M) (S k) = lift 1 (subst_rec N M k).
+Proof.
+  intros; unfold lift in |- *.
+  rewrite commute_lift_subst_rec; auto with coc core arith sets.
 Qed.
 
-
-  Lemma distr_lift_subst_rec :
-   forall M N n p k,
-   lift_rec n (subst_rec N M p) (p + k) =
-   subst_rec (lift_rec n N k) (lift_rec n M (S (p + k))) p.
-simple induction M; intros; auto with coc core arith sets.
-unfold subst_rec at 1 in |- *.
-elim (lt_eq_lt_dec p n); [ intro a | intro b ].
-elim a; clear a.
-case n; [ intro a | intros n1 b ].
-inversion_clear a.
-
-unfold pred, lift_rec at 1 in |- *.
-elim (le_gt_dec (p + k) n1); intro.
-rewrite lift_ref_ge; auto with coc core arith sets.
-elim plus_n_Sm with n0 n1.
-rewrite subst_ref_gt; auto with coc core arith sets.
-red in |- *; red in |- *; apply le_n_S.
-apply Nat.le_trans with (n0 + (p + k)); auto with coc core arith sets.
-apply Nat.le_trans with (p + k); auto with coc core arith sets.
-
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_gt; auto with coc core arith sets.
-
-simple induction 1.
-unfold lift in |- *.
-rewrite <- permute_lift_rec; auto with coc core arith sets.
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_eq; auto with coc core arith sets.
-
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite lift_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_lt; auto with coc core arith sets.
-
-simpl in |- *; replace (S (p + k)) with (S p + k);
- auto with coc core arith sets.
-rewrite H; rewrite H0; auto with coc core arith sets.
-
-simpl in |- *; rewrite H; rewrite H0; auto with coc core arith sets.
-
-simpl in |- *; replace (S (p + k)) with (S p + k);
- auto with coc core arith sets.
-rewrite H; rewrite H0; auto with coc core arith sets.
+(** Lifting distributes over substitution. *)
+Lemma distribute_lift_subst_rec :
+  forall M N n p k,
+  lift_rec n (subst_rec N M p) (p + k) =
+  subst_rec (lift_rec n N k) (lift_rec n M (S (p + k))) p.
+Proof.
+  simple induction M; intros; auto with coc core arith sets.
+  unfold subst_rec at 1 in |- *.
+  elim (lt_eq_lt_dec p n); [ intro a | intro b ].
+  elim a; clear a.
+  case n; [ intro a | intros n1 b ].
+  inversion_clear a.
+  unfold pred, lift_rec at 1 in |- *.
+  elim (le_gt_dec (p + k) n1); intro.
+  rewrite lift_ref_ge; auto with coc core arith sets.
+  elim plus_n_Sm with n0 n1.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  red in |- *; red in |- *; apply le_n_S.
+  apply Nat.le_trans with (n0 + (p + k)); auto with coc core arith sets.
+  apply Nat.le_trans with (p + k); auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  simple induction 1.
+  unfold lift in |- *.
+  rewrite <- permute_lift_rec; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_eq; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite lift_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  simpl in |- *; replace (S (p + k)) with (S p + k);
+    auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
+  simpl in |- *; rewrite H; rewrite H0; auto with coc core arith sets.
+  simpl in |- *; replace (S (p + k)) with (S p + k);
+    auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 Qed.
 
-
-  Lemma distr_lift_subst :
-   forall M N n k,
-   lift_rec n (subst N M) k = subst (lift_rec n N k) (lift_rec n M (S k)).
-intros; unfold subst in |- *.
-pattern k at 1 3 in |- *.
-replace k with (0 + k); auto with coc core arith sets.
-apply distr_lift_subst_rec.
+(** Lifting distributes over top-level substitution. *)
+Lemma distribute_lift_subst :
+  forall M N n k,
+  lift_rec n (subst N M) k = subst (lift_rec n N k) (lift_rec n M (S k)).
+Proof.
+  intros; unfold subst in |- *.
+  pattern k at 1 3 in |- *.
+  replace k with (0 + k); auto with coc core arith sets.
+  apply distribute_lift_subst_rec.
 Qed.
 
-
-  Lemma distr_subst_rec :
-   forall M N (P : term) n p,
-   subst_rec P (subst_rec N M p) (p + n) =
-   subst_rec (subst_rec P N n) (subst_rec P M (S (p + n))) p.
-simple induction M; auto with coc core arith sets; intros.
-unfold subst_rec at 2 in |- *.
-elim (lt_eq_lt_dec p n); [ intro Hlt_eq | intro Hlt ].
-elim Hlt_eq; clear Hlt_eq.
-case n; [ intro Hlt | intros n1 Heq1 ].
-inversion_clear Hlt.
-
-unfold pred, subst_rec at 1 in |- *.
-elim (lt_eq_lt_dec (p + n0) n1); [ intro Hlt_eq | intro Hlt ].
-elim Hlt_eq; clear Hlt_eq.
-case n1; [ intro Hlt | intros n2 Heq2 ].
-inversion_clear Hlt.
-
-rewrite subst_ref_gt; auto with coc core arith sets.
-rewrite subst_ref_gt; auto with coc core arith sets.
-lia.
-
-simple induction 1.
-rewrite subst_ref_eq; auto with coc core arith sets.
-rewrite simpl_subst; auto with coc core arith sets.
-
-rewrite subst_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_gt; auto with coc core arith sets.
-
-simple induction 1.
-rewrite subst_ref_lt; auto with coc core arith sets.
-rewrite subst_ref_eq.
-unfold lift in |- *.
-rewrite commut_lift_subst_rec; auto with coc core arith sets.
-
-do 3 (rewrite subst_ref_lt; auto with coc core arith sets).
-
-simpl in |- *; replace (S (p + n)) with (S p + n);
- auto with coc core arith sets.
-rewrite H; auto with coc core arith sets; rewrite H0;
- auto with coc core arith sets.
-
-simpl in |- *; rewrite H; rewrite H0; auto with coc core arith sets.
-
-simpl in |- *; replace (S (p + n)) with (S p + n);
- auto with coc core arith sets.
-rewrite H; rewrite H0; auto with coc core arith sets.
+(** Substitution distributes over substitution. *)
+Lemma distribute_subst_rec :
+  forall M N (P : term) n p,
+  subst_rec P (subst_rec N M p) (p + n) =
+  subst_rec (subst_rec P N n) (subst_rec P M (S (p + n))) p.
+Proof.
+  simple induction M; auto with coc core arith sets; intros.
+  unfold subst_rec at 2 in |- *.
+  elim (lt_eq_lt_dec p n); [ intro Hlt_eq | intro Hlt ].
+  elim Hlt_eq; clear Hlt_eq.
+  case n; [ intro Hlt | intros n1 Heq1 ].
+  inversion_clear Hlt.
+  unfold pred, subst_rec at 1 in |- *.
+  elim (lt_eq_lt_dec (p + n0) n1); [ intro Hlt_eq | intro Hlt ].
+  elim Hlt_eq; clear Hlt_eq.
+  case n1; [ intro Hlt | intros n2 Heq2 ].
+  inversion_clear Hlt.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  lia.
+  simple induction 1.
+  rewrite subst_ref_eq; auto with coc core arith sets.
+  rewrite simplify_subst; auto with coc core arith sets.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_gt; auto with coc core arith sets.
+  simple induction 1.
+  rewrite subst_ref_lt; auto with coc core arith sets.
+  rewrite subst_ref_eq.
+  unfold lift in |- *.
+  rewrite commute_lift_subst_rec; auto with coc core arith sets.
+  do 3 (rewrite subst_ref_lt; auto with coc core arith sets).
+  simpl in |- *; replace (S (p + n)) with (S p + n);
+    auto with coc core arith sets.
+  rewrite H; auto with coc core arith sets; rewrite H0;
+    auto with coc core arith sets.
+  simpl in |- *; rewrite H; rewrite H0; auto with coc core arith sets.
+  simpl in |- *; replace (S (p + n)) with (S p + n);
+    auto with coc core arith sets.
+  rewrite H; rewrite H0; auto with coc core arith sets.
 Qed.
 
-
-  Lemma distr_subst :
-   forall (P : term) N M k,
-   subst_rec P (subst N M) k = subst (subst_rec P N k) (subst_rec P M (S k)).
-intros; unfold subst in |- *.
-pattern k at 1 3 in |- *.
-replace k with (0 + k); auto with coc core arith sets.
-apply distr_subst_rec.
+(** Top-level substitution distributes over substitution. *)
+Lemma distribute_subst :
+  forall (P : term) N M k,
+  subst_rec P (subst N M) k = subst (subst_rec P N k) (subst_rec P M (S k)).
+Proof.
+  intros; unfold subst in |- *.
+  pattern k at 1 3 in |- *.
+  replace k with (0 + k); auto with coc core arith sets.
+  apply distribute_subst_rec.
 Qed.
 
-
-
-  Lemma one_step_red : forall M N, red1 M N -> red M N.
-intros.
-apply trans_red with M; auto with coc core arith sets.
+(** A single reduction step embeds into the reflexive-transitive closure. *)
+Lemma one_step_reduces : forall M N, reduces_once M N -> reduces M N.
+Proof.
+  intros.
+  apply trans_red with M; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve one_step_red: coc.
+Hint Resolve one_step_reduces: coc.
 
-
-  Lemma red1_red_ind :
-   forall N (P : term -> Prop),
-   P N ->
-   (forall M (R : term), red1 M R -> red R N -> P R -> P M) ->
-   forall M, red M N -> P M.
-cut
- (forall M N,
-  red M N ->
-  forall P : term -> Prop,
-  P N -> (forall M (R : term), red1 M R -> red R N -> P R -> P M) -> P M).
-intros.
-apply (H M N); auto with coc core arith sets.
-
-simple induction 1; intros; auto with coc core arith sets.
-apply H1; auto with coc core arith sets.
-apply H4 with N0; auto with coc core arith sets.
-
-intros.
-apply H4 with R; auto with coc core arith sets.
-apply trans_red with P; auto with coc core arith sets.
+(** Induction on [reduces] from the source side. *)
+Lemma reduces_reverse_ind :
+  forall N (P : term -> Prop),
+  P N ->
+  (forall M (R : term), reduces_once M R -> reduces R N -> P R -> P M) ->
+  forall M, reduces M N -> P M.
+Proof.
+  cut
+    (forall M N,
+     reduces M N ->
+     forall P : term -> Prop,
+     P N -> (forall M (R : term), reduces_once M R -> reduces R N -> P R -> P M) -> P M).
+  intros; apply (H M N); auto.
+  intros M0 N0 Hred; induction Hred; intros; auto.
+  apply IHHred.
+  - apply H1 with z; auto with coc core arith sets.
+  - intros. apply H1 with R; auto.
+    apply trans_red with y; auto.
 Qed.
 
-
-  Lemma trans_red_red : forall M N (P : term), red M N -> red N P -> red M P.
-intros.
-generalize H0 M H.
-simple induction 1; auto with coc core arith sets.
-intros.
-apply trans_red with P0; auto with coc core arith sets.
-Qed.
- 
-
-  Lemma red_red_app :
-   forall u u0 v v0, red u u0 -> red v v0 -> red (App u v) (App u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with coc core arith sets.
-apply trans_red with (App u P); auto with coc core arith sets.
-
-intros.
-apply trans_red with (App P v0); auto with coc core arith sets.
+(** Reduction is transitive. *)
+Lemma trans_reduces_reduces : forall M N (P : term), reduces M N -> reduces N P -> reduces M P.
+Proof.
+  intros M N P H1 H2.
+  induction H2; auto.
+  apply trans_red with y; auto.
 Qed.
 
-
-  Lemma red_red_abs :
-   forall u u0 v v0, red u u0 -> red v v0 -> red (Abs u v) (Abs u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with coc core arith sets.
-apply trans_red with (Abs u P); auto with coc core arith sets.
-
-intros.
-apply trans_red with (Abs P v0); auto with coc core arith sets.
+(** Reduction is compatible with [app]. *)
+Lemma reduces_reduces_application :
+  forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (app u v) (app u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with coc core arith sets.
+    apply trans_red with (app u y); auto with coc core arith sets.
+  - apply trans_red with (app y v0); auto with coc core arith sets.
 Qed.
 
-
-  Lemma red_red_prod :
-   forall u u0 v v0, red u u0 -> red v v0 -> red (Prod u v) (Prod u0 v0).
-simple induction 1.
-simple induction 1; intros; auto with coc core arith sets.
-apply trans_red with (Prod u P); auto with coc core arith sets.
-
-intros.
-apply trans_red with (Prod P v0); auto with coc core arith sets.
+(** Reduction is compatible with [lam]. *)
+Lemma reduces_reduces_lambda :
+  forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (lam u v) (lam u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with coc core arith sets.
+    apply trans_red with (lam u y); auto with coc core arith sets.
+  - apply trans_red with (lam y v0); auto with coc core arith sets.
 Qed.
 
-  Hint Resolve red_red_app red_red_abs red_red_prod: coc.
-
-
-
-  Lemma red1_lift :
-   forall u v, red1 u v -> forall n k, red1 (lift_rec n u k) (lift_rec n v k).
-simple induction 1; simpl in |- *; intros; auto with coc core arith sets.
-rewrite distr_lift_subst; auto with coc core arith sets.
+(** Reduction is compatible with [prod]. *)
+Lemma reduces_reduces_product :
+  forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (prod u v) (prod u0 v0).
+Proof.
+  intros u u0 v v0 H1 H2.
+  induction H1.
+  - induction H2; auto with coc core arith sets.
+    apply trans_red with (prod u y); auto with coc core arith sets.
+  - apply trans_red with (prod y v0); auto with coc core arith sets.
 Qed.
 
-  Hint Resolve red1_lift: coc.
+Hint Resolve reduces_reduces_application reduces_reduces_lambda reduces_reduces_product: coc.
 
-
-  Lemma red1_subst_r :
-   forall t u,
-   red1 t u -> forall (a : term) k, red1 (subst_rec a t k) (subst_rec a u k).
-simple induction 1; simpl in |- *; intros; auto with coc core arith sets.
-rewrite distr_subst; auto with coc core arith sets.
+(** One-step reduction is preserved by lifting. *)
+Lemma reduces_once_lift :
+  forall u v, reduces_once u v -> forall n k, reduces_once (lift_rec n u k) (lift_rec n v k).
+Proof.
+  simple induction 1; simpl in |- *; intros; auto with coc core arith sets.
+  rewrite distribute_lift_subst; auto with coc core arith sets.
 Qed.
 
+Hint Resolve reduces_once_lift: coc.
 
-  Lemma red1_subst_l :
-   forall (a : term) t u k,
-   red1 t u -> red (subst_rec t a k) (subst_rec u a k).
-simple induction a; simpl in |- *; auto with coc core arith sets.
-intros.
-elim (lt_eq_lt_dec k n);
- [ intro a0 | intro b; auto with coc core arith sets ].
-elim a0; auto with coc core arith sets.
-unfold lift in |- *; auto with coc core arith sets.
+(** One-step reduction is preserved by substitution on the right. *)
+Lemma reduces_once_subst_right :
+  forall t u,
+  reduces_once t u -> forall (a : term) k, reduces_once (subst_rec a t k) (subst_rec a u k).
+Proof.
+  simple induction 1; simpl in |- *; intros; auto with coc core arith sets.
+  rewrite distribute_subst; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve red1_subst_l red1_subst_r: coc.
-
-
-  Lemma red_prod_prod :
-   forall u v t,
-   red (Prod u v) t ->
-   forall P : Prop,
-   (forall a b : term, t = Prod a b -> red u a -> red v b -> P) -> P.
-simple induction 1; intros.
-apply H0 with u v; auto with coc core arith sets.
-
-apply H1; intros.
-inversion_clear H4 in H2.
-inversion H2.
-apply H3 with N1 b; auto with coc core arith sets.
-apply trans_red with a; auto with coc core arith sets.
-
-apply H3 with a N2; auto with coc core arith sets.
-apply trans_red with b; auto with coc core arith sets.
+(** Reduction on the substituted term propagates through substitution. *)
+Lemma reduces_once_subst_left :
+  forall (a : term) t u k,
+  reduces_once t u -> reduces (subst_rec t a k) (subst_rec u a k).
+Proof.
+  simple induction a; simpl in |- *; auto with coc core arith sets.
+  intros.
+  elim (lt_eq_lt_dec k n);
+    [ intro a0 | intro b; auto with coc core arith sets ].
+  elim a0; auto with coc core arith sets.
+  unfold lift in |- *; auto with coc core arith sets.
 Qed.
 
+Hint Resolve reduces_once_subst_left reduces_once_subst_right: coc.
 
-  Lemma red_sort_sort : forall s t, red (Srt s) t -> t <> Srt s -> False.
-simple induction 1; intros; auto with coc core arith sets.
-apply H1.
-generalize H2.
-case P; intros; try discriminate.
-inversion_clear H4.
+(** A prod reduces only to a prod. *)
+Lemma reduces_product_product :
+  forall u v t,
+  reduces (prod u v) t ->
+  forall P : Prop,
+  (forall a b : term, t = prod a b -> reduces u a -> reduces v b -> P) -> P.
+Proof.
+  intros u v t Hred.
+  induction Hred; intros.
+  - apply H with u v; auto with coc core arith sets.
+  - apply IHHred; intros.
+    subst y. inversion H.
+    apply H0 with N1 b; auto with coc core arith sets.
+    apply trans_red with a; auto with coc core arith sets.
+    apply H0 with a N2; auto with coc core arith sets.
+    apply trans_red with b; auto with coc core arith sets.
 Qed.
 
-
-
-  Lemma one_step_conv_exp : forall M N, red1 M N -> conv N M.
-intros.
-apply trans_conv_exp with N; auto with coc core arith sets.
+(** A sort does not reduce to a different term. *)
+Lemma reduces_sort_sort : forall s t, reduces (sort_term s) t -> t <> sort_term s -> False.
+Proof.
+  intros s t Hred Hneq.
+  induction Hred; auto.
+  apply IHHred; intro; subst y.
+  apply Hneq.
+  inversion H.
 Qed.
 
-
-  Lemma red_conv : forall M N, red M N -> conv M N.
-simple induction 1; auto with coc core arith sets.
-intros; apply trans_conv_red with P; auto with coc core arith sets.
+(** A single expansion step embeds into conversion. *)
+Lemma one_step_convertible_expansion : forall M N, reduces_once M N -> convertible N M.
+Proof.
+  intros.
+  apply trans_conv_exp with N; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve one_step_conv_exp red_conv: coc.
-
-
-  Lemma sym_conv : forall M N, conv M N -> conv N M.
-simple induction 1; auto with coc core arith sets.
-simple induction 2; intros; auto with coc core arith sets.
-apply trans_conv_red with P0; auto with coc core arith sets.
-
-apply trans_conv_exp with P0; auto with coc core arith sets.
-
-simple induction 2; intros; auto with coc core arith sets.
-apply trans_conv_red with P0; auto with coc core arith sets.
-
-apply trans_conv_exp with P0; auto with coc core arith sets.
+(** Reduction embeds into conversion. *)
+Lemma reduces_convertible : forall M N, reduces M N -> convertible M N.
+Proof.
+  intros M N H; induction H; auto with coc core arith sets.
+  apply trans_conv_red with y; auto with coc core arith sets.
 Qed.
 
-  Hint Immediate sym_conv: coc.
+Hint Resolve one_step_convertible_expansion reduces_convertible: coc.
 
-
-  Lemma trans_conv_conv :
-   forall M N (P : term), conv M N -> conv N P -> conv M P.
-intros.
-generalize M H; elim H0; intros; auto with coc core arith sets.
-apply trans_conv_red with P0; auto with coc core arith sets.
-
-apply trans_conv_exp with P0; auto with coc core arith sets.
+(** Conversion is symmetric. *)
+Lemma sym_convertible : forall M N, convertible M N -> convertible N M.
+Proof.
+  intros M N H.
+  apply clos_rst_rstn1_iff.
+  apply rst_sym.
+  apply clos_rst_rstn1_iff; auto.
 Qed.
 
+Hint Immediate sym_convertible: coc.
 
-  Lemma conv_conv_prod :
-   forall a b c d : term, conv a b -> conv c d -> conv (Prod a c) (Prod b d).
-intros.
-apply trans_conv_conv with (Prod a d).
-elim H0; intros; auto with coc core arith sets.
-apply trans_conv_red with (Prod a P); auto with coc core arith sets.
-
-apply trans_conv_exp with (Prod a P); auto with coc core arith sets.
-
-elim H; intros; auto with coc core arith sets.
-apply trans_conv_red with (Prod P d); auto with coc core arith sets.
-
-apply trans_conv_exp with (Prod P d); auto with coc core arith sets.
+(** Conversion is transitive. *)
+Lemma trans_convertible_convertible :
+  forall M N (P : term), convertible M N -> convertible N P -> convertible M P.
+Proof.
+  intros; eapply clos_rstn1_trans; eassumption.
 Qed.
 
-
-  Lemma conv_conv_lift :
-   forall (a b : term) n k,
-   conv a b -> conv (lift_rec n a k) (lift_rec n b k).
-intros.
-elim H; intros; auto with coc core arith sets.
-apply trans_conv_red with (lift_rec n P k); auto with coc core arith sets.
-
-apply trans_conv_exp with (lift_rec n P k); auto with coc core arith sets.
-Qed.
- 
-
-  Lemma conv_conv_subst :
-   forall (a b c d : term) k,
-   conv a b -> conv c d -> conv (subst_rec a c k) (subst_rec b d k).
-intros.
-apply trans_conv_conv with (subst_rec a d k).
-elim H0; intros; auto with coc core arith sets.
-apply trans_conv_red with (subst_rec a P k); auto with coc core arith sets.
-
-apply trans_conv_exp with (subst_rec a P k); auto with coc core arith sets.
-
-elim H; intros; auto with coc core arith sets.
-apply trans_conv_conv with (subst_rec P d k); auto with coc core arith sets.
-
-apply trans_conv_conv with (subst_rec P d k); auto with coc core arith sets.
-apply sym_conv; auto with coc core arith sets.
+(** Conversion is compatible with [prod]. *)
+Lemma convertible_convertible_product :
+  forall a b c d : term, convertible a b -> convertible c d -> convertible (prod a c) (prod b d).
+Proof.
+  intros a b c d H1 H2.
+  apply trans_convertible_convertible with (prod a d).
+  - induction H2; auto with coc core arith sets.
+    destruct H as [Hfwd | Hbwd].
+    + apply trans_conv_red with (prod a y); auto with coc core arith sets.
+    + apply trans_conv_exp with (prod a y); auto with coc core arith sets.
+  - induction H1; auto with coc core arith sets.
+    destruct H as [Hfwd | Hbwd].
+    + apply trans_conv_red with (prod y d); auto with coc core arith sets.
+    + apply trans_conv_exp with (prod y d); auto with coc core arith sets.
 Qed.
 
-  Hint Resolve conv_conv_prod conv_conv_lift conv_conv_subst: coc.
-
-
-  Lemma refl_par_red1 : forall M, par_red1 M M.
-simple induction M; auto with coc core arith sets.
+(** Conversion is preserved by lifting. *)
+Lemma convertible_convertible_lift :
+  forall (a b : term) n k,
+  convertible a b -> convertible (lift_rec n a k) (lift_rec n b k).
+Proof.
+  intros a b n k H.
+  induction H; auto with coc core arith sets.
+  destruct H as [Hfwd | Hbwd].
+  - apply trans_conv_red with (lift_rec n y k); auto with coc core arith sets.
+  - apply trans_conv_exp with (lift_rec n y k); auto with coc core arith sets.
 Qed.
 
-  Hint Resolve refl_par_red1: coc.
-
-
-  Lemma red1_par_red1 : forall M N, red1 M N -> par_red1 M N.
-simple induction 1; auto with coc core arith sets; intros.
+(** Conversion is preserved by substitution on both sides. *)
+Lemma convertible_convertible_subst :
+  forall (a b c d : term) k,
+  convertible a b -> convertible c d -> convertible (subst_rec a c k) (subst_rec b d k).
+Proof.
+  intros a b c d k H1 H2.
+  apply trans_convertible_convertible with (subst_rec a d k).
+  - induction H2; auto with coc core arith sets.
+    destruct H as [Hfwd | Hbwd].
+    + apply trans_conv_red with (subst_rec a y k); auto with coc core arith sets.
+    + apply trans_conv_exp with (subst_rec a y k); auto with coc core arith sets.
+  - induction H1; auto with coc core arith sets.
+    destruct H as [Hfwd | Hbwd].
+    + apply trans_convertible_convertible with (subst_rec y d k); auto with coc core arith sets.
+    + apply trans_convertible_convertible with (subst_rec y d k); auto with coc core arith sets.
+      apply sym_convertible; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve red1_par_red1: coc.
+Hint Resolve convertible_convertible_product convertible_convertible_lift convertible_convertible_subst: coc.
 
-
-  Lemma red_par_red : forall M N, red M N -> par_red M N.
-red in |- *; simple induction 1; intros; auto with coc core arith sets.
-apply t_trans with P; auto with coc core arith sets.
+(** Every term parallel-reduces to itself in one step. *)
+Lemma refl_parallel_reduces_once : forall M, parallel_reduces_once M M.
+Proof.
+  simple induction M; auto with coc core arith sets.
 Qed.
 
+Hint Resolve refl_parallel_reduces_once: coc.
 
-  Lemma par_red_red : forall M N, par_red M N -> red M N.
-simple induction 1.
-simple induction 1; intros; auto with coc core arith sets.
-apply trans_red with (App (Abs T M') N'); auto with coc core arith sets.
-
-intros.
-apply trans_red_red with y; auto with coc core arith sets.
+(** One-step reduction embeds into one-step parallel reduction. *)
+Lemma reduces_once_parallel_reduces_once : forall M N, reduces_once M N -> parallel_reduces_once M N.
+Proof.
+  simple induction 1; auto with coc core arith sets; intros.
 Qed.
 
-  Hint Resolve red_par_red par_red_red: coc.
+Hint Resolve reduces_once_parallel_reduces_once: coc.
 
-
-  Lemma par_red1_lift :
-   forall n (a b : term),
-   par_red1 a b -> forall k, par_red1 (lift_rec n a k) (lift_rec n b k).
-simple induction 1; simpl in |- *; auto with coc core arith sets.
-intros.
-rewrite distr_lift_subst; auto with coc core arith sets.
+(** Reduction embeds into parallel reduction. *)
+Lemma reduces_parallel_reduces : forall M N, reduces M N -> parallel_reduces M N.
+Proof.
+  intros M N H; red in |- *; induction H; auto with coc core arith sets.
+  apply t_trans with y; auto with coc core arith sets.
 Qed.
 
-
-  Lemma par_red1_subst :
-   forall c d : term,
-   par_red1 c d ->
-   forall a b : term,
-   par_red1 a b -> forall k, par_red1 (subst_rec a c k) (subst_rec b d k).
-simple induction 1; simpl in |- *; auto with coc core arith sets; intros.
-rewrite distr_subst; auto with coc core arith sets.
-
-elim (lt_eq_lt_dec k n); auto with coc core arith sets; intro a0.
-elim a0; intros; auto with coc core arith sets.
-unfold lift in |- *.
-apply par_red1_lift; auto with coc core arith sets.
+(** Parallel reduction embeds back into reduction. *)
+Lemma parallel_reduces_reduces : forall M N, parallel_reduces M N -> reduces M N.
+Proof.
+  intros M N H; induction H.
+  - induction H; auto with coc core arith sets.
+    apply trans_red with (app (lam T M') N'); auto with coc core arith sets.
+  - apply trans_reduces_reduces with y; auto with coc core arith sets.
 Qed.
 
+Hint Resolve reduces_parallel_reduces parallel_reduces_reduces: coc.
 
-  Lemma inv_par_red_abs :
-   forall (P : Prop) T (U x : term),
-   par_red1 (Abs T U) x ->
-   (forall T' (U' : term), x = Abs T' U' -> par_red1 U U' -> P) -> P.
-do 5 intro.
-inversion_clear H; intros.
-apply H with T' M'; auto with coc core arith sets.
+(** Parallel reduction is preserved by lifting. *)
+Lemma parallel_reduces_once_lift :
+  forall n (a b : term),
+  parallel_reduces_once a b -> forall k, parallel_reduces_once (lift_rec n a k) (lift_rec n b k).
+Proof.
+  simple induction 1; simpl in |- *; auto with coc core arith sets.
+  intros.
+  rewrite distribute_lift_subst; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve par_red1_lift par_red1_subst: coc.
-
-
-
-  Lemma subterm_abs : forall t (m : term), subterm m (Abs t m).
-intros.
-apply Sbtrm_bind with t; auto with coc core arith sets.
+(** Parallel reduction is preserved by substitution. *)
+Lemma parallel_reduces_once_subst :
+  forall c d : term,
+  parallel_reduces_once c d ->
+  forall a b : term,
+  parallel_reduces_once a b -> forall k, parallel_reduces_once (subst_rec a c k) (subst_rec b d k).
+Proof.
+  simple induction 1; simpl in |- *; auto with coc core arith sets; intros.
+  rewrite distribute_subst; auto with coc core arith sets.
+  elim (lt_eq_lt_dec k n); auto with coc core arith sets; intro a0.
+  elim a0; intros; auto with coc core arith sets.
+  unfold lift in |- *.
+  apply parallel_reduces_once_lift; auto with coc core arith sets.
 Qed.
 
-  Lemma subterm_prod : forall t (m : term), subterm m (Prod t m).
-intros.
-apply Sbtrm_bind with t; auto with coc core arith sets.
+(** Inversion: a parallel reduct of [lam T U] is [lam T' U']. *)
+Lemma inversion_parallel_reduces_lambda :
+  forall (P : Prop) T (U x : term),
+  parallel_reduces_once (lam T U) x ->
+  (forall T' (U' : term), x = lam T' U' -> parallel_reduces_once U U' -> P) -> P.
+Proof.
+  do 5 intro.
+  inversion_clear H; intros.
+  apply H with T' M'; auto with coc core arith sets.
 Qed.
 
-  Hint Resolve subterm_abs subterm_prod: coc.
+Hint Resolve parallel_reduces_once_lift parallel_reduces_once_subst: coc.
 
-
-
-  Lemma mem_sort_lift :
-   forall t n k s, mem_sort s (lift_rec n t k) -> mem_sort s t.
-simple induction t; simpl in |- *; intros; auto with coc core arith sets.
-generalize H; elim (le_gt_dec k n); intros; auto with coc core arith sets.
-inversion_clear H0.
-
-inversion_clear H1.
-apply mem_abs_l; apply H with n k; auto with coc core arith sets.
-
-apply mem_abs_r; apply H0 with n (S k); auto with coc core arith sets.
-
-inversion_clear H1.
-apply mem_app_l; apply H with n k; auto with coc core arith sets.
-
-apply mem_app_r; apply H0 with n k; auto with coc core arith sets.
-
-inversion_clear H1.
-apply mem_prod_l; apply H with n k; auto with coc core arith sets.
-
-apply mem_prod_r; apply H0 with n (S k); auto with coc core arith sets.
+(** The body of an [lam] is a subterm. *)
+Lemma subterm_lambda : forall t (m : term), subterm m (lam t m).
+Proof.
+  intros.
+  apply sub_bind with t; auto with coc core arith sets.
 Qed.
 
-
-  Lemma mem_sort_subst :
-   forall (b a : term) n s,
-   mem_sort s (subst_rec a b n) -> mem_sort s a \/ mem_sort s b.
-simple induction b; simpl in |- *; intros; auto with coc core arith sets.
-generalize H; elim (lt_eq_lt_dec n0 n); [ intro a0 | intro b0 ].
-elim a0; intros.
-inversion_clear H0.
-
-left.
-apply mem_sort_lift with n0 0; auto with coc core arith sets.
-
-intros.
-inversion_clear H0.
-
-inversion_clear H1.
-elim H with a n s; auto with coc core arith sets.
-
-elim H0 with a (S n) s; auto with coc core arith sets.
-
-inversion_clear H1.
-elim H with a n s; auto with coc core arith sets.
-
-elim H0 with a n s; auto with coc core arith sets.
-
-inversion_clear H1.
-elim H with a n s; auto with coc core arith sets.
-
-elim H0 with a (S n) s; intros; auto with coc core arith sets.
+(** The body of a [prod] is a subterm. *)
+Lemma subterm_product : forall t (m : term), subterm m (prod t m).
+Proof.
+  intros.
+  apply sub_bind with t; auto with coc core arith sets.
 Qed.
 
+Hint Resolve subterm_lambda subterm_product: coc.
 
-  Lemma red_sort_mem : forall t s, red t (Srt s) -> mem_sort s t.
-intros.
-pattern t in |- *.
-apply red1_red_ind with (Srt s); auto with coc core arith sets.
-do 4 intro.
-elim H0; intros.
-elim mem_sort_subst with M0 N 0 s; intros; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
-
-inversion_clear H4; auto with coc core arith sets.
+(** Sort occurrence is preserved by un-lifting. *)
+Lemma sort_occurs_in_lift :
+  forall t n k s, sort_occurs_in s (lift_rec n t k) -> sort_occurs_in s t.
+Proof.
+  simple induction t; simpl in |- *; intros; auto with coc core arith sets.
+  generalize H; elim (le_gt_dec k n); intros; auto with coc core arith sets.
+  inversion_clear H0.
+  inversion_clear H1.
+  apply mem_abs_l; apply H with n k; auto with coc core arith sets.
+  apply mem_abs_r; apply H0 with n (S k); auto with coc core arith sets.
+  inversion_clear H1.
+  apply mem_app_l; apply H with n k; auto with coc core arith sets.
+  apply mem_app_r; apply H0 with n k; auto with coc core arith sets.
+  inversion_clear H1.
+  apply mem_prod_l; apply H with n k; auto with coc core arith sets.
+  apply mem_prod_r; apply H0 with n (S k); auto with coc core arith sets.
 Qed.
 
-
-
-  Lemma red_normal : forall u v, red u v -> normal u -> u = v.
-simple induction 1; auto with coc core arith sets; intros.
-absurd (red1 u N); auto with coc core arith sets.
-absurd (red1 P N); auto with coc core arith sets.
-elim (H1 H3).
-unfold not in |- *; intro; apply (H3 N); auto with coc core arith sets.
+(** Sort occurrence in a substitution comes from one of the two parts. *)
+Lemma sort_occurs_in_subst :
+  forall (b a : term) n s,
+  sort_occurs_in s (subst_rec a b n) -> sort_occurs_in s a \/ sort_occurs_in s b.
+Proof.
+  simple induction b; simpl in |- *; intros; auto with coc core arith sets.
+  generalize H; elim (lt_eq_lt_dec n0 n); [ intro a0 | intro b0 ].
+  elim a0; intros.
+  inversion_clear H0.
+  left.
+  apply sort_occurs_in_lift with n0 0; auto with coc core arith sets.
+  intros.
+  inversion_clear H0.
+  inversion_clear H1.
+  elim H with a n s; auto with coc core arith sets.
+  elim H0 with a (S n) s; auto with coc core arith sets.
+  inversion_clear H1.
+  elim H with a n s; auto with coc core arith sets.
+  elim H0 with a n s; auto with coc core arith sets.
+  inversion_clear H1.
+  elim H with a n s; auto with coc core arith sets.
+  elim H0 with a (S n) s; intros; auto with coc core arith sets.
 Qed.
 
-
-
-  Lemma sn_red_sn : forall a b : term, sn a -> red a b -> sn b.
-unfold sn in |- *.
-simple induction 2; intros; auto with coc core arith sets.
-apply Acc_inv with P; auto with coc core arith sets.
+(** If a term reduces to a sort, that sort occurs in the original term. *)
+Lemma reduces_sort_occurs : forall t s, reduces t (sort_term s) -> sort_occurs_in s t.
+Proof.
+  intros.
+  pattern t in |- *.
+  apply reduces_reverse_ind with (sort_term s); auto with coc core arith sets.
+  do 4 intro.
+  elim H0; intros.
+  elim sort_occurs_in_subst with M0 N 0 s; intros; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
+  inversion_clear H4; auto with coc core arith sets.
 Qed.
 
-
-  Lemma commut_red1_subterm : commut _ subterm (transp _ red1).
-red in |- *.
-simple induction 1; intros.
-inversion_clear H0.
-exists (Abs t z); auto with coc core arith sets.
-
-exists (Prod t z); auto with coc core arith sets.
-
-inversion_clear H0.
-exists (Abs z n); auto with coc core arith sets.
-
-exists (App z v); auto with coc core arith sets.
-
-exists (App u z); auto with coc core arith sets.
-
-exists (Prod z n); auto with coc core arith sets.
+(** A normal term is a fixed point of reduction. *)
+Lemma reduces_normal : forall u v, reduces u v -> normal u -> u = v.
+Proof.
+  intros u v H Hn; induction H as [| y z Hyz Huy IH]; auto.
+  assert (u = y) as Heq by auto.
+  subst y. elim (Hn z); auto.
 Qed.
 
-
-  Lemma subterm_sn :
-   forall a : term, sn a -> forall b : term, subterm b a -> sn b.
-unfold sn in |- *.
-simple induction 1; intros.
-apply Acc_intro; intros.
-elim commut_red1_subterm with x b y; intros; auto with coc core arith sets.
-apply H1 with x0; auto with coc core arith sets.
+(** Strong normalization is preserved by reduction. *)
+Lemma strongly_normalizing_reduces : forall a b : term, strongly_normalizing a -> reduces a b -> strongly_normalizing b.
+Proof.
+  unfold strongly_normalizing in |- *.
+  intros a b Hsn Hred; induction Hred; auto with coc core arith sets.
+  apply Acc_inv with y; auto with coc core arith sets.
 Qed.
 
-
-  Lemma sn_prod : forall A, sn A -> forall B, sn B -> sn (Prod A B).
-unfold sn in |- *.
-simple induction 1.
-simple induction 3; intros.
-apply Acc_intro; intros.
-inversion_clear H5; auto with coc core arith sets.
-apply H1; auto with coc core arith sets.
-apply Acc_intro; auto with coc core arith sets.
+(** One-step reduction commutes with the subterm relation. *)
+Lemma commute_reduces_once_subterm : commut _ subterm (transp _ reduces_once).
+Proof.
+  red in |- *.
+  simple induction 1; intros.
+  inversion_clear H0.
+  exists (lam t z); auto with coc core arith sets.
+  exists (prod t z); auto with coc core arith sets.
+  inversion_clear H0.
+  exists (lam z n); auto with coc core arith sets.
+  exists (app z v); auto with coc core arith sets.
+  exists (app u z); auto with coc core arith sets.
+  exists (prod z n); auto with coc core arith sets.
 Qed.
 
+(** Strong normalization of a term implies strong normalization of all subterms. *)
+Lemma subterm_sn :
+  forall a : term, strongly_normalizing a -> forall b : term, subterm b a -> strongly_normalizing b.
+Proof.
+  unfold strongly_normalizing in |- *.
+  simple induction 1; intros.
+  apply Acc_intro; intros.
+  elim commute_reduces_once_subterm with x b y; intros; auto with coc core arith sets.
+  apply H1 with x0; auto with coc core arith sets.
+Qed.
 
-  Lemma sn_subst : forall T M, sn (subst T M) -> sn M.
-intros.
-cut (forall t, sn t -> forall m : term, t = subst T m -> sn m).
-intros.
-apply H0 with (subst T M); auto with coc core arith sets.
+(** A [prod] is strongly normalizing when both components are. *)
+Lemma strongly_normalizing_product : forall A, strongly_normalizing A -> forall B, strongly_normalizing B -> strongly_normalizing (prod A B).
+Proof.
+  unfold strongly_normalizing in |- *.
+  simple induction 1.
+  simple induction 3; intros.
+  apply Acc_intro; intros.
+  inversion_clear H5; auto with coc core arith sets.
+  apply H1; auto with coc core arith sets.
+  apply Acc_intro; auto with coc core arith sets.
+Qed.
 
-unfold sn in |- *.
-simple induction 1; intros.
-apply Acc_intro; intros.
-apply H2 with (subst T y); auto with coc core arith sets.
-rewrite H3.
-unfold subst in |- *; auto with coc core arith sets.
+(** If [subst T M] is strongly normalizing, then [M] is. *)
+Lemma strongly_normalizing_subst : forall T M, strongly_normalizing (subst T M) -> strongly_normalizing M.
+Proof.
+  intros.
+  cut (forall t, strongly_normalizing t -> forall m : term, t = subst T m -> strongly_normalizing m).
+  intros.
+  apply H0 with (subst T M); auto with coc core arith sets.
+  unfold strongly_normalizing in |- *.
+  simple induction 1; intros.
+  apply Acc_intro; intros.
+  apply H2 with (subst T y); auto with coc core arith sets.
+  rewrite H3.
+  unfold subst in |- *; auto with coc core arith sets.
 Qed.

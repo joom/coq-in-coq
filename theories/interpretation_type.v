@@ -14,72 +14,95 @@
 (* 02110-1301 USA                                                     *)
 
 
+From CoqInCoq Require Import confluence.
+From CoqInCoq Require Import typing.
+From CoqInCoq Require Import classification.
+From CoqInCoq Require Import candidates.
+From CoqInCoq Require Import terms.
 
-Require Import Termes.
-Require Import Conv.
-Require Import Types.
-Require Import Class.
-Require Import Can.
+  (* Interpretation of type variables *)
 
-  (* Interpretations des variables de type *)
+  (** Interpretation of type variables as either a skeleton-indexed candidate or a type. *)
+  Inductive interpretation_kind : Type :=
+    | interp_knd : forall s : skeleton, candidate s -> interpretation_kind
+    | interp_typ : interpretation_kind.
 
-  Inductive Int_K : Type :=
-    | iK : forall s : skel, Can s -> Int_K
-    | iT : Int_K.
-
-  Definition intP := TList Int_K.
+  (** Type interpretation environment. *)
+  Definition interpretation_env := list interpretation_kind.
 
 
-  Definition class_of_ik (ik : Int_K) :=
+  (** Extract the class of an interpretation element. *)
+  Definition class_of_interpretation_kind (ik : interpretation_kind) :=
     match ik with
-    | iK s _ => Knd s
-    | iT => Typ PROP
+    | interp_knd s _ => knd s
+    | interp_typ => typ prop_skel
     end.
 
 
+  (** Map an interpretation environment to a class environment. *)
+  Definition classes_of_interpretation : interpretation_env -> class_list := map class_of_interpretation_kind.
 
-  Definition cls_of_int : intP -> cls := Tmap _ _ class_of_ik.
 
-
-  Definition ext_ik (T : term) (ip : intP) (s : skel) 
-    (C : Can s) :=
-    match cl_term T (cls_of_int ip) with
-    | Knd _ => iK s C
-    | _ => iT
+  (** Extend an interpretation with a candidate guarded by the term's class. *)
+  Definition extend_interpretation_kind (T : term) (ip : interpretation_env) (s : skeleton)
+    (C : candidate s) :=
+    match classify_term T (classes_of_interpretation ip) with
+    | knd _ => interp_knd s C
+    | _ => interp_typ
     end.
 
 
-  Definition int_cons (T : term) (ip : intP) (s : skel) 
-    (C : Can s) := TCs _ (ext_ik T ip s C) ip.
+  (** Cons an extended interpretation element onto the environment. *)
+  Definition interpretation_cons (T : term) (ip : interpretation_env) (s : skeleton)
+    (C : candidate s) := cons (extend_interpretation_kind T ip s C) ip.
 
 
-  Definition def_cons (T : term) (I : intP) : intP :=
-    int_cons T I _ (default_can (cv_skel (cl_term T (cls_of_int I)))).
+  (** Cons a default candidate onto the interpretation environment. *)
+  Definition default_cons (T : term) (I : interpretation_env) : interpretation_env :=
+    interpretation_cons T I _ (default_can (covariant_skeleton (classify_term T (classes_of_interpretation I)))).
 
 
+  (** Skeleton of the class of a term under an interpretation. *)
+  Definition skeleton_interpretation (t : term) (I : interpretation_env) :=
+    type_skeleton (classify_term t (classes_of_interpretation I)).
 
 
-  Definition skel_int (t : term) (I : intP) :=
-    typ_skel (cl_term t (cls_of_int I)).
+  (** classes_of_interpretation (map class_of_interpretation_kind) commutes with firstn. *)
+  Lemma classes_of_interpretation_firstn : forall (k : nat) (ip : interpretation_env),
+    firstn k (classes_of_interpretation ip) = classes_of_interpretation (firstn k ip).
+  Proof.
+    unfold classes_of_interpretation; intros k ip; rewrite firstn_map; auto.
+  Qed.
+
+  (** classes_of_interpretation commutes with skipn. *)
+  Lemma classes_of_interpretation_skipn : forall (k : nat) (ip : interpretation_env),
+    skipn k (classes_of_interpretation ip) = classes_of_interpretation (skipn k ip).
+  Proof.
+    unfold classes_of_interpretation; intros k ip; rewrite skipn_map; auto.
+  Qed.
+
+  (** Inserting into an interpretation preserves the class environment. *)
+  Lemma insert_in_classes :
+   forall (c : class) (y : interpretation_kind) (k : nat) (ipe ipf : interpretation_env),
+   class_of_interpretation_kind y = c ->
+   insert y k ipe ipf -> insert c k (classes_of_interpretation ipe) (classes_of_interpretation ipf).
+  Proof.
+    unfold insert, classes_of_interpretation.
+    intros c y k ipe ipf Hc [Heq Hle]; subst ipf c.
+    split.
+    - rewrite map_app. simpl.
+      rewrite firstn_map, skipn_map. reflexivity.
+    - rewrite length_map. exact Hle.
+  Qed.
 
 
-  Lemma ins_in_cls :
-   forall (c : class) (y : Int_K) (k : nat) (ipe ipf : intP),
-   class_of_ik y = c ->
-   TIns Int_K y k ipe ipf -> TIns _ c k (cls_of_int ipe) (cls_of_int ipf).
-unfold cls_of_int in |- *.
-simple induction 1.
-simple induction 1; simpl in |- *; auto with coc core arith datatypes.
-Qed.
-
-
-
-  Definition coerce_CR (s : skel) (i : Int_K) : Can s :=
+  (** Coerce an interpretation element to a candidate at a given skeleton. *)
+  Definition coerce_candidate (s : skeleton) (i : interpretation_kind) : candidate s :=
     match i with
-    | iK si Ci =>
-        match EQ_skel si s with
+    | interp_knd si Ci =>
+        match skeleton_eq_dec si s with
         | left y =>
-            match y in (_ = x) return (Can x) with
+            match y in (_ = x) return (candidate x) with
             | refl_equal => Ci
             end
         | _ => default_can s
@@ -87,131 +110,172 @@ Qed.
     | _ => default_can s
     end.
 
+  (** Coercing a candidate preserves the is_can property. *)
   Lemma is_can_coerce :
-   forall s s' C, is_can s C -> is_can s' (coerce_CR s' (iK s C)).
-Proof.
-simpl in |- *; intros.
-elim (EQ_skel s s'); intros; auto with coc.
-case a; trivial.
-Qed.
+   forall s s' C, is_can s C -> is_can s' (coerce_candidate s' (interp_knd s C)).
+  Proof.
+    simpl in |- *; intros.
+    elim (skeleton_eq_dec s s'); intros; auto with coc.
+    case a; trivial.
+  Qed.
 
-Hint Resolve is_can_coerce: coc.
-
-
-  Lemma extr_eq :
-   forall (P : forall s : skel, Can s -> Prop) (s : skel) (c : Can s),
-   P s c -> P s (coerce_CR s (iK s c)).
-Proof.
-intros.
-unfold coerce_CR in |- *.
-elim (EQ_skel s s).
-intro Heq.
-change
-  ((fun s0 (e : s = s0) =>
-    P s0 match e in (_ = x) return (Can x) with
-         | refl_equal => c
-         end) s Heq) in |- *.
-case Heq; trivial.
-
-simple induction 1; auto with coc core arith datatypes.
-Qed.
+  Hint Resolve is_can_coerce: coc.
 
 
-  Lemma eq_can_extr :
-   forall (s si : skel) (X Y : Can s),
-   eq_can s X Y -> eq_can si (coerce_CR si (iK s X)) (coerce_CR si (iK s Y)).
-unfold coerce_CR in |- *.
-intros.
-elim (EQ_skel s si); auto with coc core arith datatypes.
-intro Heq; case Heq; auto with coc core arith datatypes.
-Qed.
+  (** Extracting a candidate at its own skeleton yields the original. *)
+  Lemma extract_eq :
+   forall (P : forall s : skeleton, candidate s -> Prop) (s : skeleton) (c : candidate s),
+   P s c -> P s (coerce_candidate s (interp_knd s c)).
+  Proof.
+    intros.
+    unfold coerce_candidate in |- *.
+    elim (skeleton_eq_dec s s).
+    intro Heq.
+    change
+      ((fun s0 (e : s = s0) =>
+        P s0 match e in (_ = x) return (candidate x) with
+             | refl_equal => c
+             end) s Heq) in |- *.
+    case Heq; trivial.
+    simple induction 1; auto with coc core arith datatypes.
+  Qed.
 
-  Hint Resolve eq_can_extr: coc.
+
+  (** Candidate equality is preserved by coercion. *)
+  Lemma eq_can_extract :
+   forall (s si : skeleton) (X Y : candidate s),
+   eq_can s X Y -> eq_can si (coerce_candidate si (interp_knd s X)) (coerce_candidate si (interp_knd s Y)).
+  Proof.
+    unfold coerce_candidate in |- *.
+    intros.
+    elim (skeleton_eq_dec s si); auto with coc core arith datatypes.
+    intro Heq; case Heq; auto with coc core arith datatypes.
+  Qed.
+
+  Hint Resolve eq_can_extract: coc.
 
 
-
-
-  Inductive ik_eq : Int_K -> Int_K -> Prop :=
-    | eqi_K :
-        forall (s : skel) (X Y : Can s),
+  (** Pointwise equality of interpretation elements. *)
+  Inductive interpretation_kind_eq : interpretation_kind -> interpretation_kind -> Prop :=
+    | interp_eq_knd :
+        forall (s : skeleton) (X Y : candidate s),
         eq_can s X X ->
-        eq_can s Y Y -> eq_can s X Y -> ik_eq (iK s X) (iK s Y)
-    | eqi_T : ik_eq iT iT.
+        eq_can s Y Y -> eq_can s X Y -> interpretation_kind_eq (interp_knd s X) (interp_knd s Y)
+    | interp_eq_typ : interpretation_kind_eq interp_typ interp_typ.
 
-  Hint Resolve eqi_K eqi_T: coc.
+  Hint Resolve interp_eq_knd interp_eq_typ: coc.
 
-  Lemma iki_K :
-   forall (s : skel) (C : Can s), eq_can s C C -> ik_eq (iK s C) (iK s C).
-auto with coc core arith datatypes.
-Qed.
+  (** Reflexivity of interpretation element equality. *)
+  Lemma interpretation_kind_inversion :
+   forall (s : skeleton) (C : candidate s), eq_can s C C -> interpretation_kind_eq (interp_knd s C) (interp_knd s C).
+  Proof.
+    auto with coc core arith datatypes.
+  Qed.
 
-  Hint Resolve iki_K: coc.
-
-
-
-
-  Definition int_eq_can : intP -> intP -> Prop := Tfor_all2 _ _ ik_eq.
-  Definition int_inv (i : intP) := int_eq_can i i.
-
-  Hint Unfold int_eq_can int_inv: coc.
+  Hint Resolve interpretation_kind_inversion: coc.
 
 
-  Lemma ins_int_inv :
-   forall (e f : intP) (k : nat) (y : Int_K),
-   TIns _ y k e f -> int_inv f -> int_inv e.
-unfold int_inv, int_eq_can in |- *.
-simple induction 1; intros; auto with coc core arith datatypes.
-inversion_clear H0; auto with coc core arith datatypes.
+  (** Pointwise equality of interpretation environments. *)
+  Definition interpretation_eq_can : interpretation_env -> interpretation_env -> Prop := Forall2 interpretation_kind_eq.
 
-inversion_clear H2; auto with coc core arith datatypes.
-Qed.
+  (** Invariant: an interpretation is self-equal. *)
+  Definition interpretation_invariant (i : interpretation_env) := interpretation_eq_can i i.
+
+  Hint Unfold interpretation_eq_can interpretation_invariant: coc.
 
 
-  Lemma int_inv_int_eq_can : forall i : intP, int_inv i -> int_eq_can i i.
-auto with coc core arith datatypes.
-Qed.
+  (** Truncating an interpretation_env also truncates the classes_of_interpretation view. *)
+  Lemma skipn_interpretation_classes :
+   forall (k : nat) (ipf ipg : interpretation_env),
+   ipg = skipn k ipf ->
+   classes_of_interpretation ipg = skipn k (classes_of_interpretation ipf).
+  Proof.
+    unfold classes_of_interpretation.
+    intros k ipf ipg H. subst.
+    revert ipf; induction k as [|k' IH]; intros ipf.
+    - simpl; auto.
+    - destruct ipf as [|h ipf'].
+      + simpl; auto.
+      + simpl. apply IH.
+  Qed.
 
-  Hint Resolve int_inv_int_eq_can: coc.
+  (* skipn_interpretation_classes NOT added as hint -- adding it breaks interpretation_stability proof structure *)
+
+  (** Forall2 R (l1 ++ l2) (l1 ++ l2) implies Forall2 R l1 l1 and Forall2 R l2 l2. *)
+  Lemma Forall2_app_self_inv {A : Type} (R : A -> A -> Prop) (l1 l2 : list A) :
+    Forall2 R (l1 ++ l2) (l1 ++ l2) -> Forall2 R l1 l1 /\ Forall2 R l2 l2.
+  Proof.
+    revert l2; induction l1 as [|h l1' IHl]; intros l2 H.
+    - simpl in H; auto.
+    - simpl in H. inversion H as [|? ? ? ? Rhh Htail]; subst.
+      destruct (IHl l2 Htail) as [Ha Hb].
+      split; [constructor; auto | exact Hb].
+  Qed.
+
+  (** Insertion preserves the interpretation invariant. *)
+  Lemma insert_interpretation_invariant :
+   forall (e f : interpretation_env) (k : nat) (y : interpretation_kind),
+   insert y k e f -> interpretation_invariant f -> interpretation_invariant e.
+  Proof.
+    unfold interpretation_invariant, interpretation_eq_can, insert.
+    intros e f k y [Heq Hle] Hf; subst f.
+    (* Hf : Forall2 interpretation_kind_eq (firstn k e ++ y :: skipn k e) (firstn k e ++ y :: skipn k e) *)
+    apply Forall2_app_self_inv in Hf; destruct Hf as [H1 H2].
+    inversion H2 as [|? ? ? ? _ Hskip]; subst.
+    rewrite <- firstn_skipn with (n := k) (l := e).
+    exact (Forall2_app H1 Hskip).
+  Qed.
 
 
+  (** interpretation_invariant implies interpretation_eq_can reflexivity. *)
+  Lemma interpretation_invariant_eq_can : forall i : interpretation_env, interpretation_invariant i -> interpretation_eq_can i i.
+  Proof.
+    auto with coc core arith datatypes.
+  Qed.
 
-  Lemma int_eq_can_cls :
-   forall i i' : intP, int_eq_can i i' -> cls_of_int i = cls_of_int i'.
-unfold cls_of_int in |- *.
-simple induction 1; simpl in |- *; intros; auto with coc core arith datatypes.
-inversion_clear H0; simpl in |- *; intros; elim H2;
- auto with coc core arith datatypes.
-Qed.
+  Hint Resolve interpretation_invariant_eq_can: coc.
 
 
-  Fixpoint int_typ (T : term) : intP -> forall s : skel, Can s :=
-    fun (ip : intP) (s : skel) =>
+  (** Equal interpretations yield equal class environments. *)
+  Lemma interpretation_eq_can_classes :
+   forall i i' : interpretation_env, interpretation_eq_can i i' -> classes_of_interpretation i = classes_of_interpretation i'.
+  Proof.
+    unfold classes_of_interpretation in |- *.
+    simple induction 1; simpl in |- *; intros; auto with coc core arith datatypes.
+    inversion_clear H0; simpl in |- *; intros; elim H2;
+     auto with coc core arith datatypes.
+  Qed.
+
+
+  (** Interpret a term as a candidate at a given skeleton. *)
+  Fixpoint interpret_type (T : term) : interpretation_env -> forall s : skeleton, candidate s :=
+    fun (ip : interpretation_env) (s : skeleton) =>
     match T with
-    | Srt _ => default_can s
-    | Ref n => coerce_CR s (Tnth_def _ (iK PROP sn) ip n)
-    | Abs A t =>
-        match cl_term A (cls_of_int ip) with
-        | Knd _ =>
-            match s as x return (Can x) with
-            | PROD s1 s2 =>
-                fun C : Can s1 => int_typ t (TCs _ (iK s1 C) ip) s2
-            | PROP => default_can PROP
+    | sort_term _ => default_can s
+    | var n => coerce_candidate s (nth n ip (interp_knd prop_skel strongly_normalizing))
+    | lam A t =>
+        match classify_term A (classes_of_interpretation ip) with
+        | knd _ =>
+            match s as x return (candidate x) with
+            | prod_skel s1 s2 =>
+                fun C : candidate s1 => interpret_type t (cons (interp_knd s1 C) ip) s2
+            | prop_skel => default_can prop_skel
             end
-        | Typ _ => int_typ t (def_cons A ip) s
+        | typ _ => interpret_type t (default_cons A ip) s
         | _ => default_can s
         end
-    | App u v =>
-        match cl_term v (cls_of_int ip) with
-        | Trm => int_typ u ip s
-        | Typ sv => int_typ u ip (PROD sv s) (int_typ v ip sv)
+    | app u v =>
+        match classify_term v (classes_of_interpretation ip) with
+        | trm => interpret_type u ip s
+        | typ sv => interpret_type u ip (prod_skel sv s) (interpret_type v ip sv)
         | _ => default_can s
         end
-    | Prod A B =>
-        match s as x return (Can x) with
-        | PROP =>
-            let s := cv_skel (cl_term A (cls_of_int ip)) in
-            Pi s (int_typ A ip PROP)
-              (fun C => int_typ B (int_cons A ip s C) PROP)
-        | PROD s1 s2 => default_can (PROD s1 s2)
+    | prod A B =>
+        match s as x return (candidate x) with
+        | prop_skel =>
+            let s := covariant_skeleton (classify_term A (classes_of_interpretation ip)) in
+            Pi s (interpret_type A ip prop_skel)
+              (fun C => interpret_type B (interpretation_cons A ip s C) prop_skel)
+        | prod_skel s1 s2 => default_can (prod_skel s1 s2)
         end
     end.
