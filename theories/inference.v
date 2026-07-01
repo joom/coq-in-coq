@@ -20,7 +20,10 @@ From CoqInCoq Require Import strong_normalization.
 From CoqInCoq Require Import decidable_conversion.
 From CoqInCoq Require Import terms.
 
-Load "implicit_variables".
+Implicit Types i k m n p : nat.
+Implicit Type s : sort.
+Implicit Types A B M N T t u v : term.
+Implicit Types e f g : environment.
 
 (** Decide whether a strongly normalizing term reduces to a sort. *)
   Definition reduces_to_sort :

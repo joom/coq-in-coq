@@ -1,0 +1,5 @@
+(coq.theory
+ (name CoqInCoq)
+ (package coq-in-coq)
+ (synopsis "Calculus of Constructions formalized in Rocq")
+ (theories Stdlib))

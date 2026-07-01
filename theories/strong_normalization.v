@@ -25,7 +25,10 @@ From CoqInCoq Require Import interpretation_term.
 From CoqInCoq Require Import interpretation_type.
 From CoqInCoq Require Import interpretation_stability.
 
-Load "implicit_variables".
+Implicit Types i k m n p : nat.
+Implicit Type s : sort.
+Implicit Types A B M N T t u v : term.
+Implicit Types e f g : environment.
 
 (** Predicate stating that a term interpretation matches an environment. *)
 Inductive term_in_interpretation : environment -> interpretation_env -> term_interpretation -> Prop :=

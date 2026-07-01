@@ -1,0 +1,26 @@
+(executable
+ (name top)
+ (public_name coc)
+ (ocamlopt_flags (:standard -w -39))
+ (libraries rocq-runtime.kernel unix)
+ (modules core top parser lexer))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
+
+(rule
+ (targets core.ml core.mli)
+ (deps
+  Extract.v
+  (alias_rec ../theories/all))
+ (action
+  (run rocq compile -R %{project_root}/theories CoqInCoq Extract.v)))
+
+(rule
+ (alias runtest)
+ (deps newman.coc top.exe)
+ (action
+  (with-stdin-from newman.coc
+   (run ./top.exe))))
