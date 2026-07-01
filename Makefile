@@ -7,4 +7,4 @@ clean:
 	dune clean
 
 test:
-	dune build @runtest
+	dune build @runtest --force
