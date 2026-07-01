@@ -57,6 +57,7 @@ From CoqInCoq Require Import expressions.
     | cmd_axiom : name -> term -> command
     | cmd_delete : command
     | cmd_list : command
+    | cmd_help : command
     | cmd_quit : command.
 
 (** Messages returned after successful command execution *)
@@ -66,6 +67,7 @@ From CoqInCoq Require Import expressions.
     | msg_correct : message
     | msg_delete_axiom : name -> message
     | msg_context_listing : partial_names -> message
+    | msg_help : message
     | msg_exiting : message.
 
 (** Errors produced by failed command execution *)
@@ -82,6 +84,7 @@ From CoqInCoq Require Import expressions.
     | ast_axiom : name -> expr -> ast
     | ast_delete : ast
     | ast_list : ast
+    | ast_help : ast
     | ast_quit : ast.
 
 (** Extracts sub-expressions from an AST node *)
@@ -100,6 +103,7 @@ From CoqInCoq Require Import expressions.
     | pmsg_correct : pmessage
     | pmsg_context_listing : partial_names -> pmessage
     | pmsg_delete_axiom : name -> pmessage
+    | pmsg_help : pmessage
     | pmsg_exiting : pmessage.
 
 
@@ -139,9 +143,10 @@ From CoqInCoq Require Import expressions.
         synthesis_trans s (ast_axiom x e) (cmd_axiom x t)
     | sy_delete : synthesis_trans s ast_delete cmd_delete
     | sy_list : synthesis_trans s ast_list cmd_list
+    | sy_help : synthesis_trans s ast_help cmd_help
     | sy_quit : synthesis_trans s ast_quit cmd_quit.
 
-  Hint Resolve sy_infer sy_check sy_axiom sy_delete sy_list sy_quit: coc.
+  Hint Resolve sy_infer sy_check sy_axiom sy_delete sy_list sy_help sy_quit: coc.
 
 
 (** State transitions for internal commands *)
@@ -162,9 +167,10 @@ From CoqInCoq Require Import expressions.
         x :: glob_names s2 = glob_names s1 ->
         transition s1 cmd_delete s2 (msg_delete_axiom x)
     | tr_list : transition s1 cmd_list s1 (msg_context_listing (glob_names s1))
+    | tr_help : transition s1 cmd_help s1 msg_help
     | tr_quit : transition s1 cmd_quit s1 msg_exiting.
 
-  Hint Resolve tr_infer tr_check tr_axiom tr_delete tr_list tr_quit: coc.
+  Hint Resolve tr_infer tr_check tr_axiom tr_delete tr_list tr_help tr_quit: coc.
 
 
 (** Translation of internal messages to printable messages *)
@@ -180,9 +186,10 @@ From CoqInCoq Require Import expressions.
     | tm_listing :
         forall l : partial_names,
         translate_message s (msg_context_listing l) (pmsg_context_listing l)
+    | tm_help : translate_message s msg_help pmsg_help
     | tm_exit : translate_message s msg_exiting pmsg_exiting.
 
-  Hint Resolve tm_infer tm_check tm_axiom tm_delete tm_listing tm_exit: coc.
+  Hint Resolve tm_infer tm_check tm_axiom tm_delete tm_listing tm_help tm_exit: coc.
 
 
   (* ERRORS *)
@@ -255,7 +262,7 @@ From CoqInCoq Require Import expressions.
         forall (l : partial_names) (t0 t1 : term) (e0 e1 : expr),
         term_expression_equivalent l t0 e0 ->
         term_expression_equivalent l t1 e1 ->
-        translate_type_error l (perr_not_a_fun e0 e1) (Not_a_fun t0 t1)
+        translate_type_error l (perr_not_a_fun e0 e1) (err_not_a_fun t0 t1)
     | tpe_apply_err :
         forall (l : partial_names) (t0 t1 t2 t3 : term) (e0 e1 e2 e3 : expr),
         term_expression_equivalent l t0 e0 ->
@@ -324,6 +331,8 @@ From CoqInCoq Require Import expressions.
     inversion_clear H0.
 
     inversion_clear H0.
+
+    inversion_clear H0.
   Qed.
 
 
@@ -385,6 +394,9 @@ From CoqInCoq Require Import expressions.
 
     inversion_clear H0.
     inversion_clear H1.
+
+    inversion_clear H0.
+    inversion_clear H1.
   Qed.
 
 
@@ -407,6 +419,8 @@ From CoqInCoq Require Import expressions.
     inversion_clear H1.
     elim equivalent_unique with (glob_names si) t e t0;
      auto with coc core arith datatypes.
+
+    inversion_clear H0; auto with coc core arith datatypes.
 
     inversion_clear H0; auto with coc core arith datatypes.
 
@@ -490,6 +504,9 @@ From CoqInCoq Require Import expressions.
 
     left.
     exists cmd_list; auto with coc core arith datatypes.
+
+    left.
+    exists cmd_help; auto with coc core arith datatypes.
 
     left.
     exists cmd_quit; auto with coc core arith datatypes.
@@ -623,6 +640,7 @@ From CoqInCoq Require Import expressions.
     exact (execute_axiom si).
     exact (execute_delete si).
     left; exists (si, msg_context_listing (glob_names si)); auto with coc.
+    left; exists (si, msg_help); auto with coc.
     left; exists (si, msg_exiting); auto with coc.
   Defined.
 
@@ -645,6 +663,7 @@ From CoqInCoq Require Import expressions.
     exists pmsg_correct; auto with coc.
     intro x; exists (pmsg_delete_axiom x); auto with coc.
     intro l; exists (pmsg_context_listing l); auto with coc.
+    exists pmsg_help; auto with coc.
     exists pmsg_exiting; auto with coc.
   Defined.
 

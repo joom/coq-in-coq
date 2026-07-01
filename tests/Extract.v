@@ -28,6 +28,7 @@ From CoqInCoq Require Import names.
 From CoqInCoq Require Import expressions.
 From CoqInCoq Require Import machine.
 
+Extract Constant name_eq_dec => "(=)".
 Extract Constant name_of_nat => "fun n -> Pstring.unsafe_of_string (""x"" ^ (string_of_int n))".
 
 Extraction

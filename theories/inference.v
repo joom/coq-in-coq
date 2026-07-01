@@ -130,7 +130,7 @@ Section TypeChecker.
     | err_db : nat -> type_error
     | err_lambda_kind : term -> type_error
     | err_not_a_type : term -> term -> type_error
-    | Not_a_fun : term -> term -> type_error
+    | err_not_a_fun : term -> term -> type_error
     | err_apply : term -> term -> term -> term -> type_error.
 
 
@@ -159,7 +159,7 @@ Section TypeChecker.
     | Exp_fun :
         forall e (m : term) t,
         has_type e m t ->
-        (forall a b : term, ~ has_type e m (prod a b)) -> explanation e (Not_a_fun m t)
+        (forall a b : term, ~ has_type e m (prod a b)) -> explanation e (err_not_a_fun m t)
     | expl_apply :
         forall e u v (a b tv : term),
         has_type e u (prod a b) ->
@@ -203,7 +203,7 @@ Section TypeChecker.
     | infer_err_lam_kind : forall M T, infer_error (lam T M) (err_lambda_kind (lam T M))
     | infer_err_type_abs :
         forall (m n : term) t, infer_error (lam m n) (err_not_a_type m t)
-    | Infe_fun : forall (m n : term) t, infer_error (app m n) (Not_a_fun m t)
+    | Infe_fun : forall (m n : term) t, infer_error (app m n) (err_not_a_fun m t)
     | infer_err_apply :
         forall m n tf ta : term, infer_error (app m n) (err_apply m tf n ta)
     | infer_err_type_prod_l :
@@ -423,7 +423,7 @@ Section TypeChecker.
 
     intros not_prod.
     right.
-    exists (Not_a_fun u T); auto with coc arith.
+    exists (err_not_a_fun u T); auto with coc arith.
     apply Exp_fun; auto with coc arith.
     red in |- *; intros.
     elim not_prod with a b.
