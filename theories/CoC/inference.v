@@ -14,11 +14,11 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import strong_normalization.
-From CoqInCoq Require Import decidable_conversion.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import strong_normalization.
+From CoC Require Import decidable_conversion.
+From CoC Require Import terms.
 
 Implicit Types i k m n p : nat.
 Implicit Type s : sort.
@@ -28,15 +28,16 @@ Implicit Types e f g : environment.
 (** Decide whether a strongly normalizing term reduces to a sort. *)
   Definition reduces_to_sort :
    forall t,
-   strongly_normalizing t -> {s : sort | reduces t (sort_term s)} + {(forall s, ~ convertible t (sort_term s))}.
+   strongly_normalizing t -> {s : sort & reduces t (sort_term s)} + {(forall s, convertible t (sort_term s) -> False)}.
   Proof.
     intros t snt.
     elim compute_normal_form with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
     left.
     exists s; trivial.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (sort_term s) (var n); intros.
+    right; intros.
+    elim church_rosser_theorem with (sort_term s) (var n).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (var n) x); auto with coc; intros.
     apply reduces_sort_sort with s (var n); auto with coc.
@@ -44,8 +45,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (sort_term s) (lam T b); intros.
+    right; intros.
+    elim church_rosser_theorem with (sort_term s) (lam T b).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (lam T b) x); auto with coc; intros.
     apply reduces_sort_sort with s (lam T b); auto with coc.
@@ -53,8 +55,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (sort_term s) (app u v); intros.
+    right; intros.
+    elim church_rosser_theorem with (sort_term s) (app u v).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (app u v) x); auto with coc; intros.
     apply reduces_sort_sort with s (app u v); auto with coc.
@@ -62,8 +65,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (sort_term s) (prod T U); intros.
+    right; intros.
+    elim church_rosser_theorem with (sort_term s) (prod T U).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (prod T U) x); auto with coc; intros.
     apply reduces_sort_sort with s (prod T U); auto with coc.
@@ -77,14 +81,15 @@ Implicit Types e f g : environment.
   Definition reduces_to_prod :
    forall t,
    strongly_normalizing t ->
-   {p : term * term | match p with
+   {p : term * term & match p with
                       | (u, v) => reduces t (prod u v)
-                      end} + {(forall u v, ~ convertible t (prod u v))}.
+                      end} + {(forall u v, convertible t (prod u v) -> False)}.
   Proof.
     intros t snt.
     elim compute_normal_form with (1 := snt); intros [s| n| T b| u v| T U] redt nt.
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (prod u v) (sort_term s); intros.
+    right; intros.
+    elim church_rosser_theorem with (prod u v) (sort_term s).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (sort_term s) x); auto with coc; intros.
     apply reduces_product_product with u v (sort_term s); auto with coc; intros.
@@ -92,8 +97,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (prod u v) (var n); intros.
+    right; intros.
+    elim church_rosser_theorem with (prod u v) (var n).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (var n) x); auto with coc; intros.
     apply reduces_product_product with u v (var n); auto with coc; intros.
@@ -101,8 +107,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (prod u v) (lam T b); intros.
+    right; intros.
+    elim church_rosser_theorem with (prod u v) (lam T b).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (lam T b) x); auto with coc; intros.
     apply reduces_product_product with u v (lam T b); auto with coc; intros.
@@ -110,8 +117,9 @@ Implicit Types e f g : environment.
 
     apply trans_convertible_convertible with t; auto with coc.
 
-    right; red in |- *; intros.
-    elim church_rosser_theorem with (prod u0 v0) (app u v); intros.
+    right; intros.
+    elim church_rosser_theorem with (prod u0 v0) (app u v).
+    intros x H0 H1.
     generalize H0.
     elim (reduces_normal (app u v) x); auto with coc; intros.
     apply reduces_product_product with u0 v0 (app u v); auto with coc; intros.
@@ -139,18 +147,18 @@ Section TypeChecker.
 
 (** Semantic explanation of type errors in an environment. *)
 (* meaning of errors *)
-  Inductive explanation : environment -> type_error -> Prop :=
+  Inductive explanation : environment -> type_error -> Type :=
     | expl_under :
         forall e t (err : type_error),
         explanation (t :: e) err -> explanation e (err_under t err)
     | expl_expected_type :
         forall e (m at_ et : term),
         has_type e m at_ ->
-        ~ has_type e m et ->
+        (has_type e m et -> False) ->
         free_db_below (length e) et -> explanation e (err_expected_type m at_ et)
     | expl_kind :
         forall e,
-        well_formed e -> (forall t, ~ has_type e (sort_term kind) t) -> explanation e err_kind_ill_typed
+        well_formed e -> (forall t, has_type e (sort_term kind) t -> False) -> explanation e err_kind_ill_typed
     | expl_db : forall e n, well_formed e -> length e <= n -> explanation e (err_db n)
     | expl_lam_kind :
         forall e (m : term) t,
@@ -158,15 +166,15 @@ Section TypeChecker.
     | expl_type :
         forall e (m : term) t,
         has_type e m t ->
-        (forall s, ~ has_type e m (sort_term s)) -> explanation e (err_not_a_type m t)
+        (forall s, has_type e m (sort_term s) -> False) -> explanation e (err_not_a_type m t)
     | Exp_fun :
         forall e (m : term) t,
         has_type e m t ->
-        (forall a b : term, ~ has_type e m (prod a b)) -> explanation e (err_not_a_fun m t)
+        (forall a b : term, has_type e m (prod a b) -> False) -> explanation e (err_not_a_fun m t)
     | expl_apply :
         forall e u v (a b tv : term),
         has_type e u (prod a b) ->
-        has_type e v tv -> ~ has_type e v a -> explanation e (err_apply u (prod a b) v tv).
+        has_type e v tv -> (has_type e v a -> False) -> explanation e (err_apply u (prod a b) v tv).
 
   Hint Resolve expl_under expl_expected_type expl_kind expl_db expl_lam_kind expl_type
     Exp_fun expl_apply: coc.
@@ -175,13 +183,13 @@ Section TypeChecker.
   Lemma explanation_well_formed : forall e (err : type_error), explanation e err -> well_formed e.
   Proof.
     simple induction 1; intros; auto with coc arith.
-    inversion_clear H1.
+    inversion_clear H0.
     apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
     apply has_type_well_formed with m at_; auto with coc arith.
 
     cut (well_formed (t :: e0)); intros.
-    inversion_clear H1.
+    inversion_clear H0.
     apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
     apply has_type_well_formed with m (sort_term kind); auto with coc arith.
@@ -222,10 +230,10 @@ Section TypeChecker.
 (** An inference error implies the term has no type. *)
   Lemma infer_error_no_type :
    forall (m : term) (err : type_error),
-   infer_error m err -> forall e, explanation e err -> forall t, ~ has_type e m t.
+   infer_error m err -> forall e, explanation e err -> forall t, has_type e m t -> False.
   Proof.
     simple induction 1; intros.
-    inversion_clear H0; red in |- *; intros.
+    revert t H4; inversion_clear H0; intros.
     apply inversion_has_type_abs with e m0 n0 t; intros; auto with coc arith.
     elim H2 with e (sort_term s1); auto with coc arith.
 
@@ -239,44 +247,43 @@ Section TypeChecker.
     elim H2 with e (sort_term s1); auto with coc arith.
 
     inversion_clear H3.
-    inversion_clear H0; red in |- *; intros.
+    revert t H4; inversion_clear H0; intros.
     apply inversion_has_type_abs with e T m0 t; intros; auto with coc arith.
     elim H2 with (T :: e) T0; auto with coc arith.
 
     apply inversion_has_type_prod with e T m0 t; intros; auto with coc arith.
     elim H2 with (T :: e) (sort_term s2); auto with coc arith.
 
-    inversion_clear H0; auto with coc arith.
+    inversion_clear H0; eauto with coc arith.
 
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_ref with e t n; intros; auto with coc arith.
     match goal with H : explanation _ (err_db _) |- _ => inversion_clear H end.
     match goal with Hle : _ <= _, Hnth : nth_error _ _ = Some _ |- _ =>
       apply nth_error_None in Hle; congruence end.
 
     inversion_clear H0.
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_abs with e T M t; intros; auto with coc arith.
     elim inversion_has_type_convertible_kind with (T :: e) T0 (sort_term s2); auto with coc arith.
     apply has_type_unique_sort with (T :: e) M; auto with coc arith.
 
     inversion_clear H0.
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_abs with e m0 n t0; intros; auto with coc arith.
-    elim H2 with s1; auto with coc arith.
+    elim H3 with s1; auto with coc arith.
 
     inversion_clear H0.
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_app with e m0 n t0; intros; auto with coc arith.
-    elim H2 with V Ur; auto with coc arith.
+    elim H3 with V Ur; auto with coc arith.
 
     inversion_clear H0.
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_app with e m0 n t; intros; auto with coc arith.
-    elim type_case with e m0 (prod a b); intros; auto with coc arith.
-    inversion_clear H7.
+    destruct (type_case e m0 (prod a b) H2) as [[x H7]|H7]; auto with coc arith.
     apply inversion_has_type_prod with e a b (sort_term x); intros; auto with coc arith.
-    apply H3.
+    apply H4.
     apply type_conv with V s1; auto with coc arith.
     apply inversion_convertible_product_left with Ur b.
     apply has_type_unique_sort with e m0; auto with coc arith.
@@ -284,15 +291,15 @@ Section TypeChecker.
     discriminate H7.
 
     inversion_clear H0.
-    red in |- *; intros.
+    intros.
     apply inversion_has_type_prod with e m0 n t0; intros; auto with coc arith.
-    elim H2 with s1; auto with coc arith.
+    elim H3 with s1; auto with coc arith.
 
     inversion_clear H0.
-    inversion_clear H1.
-    red in |- *; intros.
+    inversion_clear H2.
+    intros.
     apply inversion_has_type_prod with e m0 n t0; intros; auto with coc arith.
-    elim H2 with s2; auto with coc arith.
+    elim H3 with s2; auto with coc arith.
   Qed.
 
 
@@ -300,8 +307,8 @@ Section TypeChecker.
   Definition infer :
    forall e t,
    well_formed e ->
-   {T : term | has_type e t T} +
-   {err : type_error | explanation e err &  infer_error t err}.
+   {T : term & has_type e t T} +
+   {err : type_error & explanation e err &  infer_error t err}.
   Proof.
     do 2 intro.
     generalize t e.
@@ -313,7 +320,7 @@ Section TypeChecker.
     right.
     exists err_kind_ill_typed; auto with coc arith.
     apply expl_kind; intros; auto with coc arith.
-    apply inversion_has_type_kind.
+    apply inversion_has_type_kind with (1 := H).
 
     left.
     exists (sort_term kind).
@@ -372,7 +379,7 @@ Section TypeChecker.
     right.
     exists (err_not_a_type a T); auto with coc arith.
     apply expl_type; auto with coc arith.
-    red in |- *; intros.
+    intros.
     elim not_type with s.
     apply has_type_unique_sort with e a; auto with coc arith.
 
@@ -407,7 +414,7 @@ Section TypeChecker.
     right.
     exists (err_apply u (prod V Ur) v B); auto with coc arith.
     apply expl_apply; auto with coc arith.
-    red in |- *; intros.
+    intros.
     apply dom_not_conv.
     apply has_type_unique_sort with e v; auto with coc arith.
 
@@ -428,7 +435,7 @@ Section TypeChecker.
     right.
     exists (err_not_a_fun u T); auto with coc arith.
     apply Exp_fun; auto with coc arith.
-    red in |- *; intros.
+    intros.
     elim not_prod with a b.
     apply has_type_unique_sort with e u; auto with coc arith.
 
@@ -461,7 +468,7 @@ Section TypeChecker.
     exists (err_under a (err_not_a_type b B)); auto with coc arith.
     apply expl_under; auto with coc arith.
     apply expl_type; auto with coc arith.
-    red in |- *; intros.
+    intros.
     elim b_not_type with s0.
     apply has_type_unique_sort with (a :: e) b; auto with coc arith.
 
@@ -479,7 +486,7 @@ Section TypeChecker.
     right.
     exists (err_not_a_type a T); auto with coc arith.
     apply expl_type; auto with coc arith.
-    red in |- *; intros.
+    intros.
     elim a_not_type with s.
     apply has_type_unique_sort with e a; auto with coc arith.
 
@@ -507,15 +514,16 @@ Section TypeChecker.
 (** A check error implies the term does not have the given type. *)
   Lemma check_error_no_type :
    forall e (m : term) t (err : type_error),
-   check_error m t err -> explanation e err -> ~ has_type e m t.
+   check_error m t err -> explanation e err -> (has_type e m t -> False).
   Proof.
     simple destruct 1; intros.
-    apply infer_error_no_type with err0; auto with coc arith.
+    apply infer_error_no_type with (m := m) (err := err0) (e := e) (t := t); auto with coc arith.
 
-    red in |- *; intros.
-    elim type_case with e m t; intros; auto with coc arith.
-    inversion_clear H4.
-    elim infer_error_no_type with t err0 e (sort_term x); auto with coc arith.
+    destruct (type_case e m t H3) as [[x H4]|H4].
+    apply infer_error_no_type with (m := t) (err := err0) (e := e) (t := sort_term x);
+      auto with coc arith.
+
+    apply H1; assumption.
 
     inversion_clear H0; auto with coc arith.
   Qed.
@@ -525,7 +533,7 @@ Section TypeChecker.
   Definition check_type :
    forall e t (tp : term),
    well_formed e ->
-   {err : type_error | explanation e err &  check_error t tp err} + {has_type e t tp}.
+   {err : type_error & explanation e err &  check_error t tp err} + (has_type e t tp).
   Proof.
     intros.
     elim infer with e t; auto with coc arith.
@@ -541,7 +549,7 @@ Section TypeChecker.
     left.
     exists (err_expected_type t tp' tp); auto with coc.
     apply expl_expected_type; auto with coc arith.
-    red in |- *; intros; apply inf_not_kind.
+    intros; apply inf_not_kind.
     symmetry  in |- *.
     apply type_kind_not_convertible with e t; auto with coc arith.
     rewrite cast_kind; trivial.
@@ -575,7 +583,7 @@ Section TypeChecker.
     left.
     exists (err_expected_type t tp' tp); auto with coc arith.
     apply expl_expected_type; auto with coc arith.
-    red in |- *; intros; apply cast_err; apply has_type_unique_sort with e t;
+    intros; apply cast_err; apply has_type_unique_sort with e t;
      auto with coc arith.
 
     apply has_type_free_db_below with k; auto with coc arith.
@@ -606,12 +614,12 @@ Section TypeChecker.
 (** A declaration error prevents extending the environment. *)
   Lemma declare_error_not_well_formed :
    forall e t (err : type_error),
-   declare_error t err -> explanation e err -> ~ well_formed (t :: e).
+   declare_error t err -> explanation e err -> (well_formed (t :: e) -> False).
   Proof.
-    red in |- *.
     simple destruct 1; intros.
     inversion_clear H2.
-    elim infer_error_no_type with t err0 e (sort_term s); auto with coc arith.
+    apply infer_error_no_type with (m := t) (err := err0) (e := e) (t := sort_term s);
+      auto with coc arith.
 
     inversion_clear H0.
     inversion_clear H1.
@@ -623,7 +631,7 @@ Section TypeChecker.
   Definition add_type :
    forall e t,
    well_formed e ->
-   {err : type_error | explanation e err &  declare_error t err} + {well_formed (t :: e)}.
+   {err : type_error & explanation e err &  declare_error t err} + (well_formed (t :: e)).
   Proof.
     intros.
     elim infer with e t; auto with coc.
@@ -638,7 +646,7 @@ Section TypeChecker.
     left.
     exists (err_not_a_type t T); auto with coc.
     apply expl_type; auto with coc.
-    red in |- *; intros.
+    intros.
     elim not_sort with s.
     apply has_type_unique_sort with e t; auto with coc.
 
@@ -655,7 +663,7 @@ End TypeChecker.
 Section Decidabilite_typage.
 
 (** Decidability of well-formedness for environments. *)
-  Lemma decide_well_formed : forall e, {well_formed e} + {~ well_formed e}.
+  Lemma decide_well_formed : forall e, (well_formed e) + (well_formed e -> False).
   Proof.
     simple induction e; intros.
     left.
@@ -671,7 +679,7 @@ Section Decidabilite_typage.
     left; trivial.
 
     intros not_wf_l.
-    right; red in |- *; intros.
+    right; intros.
     apply not_wf_l.
     inversion_clear H0.
     apply has_type_well_formed with (1 := H1).
@@ -679,7 +687,7 @@ Section Decidabilite_typage.
 
 
 (** Decidability of typing judgments. *)
-  Lemma decide_type : forall e t (tp : term), {has_type e t tp} + {~ has_type e t tp}.
+  Lemma decide_type : forall e t (tp : term), (has_type e t tp) + (has_type e t tp -> False).
   Proof.
     intros.
     elim decide_well_formed with e.
@@ -692,7 +700,7 @@ Section Decidabilite_typage.
     left; trivial.
 
     intros not_wf_e.
-    right; red in |- *; intros.
+    right; intros.
     apply not_wf_e.
     apply has_type_well_formed with (1 := H).
   Qed.

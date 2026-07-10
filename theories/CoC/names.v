@@ -17,8 +17,8 @@
 From Stdlib Require Import Arith.
 From Stdlib Require Import Lia.
 
-From CoqInCoq Require Import list_utils.
-From CoqInCoq Require Export ml_types.
+From CoC Require Import list_utils.
+From CoC Require Export ml_types.
 
 
   (** Type of partial name lists. *)
@@ -193,6 +193,49 @@ Realizer [l](var_of_nat (find_free l O)).
     elim (find_free l 0); intros; auto with coc.
     exists (var_of_nat x); trivial.
   Defined.
+
+
+  (** Picks a display name from a hint list.  Returns the head hint when it is
+      fresh for [l] (so user-supplied names survive), otherwise a guaranteed-fresh
+      name from [find_free_var].  The second component is the unused tail of the
+      hints, so callers can thread hints left-to-right down a binder spine.
+
+      The returned name always carries a proof [~ In x l] — the exact contract of
+      [find_free_var] — so no naming choice can capture: freshness is guaranteed
+      by construction, independent of what the hints contain. *)
+  Definition pick_name (hints : list name) (l : partial_names)
+    : { x : name | ~ In x l } * list name.
+  Proof.
+    destruct hints as [| h rest].
+    - exact (find_free_var l, nil).
+    - destruct (in_dec name_dec h l).
+      + exact (find_free_var l, rest).
+      + exact (exist _ h n, rest).
+  Defined.
+
+  (** [pick_name] honours a fresh head hint: if [h] does not occur in [l], then
+      the chosen name is exactly [h] and the leftover is the tail [rest]. *)
+  Lemma pick_name_hint :
+   forall (h : name) (rest : list name) (l : partial_names),
+   ~ In h l ->
+   proj1_sig (fst (pick_name (h :: rest) l)) = h /\ snd (pick_name (h :: rest) l) = rest.
+  Proof.
+    intros h rest l Hnotin. simpl.
+    destruct (in_dec name_dec h l) as [Hin | Hni].
+    - contradiction.
+    - simpl. split; reflexivity.
+  Qed.
+
+  (** [pick_name] consumes at most the head of the hint list: the leftover is
+      either the full hint list (when empty) or its tail. *)
+  Lemma pick_name_leftover :
+   forall (hints : list name) (l : partial_names),
+   snd (pick_name hints l) = nil \/ snd (pick_name hints l) = tl hints.
+  Proof.
+    intros [| h rest] l; simpl.
+    - left; reflexivity.
+    - destruct (in_dec name_dec h l); simpl; right; reflexivity.
+  Qed.
 
 
   (** Uniqueness predicate: each name occurs at most once in the list. *)

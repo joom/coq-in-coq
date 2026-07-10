@@ -14,10 +14,10 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Export list_utils.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Export list_utils.
+From CoC Require Import terms.
 
   (* Kind skeletons *)
 
@@ -388,40 +388,42 @@ From CoqInCoq Require Import terms.
    T = sort_term kind ->
    classify_term t (classify_environment e) = knd (covariant_skeleton (classify_term t (classify_environment e))).
   Proof.
-    simple induction 1; intros.
-    simpl in |- *; auto with coc core arith datatypes.
-
-    simpl in |- *; auto with coc core arith datatypes.
-
-    elim H1; intros x0 Heq0 Hnth0.
-    destruct (well_formed_sort v e0 (skipn (S v) e0) eq_refl H0 x0 Hnth0) as [x1 Hx1].
-    assert (Hkind : x0 = sort_term kind) by
-      (assert (Hlift : lift (S v) x0 = sort_term kind) by (rewrite <- Heq0; exact H2);
-       destruct x0; simpl in Hlift; try discriminate; exact Hlift).
-    subst x0.
-    elim inversion_has_type_kind with (skipn (S v) e0) (sort_term x1); exact Hx1.
-
-    discriminate H6.
-
-    elim type_case with e0 u (prod V Ur); auto with coc core arith datatypes;
-     intros.
-    inversion_clear H5.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes.
-    intros.
-    elim inversion_has_type_kind with e0 (sort_term s2); auto with coc core arith datatypes.
-    elim H4.
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    discriminate H5.
-
-    simpl in H3.
-    simpl in |- *.
-    rewrite H3; auto with coc core arith datatypes.
-    elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
-
-    elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
-    elim H5; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros Heq.
+    - simpl in |- *; auto with coc core arith datatypes.
+    - simpl in |- *; auto with coc core arith datatypes.
+    - destruct Hitem as [x0 Heq0 Hnth0].
+      destruct (well_formed_sort v e0 (skipn (S v) e0) eq_refl Hwf0 x0 Hnth0) as [x1 Hx1].
+      assert (Hkind : x0 = sort_term kind) by
+        (assert (Hlift : lift (S v) x0 = sort_term kind) by (rewrite <- Heq0; exact Heq);
+         destruct x0; simpl in Hlift; try discriminate; exact Hlift).
+      subst x0.
+      elim inversion_has_type_kind with (skipn (S v) e0) (sort_term x1); exact Hx1.
+    - discriminate Heq.
+    - destruct (type_case e0 u0 (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+      apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+        intros s1' s2' HV HUr Hcv.
+      elim inversion_has_type_kind with e0 (sort_term s2'); auto with coc core arith datatypes.
+      rewrite <- Heq.
+      replace (sort_term s2') with (subst v0 (sort_term s2')); auto with coc core arith datatypes.
+      apply substitution with V; auto with coc core arith datatypes.
+    - injection Heq as Heqs2; subst s2.
+      simpl in |- *.
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHU.
+      rewrite (IHU eq_refl).
+      elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
+    - elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
+      rewrite <- Heq; exact Hs.
   Qed.
 
 
@@ -432,68 +434,74 @@ From CoqInCoq Require Import terms.
    has_type e T (sort_term kind) ->
    classify_term t (classify_environment e) = typ (type_skeleton (classify_term t (classify_environment e))).
   Proof.
-    simple induction 1; intros.
-    elim inversion_has_type_kind with e0 (sort_term kind); auto with coc core arith datatypes.
-
-    elim inversion_has_type_kind with e0 (sort_term kind); auto with coc core arith datatypes.
-
-    elim H1; intros x0 Heq0 Hnth0.
-    simpl in |- *.
-    assert (Hv : v < length e0) by
-      (apply (proj1 (nth_error_Some e0 v)); rewrite Hnth0; discriminate).
-    elim nth_classify_environment with x0 e0 (skipn (S v) e0) v; auto with coc core arith datatypes.
-    elim classify_skipn with (S v) (classify_environment e0) (classify_environment (skipn (S v) e0)) x0;
-     [| apply classify_environment_skipn; [reflexivity | lia]].
-    elim Heq0.
-    rewrite (class_kind e0 t0 (sort_term kind)); auto with coc core arith datatypes.
-
-    simpl in |- *.
-    simpl in H5.
-    rewrite H5.
-    elim (classify_term T0 (classify_environment e0)); intros; auto with coc core arith datatypes.
-
-    apply inversion_has_type_prod with e0 T0 U (sort_term kind); intros;
-     auto with coc core arith datatypes.
-    elim convertible_sort with s3 kind; auto with coc core arith datatypes.
-
-    simpl in |- *.
-    elim type_case with e0 u (prod V Ur); auto with coc core arith datatypes;
-     intros.
-    inversion_clear H5.
-    rewrite H3.
-    case (type_skeleton (classify_term u (classify_environment e0)));
-     auto with coc core arith datatypes.
-
-    elim (classify_term v (classify_environment e0)); auto with coc core arith datatypes.
-
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); intros;
-     auto with coc core arith datatypes.
-    apply type_prod with s1; auto with coc core arith datatypes.
-    elim convertible_sort with s2 kind; auto with coc core arith datatypes.
-    apply has_type_unique_sort with e0 (subst v Ur); auto with coc core arith datatypes.
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    discriminate H5.
-
-    simpl in |- *.
-    simpl in H3.
-    rewrite H3; auto with coc core arith datatypes.
-    replace (sort_term s2) with (lift 1 (sort_term s2)); auto with coc core arith datatypes.
-    replace (sort_term kind) with (lift 1 (sort_term kind));
-     auto with coc core arith datatypes.
-    apply weakening; auto with coc core arith datatypes.
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply H1.
-    elim type_case with e0 t0 U; auto with coc core arith datatypes; intros.
-    inversion_clear H6.
-    elim convertible_sort with x kind; auto with coc core arith datatypes.
-    apply has_type_convertible_convertible with e0 U V; auto with coc core arith datatypes.
-
-    elim inversion_has_type_convertible_kind with e0 V (sort_term kind);
-     auto with coc core arith datatypes.
-    elim H6; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros HtK.
+    - elim inversion_has_type_kind with e0 (sort_term kind); auto with coc core arith datatypes.
+    - elim inversion_has_type_kind with e0 (sort_term kind); auto with coc core arith datatypes.
+    - destruct Hitem as [x0 Heq0 Hnth0].
+      simpl in |- *.
+      assert (Hvl : v < length e0) by
+        (apply (proj1 (nth_error_Some e0 v)); rewrite Hnth0; discriminate).
+      elim nth_classify_environment with x0 e0 (skipn (S v) e0) v; auto with coc core arith datatypes.
+      elim classify_skipn with (S v) (classify_environment e0) (classify_environment (skipn (S v) e0)) x0;
+       [| apply classify_environment_skipn; [reflexivity | lia]].
+      elim Heq0.
+      rewrite (class_kind e0 t0 (sort_term kind)); auto with coc core arith datatypes.
+    - simpl in |- *.
+      apply inversion_has_type_prod with e0 T0 U0 (sort_term kind); auto with coc core arith datatypes;
+        intros s1' s2' HT1 HU1 Hcv.
+      assert (Heqk : s2' = kind) by (apply convertible_sort; auto with coc core arith datatypes).
+      subst s2'.
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHM.
+      rewrite (IHM HU1).
+      elim (classify_term T0 (classify_environment e0)); intros; auto with coc core arith datatypes.
+    - simpl in |- *.
+      destruct (type_case e0 u0 (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+      apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+        intros s1' s2' HV HUr Hcvx.
+      assert (HsubUr : has_type e0 (subst v0 Ur) (sort_term s2')).
+      { replace (sort_term s2') with (subst v0 (sort_term s2'));
+          auto with coc core arith datatypes.
+        apply substitution with V; auto with coc core arith datatypes. }
+      assert (Heqk1 : s2' = kind)
+        by (apply convertible_sort; apply (has_type_unique_sort e0 (subst v0 Ur) (sort_term s2') HsubUr); auto with coc core arith datatypes).
+      subst s2'.
+      assert (Heqx : x = kind) by
+        (apply convertible_sort; apply sym_convertible; auto with coc core arith datatypes).
+      subst x.
+      rewrite (IHu Hx).
+      case (type_skeleton (classify_term u0 (classify_environment e0)));
+        auto with coc core arith datatypes.
+      intros; elim (classify_term v0 (classify_environment e0)); auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (T0 :: e0)) by (apply wf_var with s1; auto with coc core arith datatypes).
+      assert (HtK' : has_type (T0 :: e0) (sort_term s2) (sort_term kind)).
+      { replace (sort_term s2) with (lift 1 (sort_term s2)); auto with coc core arith datatypes.
+        replace (sort_term kind) with (lift 1 (sort_term kind)); auto with coc core arith datatypes.
+        apply weakening; auto with coc core arith datatypes. }
+      simpl in |- *.
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHU.
+      rewrite (IHU HtK').
+      simpl; auto with coc core arith datatypes.
+    - apply IHt0.
+      destruct (type_case e0 t0 U0 Ht0) as [[x Hx] | Hbad].
+      + assert (Heqxk : x = kind).
+        { apply convertible_sort.
+          apply (has_type_convertible_convertible e0 U0 (sort_term x) V (sort_term kind) Hx HtK Hconv). }
+        rewrite <- Heqxk; auto with coc core arith datatypes.
+      + elim inversion_has_type_convertible_kind with e0 V (sort_term kind); auto with coc core arith datatypes.
+        rewrite <- Hbad; apply sym_convertible; auto with coc core arith datatypes.
   Qed.
 
 
@@ -523,61 +531,73 @@ From CoqInCoq Require Import terms.
    forall (e : environment) (t T : term) (s : sort),
    is_prop s -> has_type e t T -> has_type e T (sort_term s) -> classify_term t (classify_environment e) = trm.
   Proof.
-    intros e t T s is_p.
-    simple induction 1; intros.
-    elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
-
-    elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
-
-    elim H1; intros x0 Heq0 Hnth0.
-    simpl in |- *.
-    assert (Hv : v < length e0) by
-      (apply (proj1 (nth_error_Some e0 v)); rewrite Hnth0; discriminate).
-    elim nth_classify_environment with x0 e0 (skipn (S v) e0) v; auto with coc core arith datatypes.
-    elim classify_skipn with (S v) (classify_environment e0) (classify_environment (skipn (S v) e0)) x0;
-     [| apply classify_environment_skipn; [reflexivity | lia]].
-    elim Heq0.
-    rewrite (class_type e0 t0 (sort_term s)); auto with coc core arith datatypes.
-    apply type_prop_set; auto with coc core arith datatypes.
-
-    simpl in |- *.
-    simpl in H5.
-    rewrite H5; auto with coc core arith datatypes.
-    apply inversion_has_type_prod with e0 T0 U (sort_term s); intros;
-     auto with coc core arith datatypes.
-    elim convertible_sort with s3 s; auto with coc core arith datatypes.
-
-    simpl in |- *.
-    elim type_case with e0 u (prod V Ur); auto with coc core arith datatypes;
-     intros.
-    inversion_clear H5.
-    rewrite H3; auto with coc core arith datatypes.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); intros;
-     auto with coc core arith datatypes.
-    apply type_prod with s1; auto with coc core arith datatypes.
-    elim convertible_sort with s2 s; auto with coc core arith datatypes.
-    apply has_type_unique_sort with e0 (subst v Ur); auto with coc core arith datatypes.
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    discriminate H5.
-
-    simpl in |- *.
-    simpl in H3.
-    rewrite H3; auto with coc core arith datatypes.
-    replace (sort_term s2) with (lift 1 (sort_term s2)); auto with coc core arith datatypes.
-    replace (sort_term s) with (lift 1 (sort_term s)); auto with coc core arith datatypes.
-    apply weakening; auto with coc core arith datatypes.
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply H1.
-    elim type_case with e0 t0 U; auto with coc core arith datatypes; intros.
-    inversion_clear H6.
-    elim convertible_sort with x s; auto with coc core arith datatypes.
-    apply has_type_convertible_convertible with e0 U V; auto with coc core arith datatypes.
-
-    elim inversion_has_type_convertible_kind with e0 V (sort_term s); auto with coc core arith datatypes.
-    elim H6; auto with coc core arith datatypes.
+    intros e t T s is_p Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s' Hs IHs ];
+      intros HtK.
+    - elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
+    - elim inversion_has_type_kind with e0 (sort_term s); auto with coc core arith datatypes.
+    - destruct Hitem as [x0 Heq0 Hnth0].
+      simpl in |- *.
+      assert (Hvl : v < length e0) by
+        (apply (proj1 (nth_error_Some e0 v)); rewrite Hnth0; discriminate).
+      elim nth_classify_environment with x0 e0 (skipn (S v) e0) v; auto with coc core arith datatypes.
+      elim classify_skipn with (S v) (classify_environment e0) (classify_environment (skipn (S v) e0)) x0;
+       [| apply classify_environment_skipn; [reflexivity | lia]].
+      elim Heq0.
+      rewrite (class_type e0 t0 (sort_term s)); auto with coc core arith datatypes.
+      apply type_prop_set; auto with coc core arith datatypes.
+    - simpl in |- *.
+      apply inversion_has_type_prod with e0 T0 U0 (sort_term s); auto with coc core arith datatypes;
+        intros s1' s2' HT1 HU1 Hcv.
+      assert (Heqk : s2' = s) by (apply convertible_sort; auto with coc core arith datatypes).
+      subst s2'.
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHM.
+      rewrite (IHM HU1).
+      elim (classify_term T0 (classify_environment e0)); intros; auto with coc core arith datatypes.
+    - simpl in |- *.
+      destruct (type_case e0 u0 (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+      apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+        intros s1' s2' HV HUr Hcvx.
+      assert (HsubUr : has_type e0 (subst v0 Ur) (sort_term s2')).
+      { replace (sort_term s2') with (subst v0 (sort_term s2'));
+          auto with coc core arith datatypes.
+        apply substitution with V; auto with coc core arith datatypes. }
+      assert (Heqk1 : s2' = s)
+        by (apply convertible_sort; apply (has_type_unique_sort e0 (subst v0 Ur) (sort_term s2') HsubUr); auto with coc core arith datatypes).
+      subst s2'.
+      assert (Heqx : x = s) by
+        (apply convertible_sort; apply sym_convertible; auto with coc core arith datatypes).
+      subst x.
+      rewrite (IHu Hx).
+      elim (classify_term v0 (classify_environment e0)); auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (T0 :: e0)) by (apply wf_var with s1; auto with coc core arith datatypes).
+      assert (HtK' : has_type (T0 :: e0) (sort_term s2) (sort_term s)).
+      { replace (sort_term s2) with (lift 1 (sort_term s2)); auto with coc core arith datatypes.
+        replace (sort_term s) with (lift 1 (sort_term s)); auto with coc core arith datatypes.
+        apply weakening; auto with coc core arith datatypes. }
+      simpl in |- *.
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHU.
+      rewrite (IHU HtK').
+      simpl; auto with coc core arith datatypes.
+    - apply IHt0.
+      destruct (type_case e0 t0 U0 Ht0) as [[x Hx] | Hbad].
+      + assert (Heqxk : x = s).
+        { apply convertible_sort.
+          apply (has_type_convertible_convertible e0 U0 (sort_term x) V (sort_term s) Hx HtK Hconv). }
+        rewrite <- Heqxk; auto with coc core arith datatypes.
+      + elim inversion_has_type_convertible_kind with e0 V (sort_term s); auto with coc core arith datatypes.
+        rewrite <- Hbad; apply sym_convertible; auto with coc core arith datatypes.
   Qed.
 
 
@@ -588,21 +608,17 @@ From CoqInCoq Require Import terms.
    forall K : term,
    has_type e T K -> adjacent_class (classify_term t (classify_environment e)) (classify_term T (classify_environment e)).
   Proof.
-    intros.
-    elim type_case with e t T; intros; auto with coc core arith datatypes.
-    elim H1.
-    intro x; elim x using sort_induction; intros.
-    rewrite (class_kind e T (sort_term kind)); auto with coc core arith datatypes.
-    rewrite (class_type e t T); auto with coc core arith datatypes.
-
-    rewrite (class_type e T (sort_term s)); auto with coc core arith datatypes.
-    rewrite (class_term e t T s); auto with coc core arith datatypes.
-
-    apply type_prop_set; trivial.
-    apply has_type_well_formed with t T; auto with coc core arith datatypes.
-
-    elim inversion_has_type_kind with e K; auto with coc core arith datatypes.
-    elim H1; auto with coc core arith datatypes.
+    intros e t T Hty K HK.
+    destruct (type_case e t T Hty) as [[x Hx] | Hbad].
+    - generalize Hx; clear Hx; pattern x; apply sort_induction; intros.
+      + rewrite (class_kind e T (sort_term kind)); auto with coc core arith datatypes.
+        rewrite (class_type e t T); auto with coc core arith datatypes.
+      + rewrite (class_type e T (sort_term s)); auto with coc core arith datatypes.
+        rewrite (class_term e t T s); auto with coc core arith datatypes.
+        apply type_prop_set; trivial.
+        apply has_type_well_formed with t T; auto with coc core arith datatypes.
+    - elim inversion_has_type_kind with e K; auto with coc core arith datatypes.
+      rewrite <- Hbad; auto with coc core arith datatypes.
   Qed.
 
 
@@ -613,87 +629,123 @@ From CoqInCoq Require Import terms.
    forall B : term,
    reduces_once A B -> loose_eqc (classify_term A (classify_environment e)) (classify_term B (classify_environment e)).
   Proof.
-    simple induction 1; intros; auto with coc core arith datatypes.
-    inversion_clear H1.
-
-    inversion_clear H1.
-
-    inversion_clear H2.
-
-    inversion_clear H6.
-    simpl in |- *.
-    elim
-     loose_eq_class_stable
-      with
-        M
-        (cons (classify_term T0 (classify_environment e0)) (classify_environment e0))
-        (cons (classify_term M' (classify_environment e0)) (classify_environment e0));
-     auto with coc core arith datatypes.
-    elim H1 with M'; auto with coc core arith datatypes.
-
-    simpl in |- *.
-    replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
-     (classify_environment (T0 :: e0)); trivial.
-    elim H5 with M'; auto with coc core arith datatypes.
-    elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
-
-    generalize H2 H3; clear H2 H3.
-    inversion_clear H4; intros.
-    elim type_case with e0 (lam T0 M) (prod V Ur); intros;
-     auto with coc core arith datatypes.
-    inversion_clear H4.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); intros;
-     auto with coc core arith datatypes.
-    apply inversion_has_type_abs with e0 T0 M (prod V Ur); intros;
-     auto with coc core arith datatypes.
-    simpl in |- *.
-    apply loose_eq_class_trans with (classify_term M (classify_environment (T0 :: e0))).
-    replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
-     (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
-    elim classify_term_sound with (T0 :: e0) M T1 (sort_term s3); intros;
-     auto with coc core arith datatypes.
-    elim (classify_term T0 (classify_environment e0)); intros.
-    elim s4; elim (classify_term v (classify_environment e0)); auto with coc core arith datatypes.
-
-    elim s4; elim (classify_term v (classify_environment e0)); auto with coc core arith datatypes.
-
-    elim (classify_term v (classify_environment e0)); auto with coc core arith datatypes.
-
-    unfold subst in |- *.
-    apply classify_term_subst with (classify_term T0 (classify_environment e0)) (classify_environment e0);
-     auto with coc core arith datatypes.
-    apply classify_term_sound with (sort_term s0); auto with coc core arith datatypes.
-    apply type_conv with V s0; auto with coc core arith datatypes.
-    apply inversion_convertible_product_left with Ur T1; auto with coc core arith datatypes.
-
-    simpl in |- *; auto with coc core arith datatypes.
-
-    discriminate H4.
-
-    simpl in |- *.
-    elim H4 with N1; intros; auto with coc core arith datatypes.
-    case s1; case s2; elim (classify_term v (classify_environment e0));
-     auto with coc core arith datatypes.
-
-    simpl in |- *.
-    elim (classify_term u (classify_environment e0)); intros; auto with coc core arith datatypes.
-    case s; elim H1 with N2; auto with coc core arith datatypes.
-
-    inversion_clear H4.
-    simpl in |- *.
-    elim
-     loose_eq_class_stable
-      with
-        U
-        (cons (classify_term T0 (classify_environment e0)) (classify_environment e0))
-        (cons (classify_term N1 (classify_environment e0)) (classify_environment e0));
-     auto with coc core arith datatypes.
-    elim H1 with N1; auto with coc core arith datatypes.
-
-    simpl in |- *.
-    replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
-     (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
-    elim H3 with N2; auto with coc core arith datatypes.
+    intros e A T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros B Hstep.
+    - inversion_clear Hstep.
+    - inversion_clear Hstep.
+    - inversion_clear Hstep.
+    - inversion Hstep as
+        [ | T1 T1' HstepT N1 Heq1 Heq2 | M1 M1' HstepM N1 Heq1 Heq2 | | | | ]; subst.
+      + (* domain reduces *)
+        simpl in |- *.
+        assert (Hstable : loose_eqc
+                  (classify_term M0 (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)))
+                  (classify_term M0 (cons (classify_term T1' (classify_environment e0)) (classify_environment e0)))).
+        { apply loose_eq_class_stable.
+          constructor; [ apply IHT; auto with coc core arith datatypes | ].
+          clear; induction (classify_environment e0); constructor; auto with coc core arith datatypes. }
+        destruct
+          (classify_term M0 (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)))
+          eqn:E1;
+        destruct
+          (classify_term M0 (cons (classify_term T1' (classify_environment e0)) (classify_environment e0)))
+          eqn:E2;
+        inversion Hstable; subst; simpl;
+        try (destruct (classify_term T0 (classify_environment e0));
+             destruct (classify_term T1' (classify_environment e0)));
+        auto with coc core arith datatypes.
+      + (* body reduces *)
+        simpl in |- *.
+        replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
+          (classify_environment (T0 :: e0)); trivial.
+        elim (IHM M1' HstepM); intros; auto with coc core arith datatypes.
+        elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
+    - inversion Hstep as
+        [ M1 N1 T1 Heq1 Heq2
+        | | | u1 u1' HstepU M2 Heq1 Heq2 | v1 v1' HstepV M2 Heq1 Heq2 | | ]; subst.
+      + (* beta: u0 must be a lambda *)
+        destruct (type_case e0 (lam T1 M1) (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+        apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+          intros s1' s2' HV HUr Hcv.
+        apply inversion_has_type_abs with e0 T1 M1 (prod V Ur); auto with coc core arith datatypes;
+          intros s1'' s2'' T1' HT1 HM1 HT1' Hcv2.
+        simpl in |- *.
+        change (classify_environment (T1 :: e0))
+          with (classify_term T1 (classify_environment e0) :: classify_environment e0).
+        apply loose_eq_class_trans
+          with (classify_term M1 (cons (classify_term T1 (classify_environment e0)) (classify_environment e0))).
+        * pose proof (classify_term_sound (T1 :: e0) M1 T1' HM1 (sort_term s2'') HT1') as Hadj.
+          change (classify_environment (T1 :: e0))
+            with (classify_term T1 (classify_environment e0) :: classify_environment e0)
+            in Hadj.
+          destruct (classify_term M1 (cons (classify_term T1 (classify_environment e0)) (classify_environment e0)))
+            eqn:EM1;
+          destruct (classify_term T1' (cons (classify_term T1 (classify_environment e0)) (classify_environment e0)))
+            eqn:ET1';
+          try (inversion Hadj; fail);
+          destruct (classify_term T1 (classify_environment e0)) eqn:ET1;
+          simpl;
+          match goal with
+          | |- context [ match ?s0 with prop_skel => _ | prod_skel _ _ => _ end ] =>
+              destruct s0
+          | _ => idtac
+          end;
+          simpl;
+          try (destruct (classify_term v0 (classify_environment e0)); constructor);
+          auto with coc core arith datatypes.
+        * unfold subst in |- *.
+          apply classify_term_subst
+            with (classify_term T1 (classify_environment e0)) (classify_environment e0);
+            auto with coc core arith datatypes.
+          apply classify_term_sound with (sort_term s1''); auto with coc core arith datatypes.
+          apply type_conv with V s1''; auto with coc core arith datatypes.
+          apply sym_convertible.
+          apply inversion_convertible_product_left with T1' Ur; auto with coc core arith datatypes.
+      + (* function reduces *)
+        simpl in |- *.
+        elim (IHu u1' HstepU); intros; auto with coc core arith datatypes.
+        case s1; case s2; elim (classify_term v0 (classify_environment e0));
+          auto with coc core arith datatypes.
+      + (* argument reduces *)
+        simpl in |- *.
+        elim (classify_term u0 (classify_environment e0)); intros; auto with coc core arith datatypes.
+        destruct s; auto with coc core arith datatypes.
+        elim (IHv v1' HstepV); auto with coc core arith datatypes.
+    - inversion Hstep as
+        [ | | | | | T1 T1' HstepT U1 Heq1 Heq2 | U1 U1' HstepU T1 Heq1 Heq2 ]; subst.
+      + (* domain reduces *)
+        simpl in |- *.
+        assert (HTrel : loose_eqc
+                  (classify_term T0 (classify_environment e0))
+                  (classify_term T1' (classify_environment e0)))
+          by (apply IHT; auto with coc core arith datatypes).
+        assert (Hstable : loose_eqc
+                  (classify_term U0 (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)))
+                  (classify_term U0 (cons (classify_term T1' (classify_environment e0)) (classify_environment e0)))).
+        { apply loose_eq_class_stable.
+          constructor; [ exact HTrel | ].
+          clear; induction (classify_environment e0); constructor; auto with coc core arith datatypes. }
+        destruct (classify_term U0 (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)))
+          eqn:EU1;
+        destruct (classify_term U0 (cons (classify_term T1' (classify_environment e0)) (classify_environment e0)))
+          eqn:EU2;
+        destruct (classify_term T0 (classify_environment e0)) eqn:ET1;
+        destruct (classify_term T1' (classify_environment e0)) eqn:ET2;
+        inversion Hstable; subst; inversion HTrel; subst; simpl; auto with coc core arith datatypes.
+      + (* codomain reduces *)
+        simpl in |- *.
+        replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
+          (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
+        elim (IHU U1' HstepU); auto with coc core arith datatypes.
+    - apply IHt0; auto with coc core arith datatypes.
   Qed.
 
 
@@ -704,13 +756,13 @@ From CoqInCoq Require Import terms.
    forall (e : environment) (K : term),
    has_type e T K -> loose_eqc (classify_term T (classify_environment e)) (classify_term U (classify_environment e)).
   Proof.
-    intros T U H; induction H; intros; auto with coc core arith datatypes.
-    apply loose_eq_class_trans with (classify_term y (classify_environment e));
-     auto with coc core arith datatypes.
-    apply IHclos_refl_trans_n1 with K; auto with coc core arith datatypes.
-
-    apply classify_term_reduces_once with K; auto with coc core arith datatypes.
-    apply subject_reduction_theorem with T; auto with coc core arith datatypes.
+    intros T U H.
+    induction H as [ M0 | M0 P0 N0 Hstep0 Hred0 IH0 ]; intros e K Hty.
+    - auto with coc core arith datatypes.
+    - apply loose_eq_class_trans with (classify_term P0 (classify_environment e)).
+      + apply (IH0 e K Hty).
+      + apply classify_term_reduces_once with K; auto with coc core arith datatypes.
+        apply subject_reduction_theorem with M0; auto with coc core arith datatypes.
   Qed.
 
   (** Convertible terms have loosely equal classes. *)
@@ -720,12 +772,13 @@ From CoqInCoq Require Import terms.
    has_type e U K2 ->
    convertible T U -> loose_eqc (classify_term T (classify_environment e)) (classify_term U (classify_environment e)).
   Proof.
-    intros.
-    elim church_rosser_theorem with T U; intros; auto with coc core arith datatypes.
+    intros e T U K1 K2 HtyT HtyU Hconv.
+    destruct (church_rosser_theorem T U Hconv) as [x Hx1 Hx2].
     apply loose_eq_class_trans with (classify_term x (classify_environment e)).
-    apply classify_term_reduces with K1; auto with coc core arith datatypes.
-
-    elim classify_term_reduces with U x e K2; auto with coc core arith datatypes.
+    - apply classify_term_reduces with K1; auto with coc core arith datatypes.
+    - assert (Hloose : loose_eqc (classify_term U (classify_environment e)) (classify_term x (classify_environment e)))
+        by (apply classify_term_reduces with K2; auto with coc core arith datatypes).
+      destruct Hloose; constructor.
   Qed.
 
 
@@ -754,143 +807,135 @@ From CoqInCoq Require Import terms.
    has_type e t T ->
    covariant_skeleton (classify_term T (classify_environment e)) = type_skeleton (classify_term t (classify_environment e)).
   Proof.
-    simple induction 1; intros; auto with coc core arith datatypes.
-    inversion_clear H1.
-    rewrite H2.
-    simpl in |- *.
-    apply skeleton_var_helper; auto.
-
-    simpl in |- *.
-    replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
-     (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
-    rewrite
-     (commute_case_skeleton _ _ covariant_skeleton)
-                           with
-                           (bK :=
-                             fun s =>
-                             match classify_term T0 (classify_environment e0) with
-                             | trm => knd s
-                             | typ _ => knd s
-                             | knd s0 => knd (prod_skel s0 s)
-                             end).
-    rewrite
-     (commute_case_skeleton _ _ type_skeleton)
-                            with
-                            (bT :=
-                              fun s =>
-                              match classify_term T0 (classify_environment e0) with
-                              | trm => typ s
-                              | typ _ => typ s
-                              | knd s0 => typ (prod_skel s0 s)
-                              end)
-                           (bK := fun s : skeleton => knd prop_skel).
-    simpl in |- *.
-    replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
-     (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
-    pattern (classify_term M (classify_environment (T0 :: e0))) at 1,
-     (classify_term U (classify_environment (T0 :: e0))) at 1 in |- *.
-    elim classify_term_sound with (T0 :: e0) M U (sort_term s2); intros;
-     auto with coc core arith datatypes.
-    rewrite
-     (commute_case_skeleton _ _ covariant_skeleton)
-                           with
-                           (bT :=
-                             fun s : skeleton =>
-                             knd (covariant_skeleton (classify_term U (classify_environment (T0 :: e0)))))
-                          (bK :=
-                            fun s =>
-                            knd
-                              (prod_skel s
-                                 (covariant_skeleton (classify_term U (classify_environment (T0 :: e0)))))).
-    rewrite
-     (commute_case_skeleton _ _ type_skeleton)
-                            with
-                            (bT :=
-                              fun s : skeleton =>
-                              typ
-                                (type_skeleton (classify_term M (classify_environment (T0 :: e0)))))
-                           (bK :=
-                             fun s =>
-                             typ
-                               (prod_skel s
-                                  (type_skeleton
-                                     (classify_term M (classify_environment (T0 :: e0)))))).
-    elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
-    elim H5; auto with coc core arith datatypes.
-
-    elim type_case with e0 u (prod V Ur); intros;
-     auto with coc core arith datatypes.
-    inversion_clear H4.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); intros;
-     auto with coc core arith datatypes.
-    unfold subst in |- *.
-    generalize H3.
-    cut (adjacent_class (classify_term u (classify_environment e0)) (classify_term (prod V Ur) (classify_environment e0))).
-    simpl in |- *.
-    elim
-     classify_term_subst
-      with
-        (classify_term V (classify_environment e0))
-        (classify_environment e0)
-        v
-        Ur
-        0
-        (classify_environment e0)
-        (cons (classify_term V (classify_environment e0)) (classify_environment e0));
-     simpl in |- *; auto with coc core arith datatypes.
-    intros.
-    inversion_clear H8.
-
-    intros.
-    inversion_clear H8.
-    auto with coc core arith datatypes.
-
-    elim classify_term_sound with e0 v V (sort_term s1); simpl in |- *; intros;
-     auto with coc core arith datatypes.
-    rewrite H9.
-    inversion_clear H8; auto with coc core arith datatypes.
-    elim s3; auto with coc core arith datatypes.
-
-    generalize H9.
-    inversion_clear H8; intros; auto with coc core arith datatypes.
-    simpl in H8.
-    elim H8; auto with coc core arith datatypes.
-
-    apply classify_term_sound with (sort_term s1); auto with coc core arith datatypes.
-
-    apply classify_term_sound with (sort_term x); auto with coc core arith datatypes.
-
-    discriminate H4.
-
-    simpl in |- *.
-    simpl in H3.
-    simpl in H1.
-    rewrite
-     (commute_case_skeleton _ _ type_skeleton)
-                            with
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ].
+    - auto with coc core arith datatypes.
+    - auto with coc core arith datatypes.
+    - destruct Hitem as [x Heq Hnth].
+      rewrite Heq.
+      simpl in |- *.
+      apply skeleton_var_helper; auto.
+    - simpl in |- *.
+      replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
+       (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
+      rewrite
+       (commute_case_skeleton _ _ covariant_skeleton)
+                             with
+                             (bK :=
+                               fun s0 =>
+                               match classify_term T0 (classify_environment e0) with
+                               | trm => knd s0
+                               | typ _ => knd s0
+                               | knd s3 => knd (prod_skel s3 s0)
+                               end).
+      rewrite
+       (commute_case_skeleton _ _ type_skeleton)
+                              with
+                              (bT :=
+                                fun s0 =>
+                                match classify_term T0 (classify_environment e0) with
+                                | trm => typ s0
+                                | typ _ => typ s0
+                                | knd s3 => typ (prod_skel s3 s0)
+                                end)
+                             (bK := fun s0 : skeleton => knd prop_skel).
+      simpl in |- *.
+      replace (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)) with
+       (classify_environment (T0 :: e0)); auto with coc core arith datatypes.
+      pattern (classify_term M0 (classify_environment (T0 :: e0))) at 1,
+       (classify_term U0 (classify_environment (T0 :: e0))) at 1 in |- *.
+      elim (classify_term_sound (T0 :: e0) M0 U0 HM (sort_term s2) HU); intros;
+        auto with coc core arith datatypes.
+      rewrite
+       (commute_case_skeleton _ _ covariant_skeleton)
+                             with
+                             (bT :=
+                               fun s0 : skeleton =>
+                               knd (covariant_skeleton (classify_term U0 (classify_environment (T0 :: e0)))))
                             (bK :=
-                              fun s =>
-                              match classify_term T0 (classify_environment e0) with
-                              | trm => knd s
-                              | typ _ => knd s
-                              | knd s0 => knd (prod_skel s0 s)
-                              end).
-    simpl in |- *.
-    elim H3.
-    elim (classify_term U (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)));
-     auto with coc core arith datatypes.
-    elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
-
-    elim H1.
-    elim classify_term_convertible with e0 U V (sort_term s) (sort_term s);
-     auto with coc core arith datatypes.
-    elim type_case with e0 t0 U; auto with coc core arith datatypes; intros.
-    inversion_clear H5.
-    elim convertible_sort with x s; auto with coc core arith datatypes.
-    apply has_type_convertible_convertible with e0 U V; auto with coc core arith datatypes.
-
-    elim inversion_has_type_convertible_kind with e0 V (sort_term s); auto with coc core arith datatypes.
-    elim H5; auto with coc core arith datatypes.
+                              fun s0 =>
+                              knd
+                                (prod_skel s0
+                                   (covariant_skeleton (classify_term U0 (classify_environment (T0 :: e0)))))).
+      rewrite
+       (commute_case_skeleton _ _ type_skeleton)
+                              with
+                              (bT :=
+                                fun s0 : skeleton =>
+                                typ
+                                  (type_skeleton (classify_term M0 (classify_environment (T0 :: e0)))))
+                             (bK :=
+                               fun s0 =>
+                               typ
+                                 (prod_skel s0
+                                    (type_skeleton
+                                       (classify_term M0 (classify_environment (T0 :: e0)))))).
+      change (classify_environment (T0 :: e0))
+        with (classify_term T0 (classify_environment e0) :: classify_environment e0)
+        in IHM.
+      elim (classify_term T0 (classify_environment e0)); simpl; intros;
+        try rewrite IHM; auto with coc core arith datatypes.
+    - destruct (type_case e0 u0 (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+      apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+        intros s1' s2' HV HUr Hcv.
+      unfold subst in |- *.
+      generalize IHu.
+      cut (adjacent_class (classify_term u0 (classify_environment e0))
+             (classify_term (prod V Ur) (classify_environment e0))).
+      simpl in |- *.
+      elim classify_term_subst with
+        (classify_term V (classify_environment e0))
+        (classify_environment e0) v0 Ur 0 (classify_environment e0)
+        (cons (classify_term V (classify_environment e0)) (classify_environment e0));
+        simpl in |- *; auto with coc core arith datatypes.
+      + intros Hadj Heq; inversion Hadj.
+      + intros sk1 sk2 Hadj Heq; inversion_clear Hadj; auto with coc core arith datatypes.
+      + intros sk Hadj Hcov.
+        pose proof (classify_term_sound e0 v0 V Hv (sort_term s1') HV) as Hav.
+        destruct (classify_term V (classify_environment e0)) eqn:EV;
+          destruct (classify_term u0 (classify_environment e0)) eqn:EU;
+          destruct (classify_term v0 (classify_environment e0)) eqn:EVv;
+          simpl in *; try (inversion Hadj; fail); try (inversion Hav; fail);
+          try congruence; auto with coc core arith datatypes.
+        { destruct s0; simpl in *; congruence. }
+        { rewrite <- Hcov; simpl; auto with coc core arith datatypes. }
+      + apply classify_term_sound with (sort_term s1'); auto with coc core arith datatypes.
+      + apply classify_term_sound with (sort_term x); auto with coc core arith datatypes.
+    - simpl in |- *.
+      simpl in IHU.
+      simpl in IHT.
+      rewrite
+       (commute_case_skeleton _ _ type_skeleton)
+                              with
+                              (bK :=
+                                fun s0 =>
+                                match classify_term T0 (classify_environment e0) with
+                                | trm => knd s0
+                                | typ _ => knd s0
+                                | knd s3 => knd (prod_skel s3 s0)
+                                end).
+      simpl in |- *.
+      elim IHU.
+      elim (classify_term U0 (cons (classify_term T0 (classify_environment e0)) (classify_environment e0)));
+        auto with coc core arith datatypes.
+      elim (classify_term T0 (classify_environment e0)); auto with coc core arith datatypes.
+    - elim IHt0.
+      elim classify_term_convertible with e0 U0 V (sort_term s) (sort_term s);
+        auto with coc core arith datatypes.
+      destruct (type_case e0 t0 U0 Ht0) as [[x Hx] | Hbad].
+      + assert (Hxs : x = s).
+        { apply convertible_sort.
+          exact (has_type_convertible_convertible e0 U0 (sort_term x) V (sort_term s) Hx Hs Hconv). }
+        rewrite Hxs in Hx; exact Hx.
+      + elim inversion_has_type_convertible_kind with e0 V (sort_term s); auto with coc core arith datatypes.
+        rewrite <- Hbad; apply sym_convertible; auto with coc core arith datatypes.
   Qed.
 
 
@@ -952,21 +997,18 @@ From CoqInCoq Require Import terms.
   Proof.
     intros.
     elim type_case with (1 := H); intros.
-    elim H1.
-    intro x; elim x using sort_induction; intros.
-    rewrite (class_kind e T (sort_term kind)); trivial.
-    rewrite (class_type e t T); trivial.
-    elim skeleton_sound with (1 := H); auto with coc.
-
-    rewrite (class_type e T (sort_term s)); trivial.
-    rewrite (class_term e t T s); trivial.
-    elim skeleton_sound with (1 := H3); simpl in |- *; auto with coc.
-
-    apply type_prop_set; trivial.
-    apply has_type_well_formed with t T; auto with coc.
-
-    elim inversion_has_type_kind with e K.
-    elim H1; auto with coc core arith datatypes.
+    - elim a.
+      intro x; elim x using sort_induction; intros.
+      + rewrite (class_kind e T (sort_term kind)); trivial.
+        rewrite (class_type e t T); trivial.
+        elim skeleton_sound with (1 := H); auto with coc.
+      + rewrite (class_type e T (sort_term s)); trivial.
+        rewrite (class_term e t T s); trivial.
+        elim skeleton_sound with (1 := p); simpl in |- *; auto with coc.
+        apply type_prop_set; trivial.
+        apply has_type_well_formed with t T; auto with coc.
+    - elim inversion_has_type_kind with e K.
+      elim b; auto with coc core arith datatypes.
   Qed.
 
 

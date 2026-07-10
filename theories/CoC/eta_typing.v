@@ -14,11 +14,11 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import eta_reduction.
-From CoqInCoq Require Export list_utils.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import eta_reduction.
+From CoC Require Export list_utils.
+From CoC Require Import typing.
+From CoC Require Import terms.
 
 
 Section Typage.
@@ -64,38 +64,36 @@ Section Typage.
 Lemma has_type_eta_has_type : forall (e : environment) (a Ta : term), has_type e a Ta -> eta_has_type e a Ta.
 Proof.
   fix has_type_eta_has_type 4.
-  intros.
-  case H; intros.
-  apply eta_type_prop.
-  case H0.
-  apply eta_well_formed_nil.
-
-  intros; apply eta_well_formed_var with s.
-  apply has_type_eta_has_type; trivial.
-
-  apply eta_type_set.
-  case H0.
-  apply eta_well_formed_nil.
-
-  intros; apply eta_well_formed_var with s; auto.
-
-  apply eta_type_var.
-  case H0.
-  apply eta_well_formed_nil.
-
-  intros; apply eta_well_formed_var with s.
-  apply has_type_eta_has_type; trivial.
-
-  trivial.
-
-  apply eta_type_abs with s1 s2; auto.
-
-  apply eta_type_app with V; auto.
-
-  apply eta_type_prod with s1; auto.
-
-  apply eta_type_eta_convertible with U s; auto.
-  apply convertible_eta_convertible; trivial.
+  intros e a Ta H.
+  destruct H as
+    [ e0 Hwf0
+    | e0 Hwf0
+    | e0 Hwf0 v t0 Hitem
+    | e0 T0 s1 HT M0 U0 s2 HU HM
+    | e0 v0 V Hv u0 Ur Hu
+    | e0 T0 s1 HT U0 s2 HU
+    | e0 t0 U0 V Ht0 Hconv s Hs ].
+  - apply eta_type_prop.
+    destruct Hwf0 as [ | e1 T1 s1' Ht1 ].
+    + apply eta_well_formed_nil.
+    + apply eta_well_formed_var with s1'.
+      apply has_type_eta_has_type; trivial.
+  - apply eta_type_set.
+    destruct Hwf0 as [ | e1 T1 s1' Ht1 ].
+    + apply eta_well_formed_nil.
+    + apply eta_well_formed_var with s1'.
+      apply has_type_eta_has_type; trivial.
+  - apply eta_type_var.
+    + destruct Hwf0 as [ | e1 T1 s1' Ht1 ].
+      * apply eta_well_formed_nil.
+      * apply eta_well_formed_var with s1'.
+        apply has_type_eta_has_type; trivial.
+    + trivial.
+  - apply eta_type_abs with s1 s2; auto.
+  - apply eta_type_app with V; auto.
+  - apply eta_type_prod with s1; auto.
+  - apply eta_type_eta_convertible with U0 s; auto.
+    apply convertible_eta_convertible; trivial.
 Qed.
 
 (** Typing of prop or set sorts in a well-formed environment. *)
@@ -103,9 +101,10 @@ Qed.
    forall s : sort,
    is_prop s -> forall e : environment, eta_well_formed e -> eta_has_type e (sort_term s) (sort_term kind).
   Proof.
-    simple destruct 1; intros; rewrite H0.
-    apply eta_type_prop; trivial.
-    apply eta_type_set; trivial.
+    intros s Hip e Hewf.
+    destruct Hip as [Hip | Hip]; rewrite Hip.
+    - apply eta_type_prop; trivial.
+    - apply eta_type_set; trivial.
   Qed.
 
   (** Typed terms have de Bruijn indices within the environment length. *)
@@ -171,22 +170,16 @@ Qed.
    forall (P : Prop) (e : environment) (t U V : term),
    eta_convertible U V -> inversion_eta_type P e t U -> inversion_eta_type P e t V.
   Proof.
-    do 6 intro.
-    cut (forall x : term, eta_convertible V x -> eta_convertible U x).
-    intro.
-    case t; simpl in |- *; intros.
-    generalize H1.
-    elim s; auto with coc ecoc core arith datatypes; intros.
-
-    apply H1 with x; auto with coc core arith datatypes.
-
-    apply H1 with s1 s2 U0; auto with coc core arith datatypes.
-
-    apply H1 with Ur V0; auto with coc core arith datatypes.
-
-    apply H1 with s1 s2; auto with coc core arith datatypes.
-
-    intros; apply trans_eta_convertible with V; auto with coc core arith datatypes.
+    intros P e t U V Hconv.
+    assert (Hback : forall x : term, eta_convertible V x -> eta_convertible U x)
+      by (intros x Hx; apply trans_eta_convertible with V; auto with coc core arith datatypes).
+    destruct t as [ s0 | n | T0 M0 | u0 v0 | A0 B0 ]; simpl in |- *.
+    - destruct s0; simpl in |- *; auto with coc ecoc core arith datatypes; intros Hinv.
+    - intros Hinv x Heq Hcv. apply Hinv with x; auto with coc core arith datatypes.
+    - intros Hinv s1 s2 U0 HT0 HM0 HU0 Hcv.
+      apply Hinv with s1 s2 U0; auto with coc core arith datatypes.
+    - intros Hinv Ur V0 Hu0 Hv0 Hcv. apply Hinv with Ur V0; auto with coc core arith datatypes.
+    - intros Hinv s1 s2 HA0 HB0 Hcv. apply Hinv with s1 s2; auto with coc core arith datatypes.
   Qed.
 
 
@@ -195,23 +188,26 @@ Qed.
    forall (P : Prop) (e : environment) (t T : term),
    eta_has_type e t T -> inversion_eta_type P e t T -> P.
   Proof.
-    simple induction 1; simpl in |- *; intros.
-    auto with coc ecoc core arith datatypes.
-
-    auto with coc ecoc core arith datatypes.
-
-    elim H1; intros.
-    apply H2 with x; auto with coc ecoc core arith datatypes.
-    rewrite H3; auto with coc ecoc core arith datatypes.
-
-    apply H6 with s1 s2 U; auto with coc ecoc core arith datatypes.
-
-    apply H4 with Ur V; auto with coc ecoc core arith datatypes.
-
-    apply H4 with s1 s2; auto with coc ecoc core arith datatypes.
-
-    apply H1.
-    apply inversion_eta_type_convertible with V; auto with coc ecoc core arith datatypes.
+    intros P e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      simpl in |- *; intros Hinv.
+    - auto with coc ecoc core arith datatypes.
+    - auto with coc ecoc core arith datatypes.
+    - destruct Hitem as [x Heq Hn].
+      apply Hinv with x; auto with coc ecoc core arith datatypes.
+      rewrite Heq; auto with coc ecoc core arith datatypes.
+    - apply Hinv with s1 s2 U0; auto with coc ecoc core arith datatypes.
+    - apply Hinv with Ur V; auto with coc ecoc core arith datatypes.
+    - apply Hinv with s1 s2; auto with coc ecoc core arith datatypes.
+    - apply IHt0.
+      apply inversion_eta_type_convertible with V; auto with coc ecoc core arith datatypes.
   Qed.
 
 

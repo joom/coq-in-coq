@@ -15,15 +15,18 @@
 
 (** Concrete types for the extracted type-checker:
     [nat] for integers (extracted to OCaml [int] via ExtrOcamlNatInt)
-    and [PrimString.string] for names (extracted via ExtrOCamlPString). *)
+    and [PrimString.string] for user-supplied names. *)
 
 From Stdlib Require Import PString.
+From Stdlib Require Import Arith.
 
-(** The type of names, backed by primitive strings. *)
-Definition name : Set := PrimString.string.
+(** The type of names: either a user-supplied string or a generated fresh variable. *)
+Inductive name : Set :=
+  | str_name : PrimString.string -> name
+  | gen_name : nat -> name.
 
-(** Decidable equality on names via primitive string comparison. *)
-Definition name_eq_dec : forall s1 s2 : name, {s1 = s2} + {s1 <> s2}.
+(** Decidable equality on names. *)
+Lemma string_eq_dec : forall s1 s2 : PrimString.string, {s1 = s2} + {s1 <> s2}.
 Proof.
   intros s1 s2.
   destruct (PrimString.compare s1 s2) eqn:H.
@@ -32,7 +35,15 @@ Proof.
   - right. intro Heq. subst. rewrite compare_refl in H. discriminate.
 Defined.
 
-(** Injective name generation from naturals.
-    Axiomatized and extracted as [fun n -> "x" ^ string_of_int n]. *)
-Parameter name_of_nat : nat -> name.
-Axiom name_of_nat_inj : forall m n : nat, name_of_nat m = name_of_nat n -> m = n.
+Definition name_eq_dec : forall s1 s2 : name, {s1 = s2} + {s1 <> s2}.
+Proof.
+  decide equality.
+  - apply string_eq_dec.
+  - apply Nat.eq_dec.
+Defined.
+
+(** Injective name generation from naturals. *)
+Definition name_of_nat (n : nat) : name := gen_name n.
+
+Lemma name_of_nat_inj : forall m n : nat, name_of_nat m = name_of_nat n -> m = n.
+Proof. intros m n H. injection H. auto. Qed.

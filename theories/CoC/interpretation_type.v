@@ -14,11 +14,11 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import classification.
-From CoqInCoq Require Import candidates.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import classification.
+From CoC Require Import candidates.
+From CoC Require Import terms.
 
   (* Interpretation of type variables *)
 

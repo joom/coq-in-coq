@@ -16,14 +16,14 @@
 
 From Stdlib Require Import PeanoNat.
 
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import classification.
-From CoqInCoq Require Import candidates.
-From CoqInCoq Require Import interpretation_term.
-From CoqInCoq Require Import interpretation_type.
-From CoqInCoq Require Import interpretation_stability.
+From CoC Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import classification.
+From CoC Require Import candidates.
+From CoC Require Import interpretation_term.
+From CoC Require Import interpretation_type.
+From CoC Require Import interpretation_stability.
 
 Implicit Types i k m n p : nat.
 Implicit Type s : sort.
@@ -86,10 +86,10 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
   Proof.
     simple induction 1; simpl in |- *; intros.
     red in |- *; apply Acc_intro; intros y Hstep.
-    unfold transp in Hstep; inversion_clear Hstep.
+    unfold transp, reduces_once_prop in Hstep; destruct Hstep as [Hstep]; inversion Hstep.
 
     red in |- *; apply Acc_intro; intros y Hstep.
-    unfold transp in Hstep; inversion_clear Hstep.
+    unfold transp, reduces_once_prop in Hstep; destruct Hstep as [Hstep]; inversion Hstep.
 
     elim (le_gt_dec 0 v); [ intro Hle | intro Hgt ].
     rewrite lift_zero.
@@ -126,7 +126,7 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
       intro n; intro Hn; intro C; intro HC; intro HCeq.
       unfold subst in |- *.
       rewrite interpret_term_subst; auto with coc core arith datatypes.
-      apply H5.
+      apply H2.
       unfold interpretation_cons, extend_interpretation_kind in |- *.
       apply Build_interpretation_adapted; auto with coc core arith datatypes.
       { (* can_adapt *)
@@ -145,13 +145,12 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
          auto with coc core arith datatypes.
         elim same_classes; auto with coc core arith datatypes. } }
     { (* strongly_normalizing *)
-      exact (H1 ip it (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes)). }
+      exact (H0 ip it (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes)). }
 
     match goal with H : interpretation_adapted _ _ _ |- _ =>
       destruct H as [in_interp ip_can_adapted same_classes] end.
-    elim type_case with e0 u (prod V Ur); intros;
+    destruct (type_case e0 u (prod V Ur) h0) as [[x Hpr]|Hpr];
      auto with coc core arith datatypes.
-    match goal with H : ex _ |- _ => inversion_clear H end.
     apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
      intros.
     apply
@@ -242,24 +241,24 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
     simpl in |- *.
     elim same_classes; auto with coc core arith datatypes.
 
-    unfold Pi in H3.
-    apply H3.
-    { exact (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes). }
-    { exact (H1 ip it (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes)). }
+    generalize (H1 ip it (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes)).
+    simpl in |- *; unfold Pi in |- *; intro HPi.
+    apply HPi.
+    { exact (H0 ip it (Build_interpretation_adapted e0 ip it in_interp ip_can_adapted same_classes)). }
     { apply interpret_type_cr; auto with coc core arith datatypes. }
     { auto with coc core arith datatypes. }
 
     match goal with H : prod _ _ = sort_term kind |- _ => discriminate H end.
 
     apply strongly_normalizing_product.
-    apply H1 with ip; auto with coc core arith datatypes.
+    apply H0 with ip; auto with coc core arith datatypes.
 
     apply strongly_normalizing_subst with (var 0).
     unfold subst in |- *.
     rewrite interpret_term_subst.
     match goal with H : interpretation_adapted _ _ _ |- _ =>
       destruct H as [in_interp ip_can_adapted same_classes] end.
-    apply H3 with (default_cons T0 ip).
+    apply H1 with (default_cons T0 ip).
     unfold default_cons, interpretation_cons in |- *.
     apply Build_interpretation_adapted.
     apply int_cs; auto with coc core arith datatypes.
@@ -304,8 +303,7 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
     elim skeleton_sound with e0 U (sort_term s); simpl in |- *;
      auto with coc core arith datatypes.
 
-    elim type_case with e0 t0 U; intros; auto with coc core arith datatypes.
-    inversion_clear H6.
+    destruct (type_case e0 t0 U h) as [[x H6]|H6]; auto with coc core arith datatypes.
     elim convertible_sort with x s; auto with coc core arith datatypes.
     apply has_type_convertible_convertible with e0 U V; auto with coc core arith datatypes.
 
@@ -434,11 +432,10 @@ Inductive term_in_interpretation : environment -> interpretation_env -> term_int
   Lemma type_strongly_normalizing : forall e t T, has_type e t T -> strongly_normalizing T.
   Proof.
     intros.
-    elim type_case with e t T; intros; auto with coc core arith datatypes.
-    elim H0; intros.
+    destruct (type_case e t T H) as [[x Hs]|Hkind]; auto with coc core arith datatypes.
     apply strong_normalization with e (sort_term x); auto with coc core arith datatypes.
 
-    rewrite H0.
-    red in |- *; apply Acc_intro; intros.
-    inversion_clear H1.
+    rewrite Hkind.
+    red in |- *; apply Acc_intro; intros y Hstep.
+    unfold transp, reduces_once_prop in Hstep; destruct Hstep as [Hstep]; inversion Hstep.
   Qed.

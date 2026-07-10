@@ -1,0 +1,13 @@
+Nat admitted.
+NZ admitted.
+NS admitted.
+add admitted.
+Elem admitted.
+Tree admitted.
+leaf admitted.
+node admitted.
+tree_rec admitted.
+Inferred type: Elem -> Tree (NS (NS NZ))
+Extracted: λx:Elem. (node ((NS NZ)) x ((node NZ x leaf leaf)) ((node NZ x leaf leaf)))
+Extracted: λh:Nat. λt:Tree. (tree_rec [Tree] leaf (λx0:Nat. λx1:Elem. λx2:Tree. λx3:Tree. (node x0 x1 x3 x2)) h t)
+Extracted: λh:Nat. λt:Tree. (tree_rec [Nat] NZ (λx0:Nat. λx1:Elem. λx2:Nat. λx3:Nat. (NS ((add x2 x3)))) h t)

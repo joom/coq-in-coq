@@ -14,13 +14,104 @@
  (targets core.ml core.mli)
  (deps
   Extract.v
-  (alias_rec ../theories/all))
+  (alias %{project_root}/theories/CoC/all)
+  (alias %{project_root}/theories/BlameFOmega/all)
+  (alias %{project_root}/theories/Extraction/all))
  (action
-  (run rocq compile -R %{project_root}/theories CoqInCoq Extract.v)))
+  (chdir %{project_root}
+   (run rocq compile -Q theories/CoC CoC -Q theories/BlameFOmega BlameFOmega -Q theories/Extraction Extraction tests/Extract.v))))
+
+; Golden-output tests: run each example through the REPL and diff its output
+; against the checked-in expected/<name>.out.  Update goldens with `dune promote`
+; after an intentional change to the extraction or pretty-printer.
 
 (rule
+ (with-stdin-from newman.v
+  (with-stdout-to newman.out.gen (run ./top.exe))))
+(rule
  (alias runtest)
- (deps newman.coc top.exe)
- (action
-  (with-stdin-from newman.coc
-   (run ./top.exe))))
+ (action (diff expected/newman.out newman.out.gen)))
+
+(rule
+ (with-stdin-from vectors.v
+  (with-stdout-to vectors.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/vectors.out vectors.out.gen)))
+
+(rule
+ (with-stdin-from fin.v
+  (with-stdout-to fin.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/fin.out fin.out.gen)))
+
+(rule
+ (with-stdin-from equality.v
+  (with-stdout-to equality.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/equality.out equality.out.gen)))
+
+(rule
+ (with-stdin-from sigma.v
+  (with-stdout-to sigma.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/sigma.out sigma.out.gen)))
+
+(rule
+ (with-stdin-from printf.v
+  (with-stdout-to printf.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/printf.out printf.out.gen)))
+
+(rule
+ (with-stdin-from matrix.v
+  (with-stdout-to matrix.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/matrix.out matrix.out.gen)))
+
+(rule
+ (with-stdin-from units.v
+  (with-stdout-to units.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/units.out units.out.gen)))
+
+(rule
+ (with-stdin-from avl.v
+  (with-stdout-to avl.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/avl.out avl.out.gen)))
+
+(rule
+ (with-stdin-from session.v
+  (with-stdout-to session.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/session.out session.out.gen)))
+
+(rule
+ (with-stdin-from stlc.v
+  (with-stdout-to stlc.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/stlc.out stlc.out.gen)))
+
+(rule
+ (with-stdin-from universe.v
+  (with-stdout-to universe.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/universe.out universe.out.gen)))
+
+(rule
+ (with-stdin-from functor.v
+  (with-stdout-to functor.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/functor.out functor.out.gen)))

@@ -1,0 +1,15 @@
+St admitted.
+Ready admitted.
+Sent admitted.
+Done admitted.
+Msg admitted.
+Chan admitted.
+open admitted.
+send admitted.
+recv admitted.
+close admitted.
+Inferred type: Msg -> Msg
+Extracted: λreq:Msg. (close ((recv ((send req open)))))
+Extracted: λreq:Msg. λc:Chan. (close ((recv ((send req c)))))
+Extracted: λreq:Msg. λc:Chan. (send req c)
+Extracted: λc:Chan. (close ((recv c)))

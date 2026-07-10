@@ -14,10 +14,10 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import classification.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import classification.
+From CoC Require Import terms.
 
   (** Reducibility candidates indexed by skeletons. *)
   Fixpoint candidate (K : skeleton) : Type :=
@@ -108,8 +108,8 @@ From CoqInCoq Require Import terms.
    forall R : term -> Prop,
    is_candidate R -> forall a b : term, R a -> reduces a b -> R b.
   Proof.
-    intros R Hcand a b Ha Hred; induction Hred; auto with coc core arith datatypes.
-    apply (clos_red R) with y; auto with coc core arith datatypes.
+    intros R Hcand a b Ha Hred; induction Hred as [M | M P N Hstep Hrec IH]; auto with coc core arith datatypes.
+    apply (clos_red R) with P; auto with coc core arith datatypes.
   Qed.
 
 
@@ -134,13 +134,16 @@ From CoqInCoq Require Import terms.
     inversion_clear H10; auto with coc core arith datatypes.
     inversion_clear H11.
     apply H2; auto with coc core arith datatypes.
+    exact (inhabits H10).
     apply Acc_intro; auto with coc core arith datatypes.
 
     apply H8; auto with coc core arith datatypes.
+    exact (inhabits H10).
     apply (clos_red X) with (subst x0 x1); auto with coc core arith datatypes.
     unfold subst in |- *; auto with coc core arith datatypes.
 
     apply H5; auto with coc core arith datatypes.
+    exact (inhabits H11).
     apply closure_reduces_star with (subst x0 x1); auto with coc core arith datatypes.
     unfold subst in |- *; auto with coc core arith datatypes.
 
@@ -183,7 +186,8 @@ From CoqInCoq Require Import terms.
 
     apply strongly_normalizing_reduces with t; auto with coc core arith datatypes.
 
-    red in |- *; apply Acc_intro; auto with coc core arith datatypes.
+    red in |- *; apply Acc_intro.
+    intros y Hy; destruct Hy as [Hy]; exact (H0 y Hy).
   Qed.
 
   Hint Resolve candidate_strongly_normalizing: coc.
@@ -256,6 +260,7 @@ From CoqInCoq Require Import terms.
     red in |- *; intros; discriminate.
 
     apply H8 with N2; auto with coc core arith datatypes.
+    exact (inhabits H11).
     apply (clos_red X) with x; auto with coc core arith datatypes.
 
     apply (incl_sn X); auto with coc core arith datatypes.

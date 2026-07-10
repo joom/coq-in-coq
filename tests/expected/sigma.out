@@ -1,0 +1,11 @@
+Nat admitted.
+Vec admitted.
+Sig admitted.
+pair admitted.
+fst admitted.
+snd admitted.
+Inferred type: forall (A : Set), forall (B : A -> Set), forall (x : A), B x -> Sig A B
+Extracted: ΛA:*. ΛB:*. λx:A. λy:B. (pair [A] [B] x y)
+Extracted: ΛA:*. ΛB:*. λp:Sig A B. (snd [A] [B] p)
+Extracted: ΛA:*. ΛB:*. λp:Sig A B. (pair [A] [B] ((fst [A] [B] p)) ((snd [A] [B] p)))
+Extracted: ΛA:*. λn:Nat. λv:Vec A. (pair [Nat] [Vec A] n v)

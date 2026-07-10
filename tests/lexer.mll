@@ -1,13 +1,16 @@
+(** Lexer for named CoC syntax.  Keywords are case-sensitive (e.g. [Set],
+    [Axiom], [Extract]).  Supports nested [(* ... *)] comments. *)
 {
 open Parser
 
 let keyword_table = Hashtbl.create 17
 let () = List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
   [ "Set", SET; "Prop", PROP; "Kind", KIND;
+    "fun", FUN; "forall", FORALL;
     "let", LET; "in", IN;
     "Quit", QUIT; "Axiom", AXIOM; "Infer", INFER;
     "Check", CHECK; "Delete", DELETE; "List", LIST;
-    "Help", HELP ]
+    "Help", HELP; "Extract", EXTRACT ]
 }
 
 let white = [' ' '\t' '\r' '\n']
@@ -20,9 +23,8 @@ rule token = parse
   | white+        { token lexbuf }
   | "(*"          { comment 1 lexbuf; token lexbuf }
   | "->"          { ARROW }
+  | "=>"          { DARROW }
   | ":="          { ASSIGN }
-  | '['           { LBRACK }
-  | ']'           { RBRACK }
   | '('           { LPAREN }
   | ')'           { RPAREN }
   | ':'           { COLON }

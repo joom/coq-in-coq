@@ -14,7 +14,7 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import terms.
+From CoC Require Import terms.
 
 (** Type of interpretations mapping naturals to terms. *)
 Definition term_interpretation := nat -> term.

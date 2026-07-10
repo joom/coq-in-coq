@@ -1,0 +1,21 @@
+Ty admitted.
+base admitted.
+arr admitted.
+Ctx admitted.
+emp admitted.
+snoc admitted.
+Var admitted.
+vz admitted.
+vs admitted.
+Tm admitted.
+tvar admitted.
+tlam admitted.
+tapp admitted.
+Inferred type: forall (t : Ty), Tm emp (arr t t)
+Extracted: λt:Ty. (tlam emp t t ((tvar ((snoc emp t)) t ((vz emp t)))))
+Extracted: λt:Ty. λu:Ty. (tlam emp t ((arr u t)) ((tlam ((snoc emp t)) u t ((tvar ((snoc ((snoc emp t)) u)) t ((vs ((snoc emp t)) t u ((vz emp t)))))))))
+Extracted: λt:Ty. λu:Ty. (tlam emp ((arr t u)) ((arr t u)) ((tlam ((snoc emp ((arr t u)))) t u ((tapp ((snoc ((snoc emp ((arr t u)))) t)) t u ((tvar ((snoc ((snoc emp ((arr t u)))) t)) ((arr t u)) ((vs ((snoc emp ((arr t u)))) ((arr t u)) t ((vz emp ((arr t u)))))))) ((tvar ((snoc ((snoc emp ((arr t u)))) t)) t ((vz ((snoc emp ((arr t u)))) t)))))))))
+El admitted.
+Env admitted.
+eval admitted.
+Extracted: λG:Ctx. λt:Ty. λe:Tm. λenv:Env. (eval G t e env)

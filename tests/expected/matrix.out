@@ -1,0 +1,14 @@
+Nat admitted.
+Real admitted.
+Mat admitted.
+madd admitted.
+mmul admitted.
+trans admitted.
+ident admitted.
+scale admitted.
+Inferred type: forall (m : Nat), forall (n : Nat), forall (p : Nat), Mat m n -> Mat n p -> Mat m p
+Extracted: λm:Nat. λn:Nat. λp:Nat. λa:Mat. λb:Mat. (mmul m n p a b)
+Extracted: λm:Nat. λn:Nat. λa:Mat. (mmul n m n ((trans m n a)) a)
+Extracted: λm:Nat. λn:Nat. λp:Mat. λb:Mat. (mmul m n m ((mmul m n n p b)) ((trans m n p)))
+Extracted: λn:Nat. λs:Real. λa:Mat. λb:Mat. (madd n n ((scale n n s ((mmul n n n a b)))) ((ident n)))
+Extracted: λm:Nat. λn:Nat. ((<? => Nat -> Nat -> ?>^0+ (<? => ?>^0+ blame(0+))) m n)

@@ -1,0 +1,65 @@
+(** Assumption audit for the headline results.
+
+    Compiling this file prints, for each main theorem, the axioms it depends on.
+    The development is intended to be free of admitted goals; the only
+    assumptions that should appear are those inherent to the standard library's
+    primitive strings and integers (used for source variable names) and
+    [eq_rect_eq] introduced by dependent case analysis.  Any other axiom -- in
+    particular any admitted goal -- is a regression.  A CI step can grep this
+    output for unexpected names. *)
+
+From Extraction Require Import proofs.
+From BlameFOmega Require Import blame ty_confluence typing_metatheory progress.
+From BlameFOmega Require Import subtyping_safety.
+From BlameFOmega Require Import preservation.
+
+(* Extraction metatheory *)
+Print Assumptions extract_well_typed.
+Print Assumptions extract_typ_wf_sort.  (* kind-regularity: fully axiom-free *)
+Print Assumptions extract_typ_tsubst_coc_equiv.  (* large-App conversion lemma *)
+Print Assumptions extracted_safe.
+Print Assumptions typing_coerce.
+Print Assumptions extract_reduces_once.
+Print Assumptions extract_reduces.
+Print Assumptions extract_deriv_indep.
+Print Assumptions extraction_blame_free.
+Print Assumptions extraction_simulates_any_instantiation.
+Print Assumptions extract_typ_dyn_free.
+Print Assumptions extract_typ_dyn_free_iff.
+
+(* Target metatheory *)
+Print Assumptions blame_theorem.
+Print Assumptions semantics.step_deterministic.
+
+(* Target type-level confluence and typing structural lemmas *)
+Print Assumptions ty_star_confluent.
+Print Assumptions ty_equiv_church_rosser.
+Print Assumptions ty_equiv_arrow_inv.
+Print Assumptions ty_equiv_all_inv.
+Print Assumptions typing_weaken_term.
+Print Assumptions typing_weaken_kind.
+Print Assumptions typing_weaken_def.
+Print Assumptions typing_weaken_prefix.
+Print Assumptions typing_subst.
+Print Assumptions canonical_arrow.
+Print Assumptions canonical_all.
+Print Assumptions ty_step_tsubst.
+Print Assumptions ty_equiv_tsubst.
+Print Assumptions typing_tsubst.
+Print Assumptions wf_typ_tsubst.
+Print Assumptions compat_tsubst.
+Print Assumptions ground_tsubst.
+
+(* Target type safety *)
+Print Assumptions progress.
+
+(* Target preservation (kind-regular typing, [step] minus [step_nu_abs]/
+   [step_nu_tabs] -- see theories/BlameFOmega/preservation.v's header for why
+   those two are excluded: they are formally proved to break preservation,
+   not merely hard to prove). *)
+Print Assumptions preservation.
+Print Assumptions typing_regular.
+Print Assumptions step_nu_abs_breaks_preservation.
+
+(* Subtyping / blame safety corollary *)
+Print Assumptions subtyping_theorem.

@@ -1,0 +1,14 @@
+U admitted.
+nat_c admitted.
+bool_c admitted.
+arr_c admitted.
+El admitted.
+Inferred type: U -> U -> U
+Extracted: λa:U. λb:U. (arr_c ((arr_c a b)) a)
+Dyn admitted.
+box admitted.
+tag admitted.
+Extracted: λc:U. λx:El. (box c x)
+Extracted: λd:Dyn. (tag d)
+Inferred type: U -> Set
+Extracted: λc:U. ((<? => U -> ?>^0+ (<? => ?>^0+ blame(0+))) c)

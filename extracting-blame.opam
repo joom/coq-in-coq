@@ -1,0 +1,14 @@
+opam-version: "2.0"
+name: "extracting-blame"
+version: "0.1.0"
+synopsis: "Verified extraction from CoC to System Fω + blame"
+depends: [
+  "ocaml"
+  "dune" {>= "3.8"}
+  "rocq-prover" {>= "9.0"}
+  "rocq-runtime"
+  "menhir"
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]

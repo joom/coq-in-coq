@@ -14,8 +14,14 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Import confluence.
+From CoC Require Import terms.
+From CoC Require Import confluence.
+
+(** A Prop-valued relation is strongly confluent when it commutes with its
+    transpose. This is the classic (Prop) notion, used here for the
+    eta-erasure relations, which remain Prop-sorted. *)
+Definition strongly_confluent (R : term -> term -> Prop) :=
+  commut _ R (transp _ R).
 
 (** One-step erasure reduction on terms. *)
 Inductive eta_reduces_once : term -> term -> Prop :=
@@ -130,8 +136,9 @@ Hint Resolve reduces_eta_reduces: ecoc.
 (** Standard conversion embeds into erasure conversion. *)
 Lemma convertible_eta_convertible : forall M N : term, convertible M N -> eta_convertible M N.
 Proof.
-  intros M N H; induction H; eauto with ecoc.
-  destruct H as [Hfwd | Hbwd]; eauto with ecoc.
+  intros M N H.
+  induction H as [ M0 | M0 P0 N0 Hstep0 Hconv0 IH0 | M0 P0 N0 Hstep0 Hconv0 IH0 ];
+    eauto with ecoc.
 Qed.
 
 Hint Resolve convertible_eta_convertible: ecoc.
@@ -155,7 +162,7 @@ Hint Resolve refl_eta_parallel_reduces_once: ecoc.
 (** A single parallel step embeds into the transitive closure. *)
 Lemma eta_parallel_once_parallel : forall M N : term, eta_parallel_reduces_once M N -> eta_parallel_reduces M N.
 Proof.
-  intros; unfold eta_parallel_reduces in |- *; apply t_trans with M; auto with ecoc sets.
+  intros; unfold eta_parallel_reduces in |- *; apply Relation_Operators.t_trans with M; auto with ecoc sets.
 Qed.
 
 Hint Resolve eta_parallel_once_parallel: ecoc.
@@ -215,7 +222,7 @@ Hint Resolve eta_reduces_once_parallel_once: ecoc.
 Lemma eta_reduces_parallel : forall M N : term, eta_reduces M N -> eta_parallel_reduces M N.
 Proof.
   intros M N H; red in |- *; induction H; auto with ecoc coc core arith sets.
-  apply t_trans with y; auto with ecoc coc core arith sets.
+  apply Relation_Operators.t_trans with y; auto with ecoc coc core arith sets.
 Qed.
 
 (** Erasure reduction is compatible with app. *)
@@ -414,7 +421,7 @@ Proof.
   elim H1 with z0; auto with ecoc coc core arith sets; intros.
   elim H3 with x1; intros; auto with ecoc coc core arith sets.
   split with x2; auto with ecoc coc core arith sets.
-  apply t_trans with x1; auto with ecoc coc core arith sets.
+  apply Relation_Operators.t_trans with x1; auto with ecoc coc core arith sets.
 Qed.
 
 (** Confluence of parallel erasure reduction. *)
@@ -429,7 +436,7 @@ Proof.
   elim H1 with z0; intros; auto with ecoc coc core arith sets.
   elim H3 with x1; intros; auto with ecoc coc core arith sets.
   split with x2; auto with ecoc coc core arith sets.
-  red in |- *; apply t_trans with x1; auto with ecoc coc core arith sets.
+  red in |- *; apply Relation_Operators.t_trans with x1; auto with ecoc coc core arith sets.
 Qed.
 
 (** Confluence of erasure reduction. *)

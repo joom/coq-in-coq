@@ -1,0 +1,9 @@
+Nat admitted.
+Eq admitted.
+refl admitted.
+eq_rect admitted.
+Inferred type: forall (A : Set), forall (x : A), forall (y : A), Eq A x y -> Eq A y x
+Extracted: ΛA:*. λx:A. λy:A. λh:Eq A. (eq_rect [A] x [Eq A] ((refl [A] x)) y h)
+Extracted: ΛA:*. λx:A. λy:A. λz:A. λhxy:Eq A. λhyz:Eq A. (eq_rect [A] y [Eq A] hxy z hyz)
+Extracted: ΛA:*. ΛB:*. λf:A -> B. λx:A. λy:A. λh:Eq A. (eq_rect [A] x [Eq B] ((refl [B] ((f x)))) y h)
+Extracted: ΛA:*. ΛP:*. λx:A. λy:A. λh:Eq A. λp:P. (eq_rect [A] x [P] p y h)

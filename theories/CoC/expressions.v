@@ -14,9 +14,9 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import list_utils.
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Export names.
+From CoC Require Import list_utils.
+From CoC Require Import terms.
+From CoC Require Export names.
 
   (** Named expression syntax for the Calculus of Constructions *)
   Inductive expr : Set :=
@@ -278,6 +278,120 @@ From CoqInCoq Require Export names.
 
     inversion_clear H2; auto with coc core arith datatypes.
   Defined.
+
+
+  (** Collect binder names from a named expression *)
+  Fixpoint collect_binder_names (e : expr) : list name :=
+    match e with
+    | expr_abs x _ body => x :: collect_binder_names body
+    | expr_prod x _ body => x :: collect_binder_names body
+    | _ => nil
+    end.
+
+
+  (** Convert a de Bruijn term to a named expression, reusing the user's binder
+      names as display hints.  [pick_name] (from [names]) chooses a hint for each
+      binder only when it is fresh for the current context, so the result is always
+      capture-free — the equivalence proof carried in the result type is exactly the
+      same [term_expression_equivalent] as for the fresh-name [expression_of_term].
+
+      Hints are threaded down the binder spine only: the body of a [lam]/[prod]
+      receives the hints left over after naming that binder, while binder-type
+      subterms and [app] arguments are converted with no hints ([nil]).  This mirrors
+      the way the surface syntax lays out binders (one hint per visible binder,
+      in order) and prevents the anonymous binder inside a non-dependent arrow
+      [prod A B] from stealing a hint intended for the next visible binder. *)
+  Definition expression_of_term_with_hints :
+   forall (t : term) (l : partial_names) (hints : list name),
+   name_unique l ->
+   free_db_below (length l) t -> {p : expr * list name | term_expression_equivalent l t (fst p)}.
+  Proof.
+    simple induction t; intros.
+    exists (expr_sort s, hints).
+    apply eqv_sort.
+
+    destruct (nth_error l n) as [x|] eqn:Hn.
+    exists (expr_ref x, hints).
+    apply eqv_ref.
+    apply name_unique_first; auto with coc core arith datatypes.
+
+    exfalso.
+    inversion_clear H0.
+    apply nth_error_None in Hn. lia.
+
+    elim (H l nil); auto with coc core arith datatypes.
+    intros [e1 le1] p; simpl in p.
+    destruct (pick_name hints l) as [[x0 Hx0] hints'].
+    elim (H0 (x0 :: l) hints'); auto with coc core arith datatypes.
+    intros [e2 hints''] p0; simpl in p0.
+    exists (expr_abs x0 e1 e2, hints'').
+    simpl. apply eqv_abs; auto with coc core arith datatypes.
+
+    apply free_var_extension; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+
+    elim (H l nil); auto with coc core arith datatypes.
+    intros [e1 le1] p; simpl in p.
+    elim (H0 l nil); auto with coc core arith datatypes.
+    intros [e2 le2] p0; simpl in p0.
+    exists (expr_app e1 e2, hints).
+    simpl. apply eqv_app; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+
+    elim (H l nil); auto with coc core arith datatypes.
+    intros [e1 le1] p; simpl in p.
+    destruct (pick_name hints l) as [[x0 Hx0] hints'].
+    elim (H0 (x0 :: l) hints'); auto with coc core arith datatypes.
+    intros [e2 hints''] p0; simpl in p0.
+    exists (expr_prod x0 e1 e2, hints'').
+    simpl. apply eqv_prod; auto with coc core arith datatypes.
+
+    apply free_var_extension; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+
+    inversion_clear H2; auto with coc core arith datatypes.
+  Defined.
+
+
+  (** {2 Correctness of hint-based naming}
+
+      The hinted conversion cannot change the meaning of a term: whatever names it
+      picks, its output is equivalent to the very same de Bruijn term, hence — by
+      [unique_alpha] — alpha-equivalent to the fresh-name conversion
+      [expression_of_term].  Names are cosmetic; the underlying binding structure is
+      preserved exactly. *)
+
+  (** The hinted conversion yields an expression equivalent to its input term. *)
+  Lemma expression_of_term_with_hints_equiv :
+   forall (t : term) (l : partial_names) (hints : list name)
+     (Hu : name_unique l) (Hf : free_db_below (length l) t),
+   term_expression_equivalent l t
+     (fst (proj1_sig (expression_of_term_with_hints t l hints Hu Hf))).
+  Proof.
+    intros t l hints Hu Hf.
+    exact (proj2_sig (expression_of_term_with_hints t l hints Hu Hf)).
+  Qed.
+
+  (** The hinted conversion is alpha-equivalent to the fresh-name conversion:
+      hints only rename binders, never restructure them. *)
+  Theorem expression_of_term_with_hints_alpha :
+   forall (t : term) (l : partial_names) (hints : list name)
+     (Hu : name_unique l) (Hf : free_db_below (length l) t),
+   alpha l (fst (proj1_sig (expression_of_term_with_hints t l hints Hu Hf)))
+         l (proj1_sig (expression_of_term t l Hu Hf)).
+  Proof.
+    intros t l hints Hu Hf.
+    apply unique_alpha with (t := t).
+    - apply expression_of_term_with_hints_equiv.
+    - exact (proj2_sig (expression_of_term t l Hu Hf)).
+  Qed.
 
 
   (** Undefined variables: names disjoint from context that occur free *)

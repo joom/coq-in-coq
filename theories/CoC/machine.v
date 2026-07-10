@@ -14,12 +14,12 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import decidable_conversion.
-From CoqInCoq Require Import inference.
-From CoqInCoq Require Import expressions.
+From CoC Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import decidable_conversion.
+From CoC Require Import inference.
+From CoC Require Import expressions.
 
 
 (** Machine state: global context with names, well-formedness proof, and uniqueness *)
@@ -204,7 +204,7 @@ From CoqInCoq Require Import expressions.
 
 
 (** Errors from internal command execution *)
-  Inductive command_error (s : state) : command -> error -> Prop :=
+  Inductive command_error (s : state) : command -> error -> Type :=
     | ce_inf_error :
         forall (m : term) (err : type_error),
         infer_error m err ->
@@ -514,11 +514,11 @@ From CoqInCoq Require Import expressions.
 
 
 (** Result type for command execution: success with new state and message, or error *)
-  Definition command_answer (si : state) (c : command) : Set :=
-    ({p : state * message |
+  Definition command_answer (si : state) (c : command) : Type :=
+    ({p : state * message &
      match p with
      | (sf, m) => transition si c sf m
-     end} + {e : error | command_error si c e})%type.
+     end} + {e : error & command_error si c e})%type.
 
 
 (** Execute the cmd_infer command: infer the type of a term *)
@@ -645,16 +645,24 @@ From CoqInCoq Require Import expressions.
   Defined.
 
 
-(** Translate an internal message to a printable message *)
+(** Translate an internal message to a printable message.
+
+    [hints] carries the user's source binder names (see [collect_binder_names]);
+    for an inferred type they are threaded through [expression_of_term_with_hints]
+    so the printed type reuses the original names instead of fresh [x0, x1, ...].
+    Every other message ignores [hints].  Because the name recovery is verified,
+    the translation still satisfies the same [translate_message] relation. *)
   Definition translate_message_string :
-   forall (s : state) (im : message),
+   forall (s : state) (im : message) (hints : list name),
    (exists c : command, (exists sf : state, transition s c sf im)) ->
    {m : pmessage | translate_message s im m}.
   Proof.
+    intros s im hints; revert im.
     simple induction im.
     intro x; exists (pmsg_new_axiom x); auto with coc.
-    intros t H; elim (expression_of_term t (glob_names s)); auto with coc.
-    intros; exists (pmsg_inferred_type x); auto with coc.
+    intros t H; elim (expression_of_term_with_hints t (glob_names s) hints);
+     auto with coc.
+    intros [e le] Hp; exists (pmsg_inferred_type e); simpl in Hp; auto with coc.
     inversion_clear H.
     inversion_clear H0.
     inversion_clear H.
@@ -823,11 +831,16 @@ From CoqInCoq Require Import expressions.
   Definition interpret_ast : forall (si : state) (a : ast), answer si a.
   Proof.
     intros.
+    (* recover the user's binder names from an [Infer] request, if any *)
+    set (hints := match a with
+                  | ast_infer e => collect_binder_names e
+                  | _ => nil (A := name)
+                  end).
     elim synthesis with si a; intros.
     elim a0; intros c H.
     elim interpret_command with si c; intros.
     elim a1; simple destruct x; intros.
-    elim translate_message_string with si m; intros.
+    elim (translate_message_string si m hints); intros.
     left.
     exists (s, x0); auto with coc core arith datatypes.
     apply Top_int with c m; auto with coc core arith datatypes.

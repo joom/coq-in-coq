@@ -17,11 +17,11 @@
 From Stdlib Require Import Transitive_Closure.
 From Stdlib Require Import Union.
 
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Import confluence.
+From CoC Require Import terms.
+From CoC Require Import confluence.
 
 (** One-step normalization order: subterm or reverse reduction. *)
-Definition normalization_order_once := union _ subterm (transp _ reduces_once).
+Definition normalization_order_once := union _ subterm (transp _ reduces_once_prop).
 
 (** Transitive closure of the one-step normalization order. *)
 Definition normalization_order := clos_trans _ normalization_order_once.
@@ -40,9 +40,12 @@ Hint Resolve subterm_normalization_order: coc.
 Lemma reduces_reduces_once_normalization_order :
  forall a b : term, reduces a b -> forall c : term, reduces_once b c -> normalization_order c a.
 Proof.
-  red in |- *.
-  intros a b H; induction H; intros; auto with coc sets.
-  apply t_trans with z; auto with coc sets.
+  intros a b H.
+  induction H as [ M0 | M0 P0 N0 Hstep0 Hred0 IH0 ]; intros c Hc.
+  - apply Relation_Operators.t_step; right; constructor; exact Hc.
+  - apply Relation_Operators.t_trans with N0.
+    + apply Relation_Operators.t_step; right; constructor; exact Hc.
+    + apply IH0; exact Hstep0.
 Qed.
 
 (** The subterm relation is well-founded. *)
@@ -93,22 +96,22 @@ Definition normalization_body (a : term) (norm : term -> term) :=
 
 (** Computes the normal form of a strongly normalizing term. *)
 Definition compute_normal_form :
- forall t : term, strongly_normalizing t -> {u : term | reduces t u &  normal u}.
+ forall t : term, strongly_normalizing t -> {u : term & reduces t u & normal u}.
 Proof.
   intros.
   cut (Acc normalization_order t); [intros _H'; elim _H' |].
   clear _H' H t.
   intros [s| n| T t| u v| T U] _ norm_rec.
   exists (sort_term s); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   exists (var n); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   elim norm_rec with T; auto with coc; intros T' redT nT.
   elim norm_rec with t; auto with coc; intros t' redt nt.
   exists (lam T' t'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   elim nT with M'; trivial.
   elim nt with M'; trivial.
@@ -116,12 +119,12 @@ Proof.
   elim norm_rec with u; auto with coc.
   intros [s| n| T t| a b| T U] redu nu.
   exists (app (sort_term s) v'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   inversion_clear H0.
   elim nv with N2; trivial.
   exists (app (var n) v'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   inversion_clear H0.
   elim nv with N2; trivial.
@@ -132,19 +135,19 @@ Proof.
   apply trans_red with (app (lam T t) v'); auto with coc.
   apply reduces_reduces_once_normalization_order with (app (lam T t) v'); auto with coc.
   exists (app (app a b) v'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   elim nu with N1; trivial.
   elim nv with N2; trivial.
   exists (app (prod T U) v'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   elim nu with N1; trivial.
   elim nv with N2; trivial.
   elim norm_rec with T; auto with coc; intros T' redT nT.
   elim norm_rec with U; auto with coc; intros U' redU nU.
   exists (prod T' U'); auto with coc.
-  red in |- *; red in |- *; intros.
+  red in |- *; intros.
   inversion_clear H.
   elim nT with N1; trivial.
   elim nU with N2; trivial.
@@ -161,7 +164,8 @@ Defined.
 
 (** Decidable conversion for strongly normalizing terms. *)
 Definition is_convertible :
- forall u v : term, strongly_normalizing u -> strongly_normalizing v -> {convertible u v} + {~ convertible u v}.
+ forall u v : term, strongly_normalizing u -> strongly_normalizing v ->
+   convertible u v + (convertible u v -> False).
 Proof.
   intros u v snu snv.
   elim compute_normal_form with (1 := snu); intros u' redu nu.
@@ -170,11 +174,12 @@ Proof.
   left.
   apply trans_convertible_convertible with u'; auto with coc.
   rewrite same_nf; apply sym_convertible; auto with coc.
-  right; red in |- *; intro; apply diff_nf.
-  elim church_rosser_theorem with u' v'; auto with coc; intros.
+  right; intro Hconv; apply diff_nf.
+  assert (Hconv' : convertible u' v').
+  { apply trans_convertible_convertible with v; auto with coc.
+    apply trans_convertible_convertible with u; auto with coc.
+    apply sym_convertible; auto with coc. }
+  destruct (church_rosser_theorem u' v' Hconv') as [x Hx1 Hx2]; auto with coc.
   rewrite (reduces_normal u' x); auto with coc.
   rewrite (reduces_normal v' x); auto with coc.
-  apply trans_convertible_convertible with v; auto with coc.
-  apply trans_convertible_convertible with u; auto with coc.
-  apply sym_convertible; auto with coc.
 Defined.

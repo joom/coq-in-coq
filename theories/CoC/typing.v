@@ -14,9 +14,9 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Export list_utils.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Export list_utils.
+From CoC Require Import terms.
 
 Implicit Types i k m n p : nat.
 Implicit Type s : sort.
@@ -29,16 +29,16 @@ Implicit Types A B M N T t u v : term.
 
   (** A term in the environment at position n, lifted to the current context. *)
   Definition item_lift t e n :=
-    ex2 (fun u => t = lift (S n) u) (fun u => nth_error (e:list term) n = Some u).
+    sigT2 (fun u => t = lift (S n) u) (fun u => nth_error (e:list term) n = Some u).
 
 
 Section Typage.
 
   (** Mutually inductive well-formedness and typing judgments for CoC. *)
-  Inductive well_formed : environment -> Prop :=
+  Inductive well_formed : environment -> Type :=
     | wf_nil : well_formed nil
     | wf_var : forall e T s, has_type e T (sort_term s) -> well_formed (T :: e)
-  with has_type : environment -> term -> term -> Prop :=
+  with has_type : environment -> term -> term -> Type :=
     | type_prop : forall e, well_formed e -> has_type e (sort_term prop) (sort_term kind)
     | type_set : forall e, well_formed e -> has_type e (sort_term set) (sort_term kind)
     | type_var :
@@ -71,26 +71,45 @@ Section Typage.
   Lemma type_prop_set :
    forall s, is_prop s -> forall e, well_formed e -> has_type e (sort_term s) (sort_term kind).
   Proof.
-    simple destruct 1; intros; rewrite H0.
-    apply type_prop; trivial.
-    apply type_set; trivial.
+    intros s Hip e Hwf.
+    destruct Hip as [Hip | Hip]; rewrite Hip.
+    - apply type_prop; trivial.
+    - apply type_set; trivial.
   Qed.
 
   (** A well-typed term has all de Bruijn indices within bounds. *)
   Lemma has_type_free_db_below : forall e t T, has_type e t T -> free_db_below (length e) t.
   Proof.
-    simple induction 1; intros; auto with coc core arith datatypes.
-    elim H1; intros x H2 H3.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M U s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u Ur Hu IHu
+      | e0 T0 s1 HT IHT U s2 HU IHU
+      | e0 t0 U V Ht0 IHt0 Hconv s Hs IHs ];
+      auto with coc core arith datatypes.
+    destruct Hitem as [x Heq Hnth].
     apply db_var.
     enough (v < length e0) by lia.
-    apply (proj1 (nth_error_Some e0 v)); rewrite H3; discriminate.
+    apply (proj1 (nth_error_Some e0 v)); rewrite Hnth; discriminate.
   Qed.
 
 
   (** A typable term lives in a well-formed environment. *)
   Lemma has_type_well_formed : forall e t T, has_type e t T -> well_formed e.
   Proof.
-    simple induction 1; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M U s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u Ur Hu IHu
+      | e0 T0 s1 HT IHT U s2 HU IHU
+      | e0 t0 U V Ht0 IHt0 Hconv s Hs IHs ];
+      auto with coc core arith datatypes.
   Qed.
 
 
@@ -98,7 +117,7 @@ Section Typage.
   Lemma well_formed_sort :
    forall n e f,
    skipn (S n) e = f ->
-   well_formed e -> forall t, nth_error e n = Some t -> exists s : sort, has_type f t (sort_term s).
+   well_formed e -> forall t, nth_error e n = Some t -> {s : sort & has_type f t (sort_term s)}.
   Proof.
     induction n as [|n IHn]; intros e f Htr Hwf t Ht.
     - destruct e as [|T l]; simpl in *; [discriminate|].
@@ -113,7 +132,7 @@ Section Typage.
 
 
   (** Inversion principle: extract typing information from a term's shape. *)
-  Definition inversion_type (P : Prop) e t T : Prop :=
+  Definition inversion_type (P : Type) e t T : Type :=
     match t with
     | sort_term prop => convertible T (sort_term kind) -> P
     | sort_term set => convertible T (sort_term kind) -> P
@@ -133,57 +152,53 @@ Section Typage.
 
   (** inversion_type is stable under convertible types. *)
   Lemma inversion_type_convertible :
-   forall (P : Prop) e t (U V : term),
+   forall (P : Type) e t (U V : term),
    convertible U V -> inversion_type P e t U -> inversion_type P e t V.
   Proof.
-    do 6 intro.
-    cut (forall x : term, convertible V x -> convertible U x).
-    intro.
-    case t; simpl in |- *; intros.
-    generalize H1.
-    elim s; auto with coc core arith datatypes; intros.
-
-    apply H1 with x; auto with coc core arith datatypes.
-
-    apply H1 with s1 s2 U0; auto with coc core arith datatypes.
-
-    apply H1 with Ur V0; auto with coc core arith datatypes.
-
-    apply H1 with s1 s2; auto with coc core arith datatypes.
-
-    intros.
-    apply trans_convertible_convertible with V; auto with coc core arith datatypes.
+    intros P e t U V Hconv.
+    assert (Hback : forall x : term, convertible V x -> convertible U x)
+      by (intros x Hx; apply trans_convertible_convertible with V; auto with coc core arith datatypes).
+    destruct t as [ s0 | n | T0 M0 | u0 v0 | A0 B0 ]; simpl in |- *.
+    - destruct s0; simpl in |- *; auto with coc core arith datatypes; intros Hinv.
+    - intros Hinv x Heq Hcv. apply Hinv with x; auto with coc core arith datatypes.
+    - intros Hinv s1 s2 U0 HT0 HM0 HU0 Hcv.
+      apply Hinv with s1 s2 U0; auto with coc core arith datatypes.
+    - intros Hinv Ur V0 Hu0 Hv0 Hcv. apply Hinv with Ur V0; auto with coc core arith datatypes.
+    - intros Hinv s1 s2 HA0 HB0 Hcv. apply Hinv with s1 s2; auto with coc core arith datatypes.
   Qed.
 
 
   (** Typing can be inverted according to the shape of the term. *)
   Theorem has_type_inversion :
-   forall (P : Prop) e t T, has_type e t T -> inversion_type P e t T -> P.
+   forall (P : Type) e t T, has_type e t T -> inversion_type P e t T -> P.
   Proof.
-    simple induction 1; simpl in |- *; intros.
-    auto with coc core arith datatypes.
-
-    auto with coc core arith datatypes.
-
-    elim H1; intros.
-    apply H2 with x; auto with coc core arith datatypes.
-    rewrite H3; auto with coc core arith datatypes.
-
-    apply H6 with s1 s2 U; auto with coc core arith datatypes.
-
-    apply H4 with Ur V; auto with coc core arith datatypes.
-
-    apply H4 with s1 s2; auto with coc core arith datatypes.
-
-    apply H1.
-    apply inversion_type_convertible with V; auto with coc core arith datatypes.
+    intros P e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M U s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u Ur Hu IHu
+      | e0 T0 s1 HT IHT U s2 HU IHU
+      | e0 t0 U V Ht0 IHt0 Hconv s Hs IHs ];
+      simpl in |- *; intros Hinv.
+    - auto with coc core arith datatypes.
+    - auto with coc core arith datatypes.
+    - destruct Hitem as [x Heq Hn].
+      apply Hinv with x; auto with coc core arith datatypes.
+      rewrite Heq; auto with coc core arith datatypes.
+    - apply Hinv with s1 s2 U; auto with coc core arith datatypes.
+    - apply Hinv with Ur V; auto with coc core arith datatypes.
+    - apply Hinv with s1 s2; auto with coc core arith datatypes.
+    - apply IHt0.
+      apply inversion_type_convertible with V; auto with coc core arith datatypes.
   Qed.
 
 
   (** Kind is not typable. *)
-  Lemma inversion_has_type_kind : forall e t, ~ has_type e (sort_term kind) t.
+  Lemma inversion_has_type_kind : forall e t, has_type e (sort_term kind) t -> False.
   Proof.
-    red in |- *; intros.
+    intros.
     apply has_type_inversion with e (sort_term kind) t; simpl in |- *;
      auto with coc core arith datatypes.
   Qed.
@@ -206,97 +221,104 @@ Section Typage.
 
   (** Inversion for variable references. *)
   Lemma inversion_has_type_ref :
-   forall (P : Prop) e T n,
+   forall (P : Type) e T n,
    has_type e (var n) T ->
    (forall U : term, nth_error e n = Some U -> convertible T (lift (S n) U) -> P) -> P.
   Proof.
-    intros.
-    apply has_type_inversion with e (var n) T; simpl in |- *; intros;
-     auto with coc core arith datatypes.
-    apply H0 with x; auto with coc core arith datatypes.
+    intros P e T n Hty Hcont.
+    apply (has_type_inversion P e (var n) T Hty).
+    simpl.
+    intros x Heq Hcv.
+    apply Hcont with x; auto with coc core arith datatypes.
   Qed.
 
   (** Inversion for lam abstractions. *)
   Lemma inversion_has_type_abs :
-   forall (P : Prop) e A M (U : term),
+   forall (P : Type) e A M (U : term),
    has_type e (lam A M) U ->
    (forall s1 s2 T,
     has_type e A (sort_term s1) ->
     has_type (A :: e) M T -> has_type (A :: e) T (sort_term s2) -> convertible (prod A T) U -> P) ->
    P.
   Proof.
-    intros.
-    apply has_type_inversion with e (lam A M) U; simpl in |- *;
-     auto with coc core arith datatypes; intros.
-    apply H0 with s1 s2 U0; auto with coc core arith datatypes.
+    intros P e A M U Hty Hcont.
+    apply (has_type_inversion P e (lam A M) U Hty).
+    simpl.
+    intros s1 s2 U0 HA HM HU Hcv.
+    apply Hcont with s1 s2 U0; auto with coc core arith datatypes.
   Qed.
 
   (** Inversion for applications. *)
   Lemma inversion_has_type_app :
-   forall (P : Prop) e u v T,
+   forall (P : Type) e u v T,
    has_type e (app u v) T ->
    (forall V Ur : term,
     has_type e u (prod V Ur) -> has_type e v V -> convertible T (subst v Ur) -> P) -> P.
   Proof.
-    intros.
-    apply has_type_inversion with e (app u v) T; simpl in |- *;
-     auto with coc core arith datatypes; intros.
-    apply H0 with V Ur; auto with coc core arith datatypes.
+    intros P e u v T Hty Hcont.
+    apply (has_type_inversion P e (app u v) T Hty).
+    simpl.
+    intros Ur V Hv Hu Hcv.
+    apply Hcont with V Ur; auto with coc core arith datatypes.
   Qed.
 
   (** Inversion for prod types. *)
   Lemma inversion_has_type_prod :
-   forall (P : Prop) e T (U s : term),
+   forall (P : Type) e T (U s : term),
    has_type e (prod T U) s ->
    (forall s1 s2,
     has_type e T (sort_term s1) -> has_type (T :: e) U (sort_term s2) -> convertible (sort_term s2) s -> P) -> P.
   Proof.
-    intros.
-    apply has_type_inversion with e (prod T U) s; simpl in |- *;
-     auto with coc core arith datatypes; intros.
-    apply H0 with s1 s2; auto with coc core arith datatypes.
+    intros P e T U s Hty Hcont.
+    apply (has_type_inversion P e (prod T U) s Hty).
+    simpl.
+    intros s1 s2 HT HU Hcv.
+    apply Hcont with s1 s2; auto with coc core arith datatypes.
   Qed.
 
 
   (** A term containing Kind as a subterm is not typable. *)
-  Lemma has_type_sort_occurs_kind : forall e t T, sort_occurs_in kind t -> ~ has_type e t T.
+  Lemma has_type_sort_occurs_kind : forall e t T, sort_occurs_in kind t -> has_type e t T -> False.
   Proof.
-    red in |- *; intros.
-    apply has_type_inversion with e t T; auto with coc core arith datatypes.
-    generalize e T.
-    clear H0.
-    elim H; simpl in |- *; auto with coc core arith datatypes; intros.
-    apply has_type_inversion with e0 u (sort_term s1); auto with coc core arith datatypes.
-
-    apply has_type_inversion with (u :: e0) v (sort_term s2);
-     auto with coc core arith datatypes.
-
-    apply has_type_inversion with e0 u (sort_term s1); auto with coc core arith datatypes.
-
-    apply has_type_inversion with (u :: e0) v U; auto with coc core arith datatypes.
-
-    apply has_type_inversion with e0 u (prod V Ur); auto with coc core arith datatypes.
-
-    apply has_type_inversion with e0 v V; auto with coc core arith datatypes.
+    intros e t T Hocc.
+    generalize dependent T; generalize dependent e.
+    induction Hocc as
+      [ | u0 v0 Hocc0 IH0 | u0 v0 Hocc0 IH0
+      | u0 v0 Hocc0 IH0 | u0 v0 Hocc0 IH0
+      | u0 v0 Hocc0 IH0 | u0 v0 Hocc0 IH0 ];
+      intros e T Hty.
+    - apply inversion_has_type_kind with (1 := Hty).
+    - apply inversion_has_type_prod with (1 := Hty).
+      intros s1 s2 Hs1 Hs2 Hcv; apply IH0 with (1 := Hs1).
+    - apply inversion_has_type_prod with (1 := Hty).
+      intros s1 s2 Hs1 Hs2 Hcv; apply IH0 with (1 := Hs2).
+    - apply inversion_has_type_abs with (1 := Hty).
+      intros s1 s2 T0 HA HM HU Hcv; apply IH0 with (1 := HA).
+    - apply inversion_has_type_abs with (1 := Hty).
+      intros s1 s2 T0 HA HM HU Hcv; apply IH0 with (1 := HM).
+    - apply inversion_has_type_app with (1 := Hty).
+      intros V Ur Hu Hv Hcv; apply IH0 with (1 := Hu).
+    - apply inversion_has_type_app with (1 := Hty).
+      intros V Ur Hu Hv Hcv; apply IH0 with (1 := Hv).
   Qed.
 
 
   (** A term convertible to Kind is not typable. *)
-  Lemma inversion_has_type_convertible_kind : forall e t T, convertible t (sort_term kind) -> ~ has_type e t T.
+  Lemma inversion_has_type_convertible_kind : forall e t T, convertible t (sort_term kind) -> has_type e t T -> False.
   Proof.
-    intros.
-    apply has_type_sort_occurs_kind.
+    intros e t T Hconv Hty.
+    apply (has_type_sort_occurs_kind e t T); auto with coc core arith datatypes.
     apply reduces_sort_occurs.
-    elim church_rosser_theorem with t (sort_term kind); intros;
-     auto with coc core arith datatypes.
-    rewrite (reduces_normal (sort_term kind) x); auto with coc core arith datatypes.
-    red in |- *; red in |- *; intros.
-    inversion_clear H2.
+    destruct (church_rosser_theorem t (sort_term kind) Hconv) as [x Hx1 Hx2].
+    assert (Heq : sort_term kind = x).
+    { apply reduces_normal; auto with coc core arith datatypes.
+      intros v Hv; inversion_clear Hv. }
+    rewrite Heq; auto with coc core arith datatypes.
   Qed.
 
 
   (** Inserting a type into the environment at position n. *)
-  Inductive insert_in_environment A : nat -> environment -> environment -> Prop :=
+  Inductive insert_in_environment A : nat -> environment -> environment -> Type :=
     | ins_zero : forall e, insert_in_environment A 0 e (A :: e)
     | ins_succ :
         forall n e f t,
@@ -355,35 +377,36 @@ Section Typage.
    forall n f,
    insert_in_environment A n e f -> well_formed f -> has_type f (lift_rec 1 t n) (lift_rec 1 T n).
   Proof.
-    simple induction 1; simpl in |- *; intros; auto with coc core arith datatypes.
-    elim (le_gt_dec n v); intros; apply type_var;
-     auto with coc core arith datatypes.
-    elim H1; intros.
-    exists x.
-    rewrite H4.
-    unfold lift in |- *.
-    rewrite simplify_lift_rec; simpl in |- *; auto with coc core arith datatypes.
-
-    apply insert_item_ge with A n e0; auto with coc core arith datatypes.
-
-    apply insert_item_lt with A e0; auto with coc core arith datatypes.
-
-    cut (well_formed (lift_rec 1 T0 n :: f)).
-    intro.
-    apply type_abs with s1 s2; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    rewrite distribute_lift_subst.
-    apply type_app with (lift_rec 1 V n); auto with coc core arith datatypes.
-
-    cut (well_formed (lift_rec 1 T0 n :: f)).
-    intro.
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_conv with (lift_rec 1 U n) s; auto with coc core arith datatypes.
+    intros A e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U V Ht0 IHt0 Hconv s Hs IHs ];
+      simpl in |- *; intros n f Hins Hwf.
+    - auto with coc core arith datatypes.
+    - auto with coc core arith datatypes.
+    - destruct (le_gt_dec n v) as [Hge | Hlt].
+      + apply type_var; auto with coc core arith datatypes.
+        destruct Hitem as [x Heq Hnth].
+        exists x.
+        * rewrite Heq. unfold lift in |- *.
+          rewrite simplify_lift_rec; simpl in |- *; auto with coc core arith datatypes.
+        * apply insert_item_ge with A n e0; auto with coc core arith datatypes.
+      + apply type_var; auto with coc core arith datatypes.
+        apply insert_item_lt with A e0; auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (lift_rec 1 T0 n :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_abs with s1 s2; auto with coc core arith datatypes.
+    - rewrite distribute_lift_subst.
+      apply type_app with (lift_rec 1 V n); auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (lift_rec 1 T0 n :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_prod with s1; auto with coc core arith datatypes.
+    - apply type_conv with (lift_rec 1 U n) s; auto with coc core arith datatypes.
   Qed.
 
 
@@ -431,7 +454,7 @@ Section Typage.
 
   (** Every item in a well-formed environment has a sort when lifted. *)
   Lemma well_formed_sort_lift :
-   forall n e t, well_formed e -> item_lift t e n -> exists s : sort, has_type e t (sort_term s).
+   forall n e t, well_formed e -> item_lift t e n -> {s : sort & has_type e t (sort_term s)}.
   Proof.
     induction n as [|n0 IHn]; intros e t Hwf Hil.
     - elim Hil; intros x Heq Hn.
@@ -460,7 +483,7 @@ Section Typage.
 
 
   (** Substituting a term at position n in the environment. *)
-  Inductive substitute_in_environment t T : nat -> environment -> environment -> Prop :=
+  Inductive substitute_in_environment t T : nat -> environment -> environment -> Type :=
     | sub_zero : forall e, substitute_in_environment t T 0 (T :: e) e
     | sub_succ :
         forall e f n u,
@@ -538,46 +561,48 @@ Section Typage.
    substitute_in_environment d t n e f ->
    well_formed f -> skipn n f = g -> has_type f (subst_rec d u n) (subst_rec d U n).
   Proof.
-    simple induction 2; simpl in |- *; intros; auto with coc core arith datatypes.
-    elim (lt_eq_lt_dec n v); [ intro Hlt_eq | intro Hlt ].
-    elim Hlt_eq; clear Hlt_eq; intro Hcomp.
-    destruct v as [|v0]. { lia. }
-    apply type_var; auto with coc core arith datatypes.
-    elim H2; intros x_raw Hx_eq Hx_nth.
-    exists x_raw.
-    rewrite Hx_eq; apply simplify_subst; lia.
-    apply nth_substitute_above with d t n e0. exact H3. lia. exact Hx_nth.
-
-    subst v.
-    elim H2; intros x_raw Hx_eq Hx_nth.
-    assert (Hx_is_t : x_raw = t) by
-      (assert (Hn_t : nth_error e0 n = Some t) by
-         (apply nth_substitute_eq with d f; auto with coc core arith datatypes);
-       rewrite Hx_nth in Hn_t; injection Hn_t as <-; reflexivity).
-    subst x_raw. rewrite Hx_eq. rewrite simplify_subst by lia.
-    apply weakening_at with g;
-      [auto with coc core arith datatypes |
-       exact (substitute_length_le d t n e0 f H3) |
-       auto with coc core arith datatypes |
-       auto with coc core arith datatypes].
-
-    apply type_var; auto with coc core arith datatypes.
-    apply nth_substitute_below with t e0; auto with coc core arith datatypes.
-
-    cut (well_formed (subst_rec d T n :: f)); intros.
-    apply type_abs with s1 s2; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    rewrite distribute_subst.
-    apply type_app with (subst_rec d V n); auto with coc core arith datatypes.
-
-    cut (well_formed (subst_rec d T n :: f)); intros.
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_conv with (subst_rec d U0 n) s; auto with coc core arith datatypes.
+    intros g d t Hgdt e u U Huu.
+    induction Huu as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      simpl in |- *; intros f n Hsub Hwf Hskip.
+    - auto with coc core arith datatypes.
+    - auto with coc core arith datatypes.
+    - destruct (lt_eq_lt_dec n v) as [[Hcomp | Heqnv] | Hlt].
+      + destruct v as [|v0]. { lia. }
+        apply type_var; auto with coc core arith datatypes.
+        destruct Hitem as [x_raw Hx_eq Hx_nth].
+        exists x_raw.
+        * rewrite Hx_eq; apply simplify_subst; lia.
+        * apply nth_substitute_above with d t n e0; auto with coc core arith datatypes; lia.
+      + subst v.
+        destruct Hitem as [x_raw Hx_eq Hx_nth].
+        assert (Hx_is_t : x_raw = t) by
+          (assert (Hn_t : nth_error e0 n = Some t) by
+             (apply nth_substitute_eq with d f; auto with coc core arith datatypes);
+           rewrite Hx_nth in Hn_t; injection Hn_t as <-; reflexivity).
+        subst x_raw. rewrite Hx_eq. rewrite simplify_subst by lia.
+        apply weakening_at with g;
+          [auto with coc core arith datatypes |
+           exact (substitute_length_le d t n e0 f Hsub) |
+           auto with coc core arith datatypes |
+           auto with coc core arith datatypes].
+      + apply type_var; auto with coc core arith datatypes.
+        apply nth_substitute_below with t e0; auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (subst_rec d T0 n :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_abs with s1 s2; auto with coc core arith datatypes.
+    - rewrite distribute_subst.
+      apply type_app with (subst_rec d V n); auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (subst_rec d T0 n :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_prod with s1; auto with coc core arith datatypes.
+    - apply type_conv with (subst_rec d U0 n) s; auto with coc core arith datatypes.
   Qed.
 
 
@@ -598,75 +623,84 @@ Section Typage.
   Theorem has_type_unique_sort :
    forall e t T, has_type e t T -> forall U : term, has_type e t U -> convertible T U.
   Proof.
-    simple induction 1; intros.
-    apply sym_convertible.
-    apply inversion_has_type_prop with e0; auto with coc core arith datatypes.
-
-    apply sym_convertible.
-    apply inversion_has_type_set with e0; auto with coc core arith datatypes.
-
-    apply inversion_has_type_ref with e0 U v; auto with coc core arith datatypes;
-     intros U0 Hnth0 Hconv0.
-    elim H1; intros x_raw Heq_raw Hnth_raw.
-    assert (Hxu : x_raw = U0) by congruence; subst x_raw.
-    rewrite Heq_raw.
-    apply sym_convertible; exact Hconv0.
-
-    apply inversion_has_type_abs with e0 T0 M U0; auto with coc core arith datatypes; intros.
-    apply trans_convertible_convertible with (prod T0 T1); auto with coc core arith datatypes.
-
-    apply inversion_has_type_app with e0 u v U; auto with coc core arith datatypes; intros.
-    apply trans_convertible_convertible with (subst v Ur0); auto with coc core arith datatypes.
-    unfold subst in |- *; apply convertible_convertible_subst;
-     auto with coc core arith datatypes.
-    apply inversion_convertible_product_right with V V0; auto with coc core arith datatypes.
-
-    apply inversion_has_type_prod with e0 T0 U U0; auto with coc core arith datatypes;
-     intros.
-    apply trans_convertible_convertible with (sort_term s3); auto with coc core arith datatypes.
-
-    apply trans_convertible_convertible with U; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros U Hty2.
+    - apply sym_convertible.
+      apply inversion_has_type_prop with e0; auto with coc core arith datatypes.
+    - apply sym_convertible.
+      apply inversion_has_type_set with e0; auto with coc core arith datatypes.
+    - apply inversion_has_type_ref with e0 U v; auto with coc core arith datatypes;
+       intros U0 Hnth0 Hconv0.
+      destruct Hitem as [x_raw Heq_raw Hnth_raw].
+      assert (Hxu : x_raw = U0) by congruence; subst x_raw.
+      rewrite Heq_raw.
+      apply sym_convertible; exact Hconv0.
+    - apply inversion_has_type_abs with e0 T0 M0 U; auto with coc core arith datatypes;
+        intros s1' s2' T1 HT1 HM1 HU1 Hcv.
+      pose proof (IHM T1 HM1) as HconvU.
+      apply trans_convertible_convertible with (prod T0 T1); auto with coc core arith datatypes.
+    - apply inversion_has_type_app with e0 u0 v0 U; auto with coc core arith datatypes;
+        intros V0 Ur0 Hu0 Hv0 Hcv.
+      apply trans_convertible_convertible with (subst v0 Ur0); auto with coc core arith datatypes.
+      unfold subst in |- *; apply convertible_convertible_subst;
+       auto with coc core arith datatypes.
+      apply inversion_convertible_product_right with V V0; auto with coc core arith datatypes.
+    - apply inversion_has_type_prod with e0 T0 U0 U; auto with coc core arith datatypes;
+       intros s1' s2' HT1 HU1 Hcv.
+      apply trans_convertible_convertible with (sort_term s2'); auto with coc core arith datatypes.
+    - apply trans_convertible_convertible with U0; auto with coc core arith datatypes.
   Qed.
 
 
   (** Every well-typed term has a sort or its type is Kind. *)
   Theorem type_case :
    forall e t T,
-   has_type e t T -> (exists s : sort, has_type e T (sort_term s)) \/ T = sort_term kind.
+   has_type e t T -> {s : sort & has_type e T (sort_term s)} + {T = sort_term kind}.
   Proof.
-    simple induction 1; intros; auto with coc core arith datatypes.
-    left.
-    elim well_formed_sort_lift with v e0 t0; auto with coc core arith datatypes; intros.
-    exists x; auto with coc core arith datatypes.
-
-    left.
-    exists s2.
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    left.
-    elim H3; intros.
-    elim H4; intros.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
-     intros.
-    exists s2.
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    discriminate H4.
-
-    case s2; auto with coc core arith datatypes.
-    left.
-    exists kind.
-    apply type_prop.
-    apply has_type_well_formed with T0 (sort_term s1); auto with coc core arith datatypes.
-
-    left.
-    exists kind.
-    apply type_set.
-    apply has_type_well_formed with T0 (sort_term s1); auto with coc core arith datatypes.
-
-    left.
-    exists s; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ].
+    - right; auto with coc core arith datatypes.
+    - right; auto with coc core arith datatypes.
+    - left.
+      destruct (well_formed_sort_lift v e0 t0 Hwf0 Hitem) as [x Hx].
+      exists x; auto with coc core arith datatypes.
+    - left.
+      exists s2.
+      apply type_prod with s1; auto with coc core arith datatypes.
+    - left.
+      destruct IHu as [[x Hx] | Hbad].
+      + apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+          intros s1' s2' HV HUr Hcv.
+        exists s2'.
+        replace (sort_term s2') with (subst v0 (sort_term s2')); auto with coc core arith datatypes.
+        apply substitution with V; auto with coc core arith datatypes.
+      + discriminate Hbad.
+    - destruct s2; auto with coc core arith datatypes.
+      + left.
+        exists kind.
+        apply type_prop.
+        apply has_type_well_formed with T0 (sort_term s1); auto with coc core arith datatypes.
+      + left.
+        exists kind.
+        apply type_set.
+        apply has_type_well_formed with T0 (sort_term s1); auto with coc core arith datatypes.
+    - left.
+      exists s; auto with coc core arith datatypes.
   Qed.
 
 
@@ -674,9 +708,8 @@ Section Typage.
   Lemma type_kind_not_convertible :
    forall e t T, has_type e t T -> has_type e t (sort_term kind) -> T = sort_term kind.
   Proof.
-    intros.
-    elim type_case with e t T; intros; auto with coc core arith datatypes.
-    elim H1; intros.
+    intros e t T Hty Htk.
+    destruct (type_case e t T Hty) as [[x Hx] | Hbad]; auto with coc core arith datatypes.
     elim inversion_has_type_convertible_kind with e T (sort_term x); auto with coc core arith datatypes.
     apply has_type_unique_sort with e t; auto with coc core arith datatypes.
   Qed.
@@ -685,17 +718,15 @@ Section Typage.
   (** The type of a well-typed term has bounded de Bruijn indices. *)
   Lemma type_free_db_below : forall e t T, has_type e t T -> free_db_below (length e) T.
   Proof.
-    intros.
-    elim type_case with e t T; intros; auto with coc core arith datatypes.
-    inversion_clear H0.
-    apply has_type_free_db_below with (sort_term x); auto with coc core arith datatypes.
-
-    rewrite H0; auto with coc core arith datatypes.
+    intros e t T Hty.
+    destruct (type_case e t T Hty) as [[x Hx] | Hbad]; auto with coc core arith datatypes.
+    - apply has_type_free_db_below with (sort_term x); auto with coc core arith datatypes.
+    - rewrite Hbad; auto with coc core arith datatypes.
   Qed.
 
 
   (** One-step reduction in the environment. *)
-  Inductive reduces_once_in_environment : environment -> environment -> Prop :=
+  Inductive reduces_once_in_environment : environment -> environment -> Type :=
     | red_env_hd : forall e t u, reduces_once t u -> reduces_once_in_environment (t :: e) (u :: e)
     | red_env_tl :
         forall e f t, reduces_once_in_environment e f -> reduces_once_in_environment (t :: e) (t :: f).
@@ -708,9 +739,9 @@ Section Typage.
    item_lift t e n ->
    forall f,
    reduces_once_in_environment e f ->
-   item_lift t f n \/
-   (forall g, skipn (S n) e = g -> skipn (S n) f = g) /\
-   ex2 (fun u => reduces_once t u) (fun u => item_lift u f n).
+   item_lift t f n +
+   ((forall g, skipn (S n) e = g -> skipn (S n) f = g) *
+    sigT2 (fun u => reduces_once t u) (fun u => item_lift u f n)).
   Proof.
     induction n as [|n0 IHn]; intros t e Hil f Hred.
     - elim Hil; intros x Heq Hn.
@@ -760,115 +791,120 @@ Section Typage.
   Lemma has_type_reduces_environment :
    forall e t T, has_type e t T -> forall f, reduces_once_in_environment e f -> well_formed f -> has_type f t T.
   Proof.
-    simple induction 1; intros.
-    auto with coc core arith datatypes.
-
-    auto with coc core arith datatypes.
-
-    elim reduces_item with v t0 e0 f; auto with coc core arith datatypes; intros.
-    inversion_clear H4.
-    inversion_clear H6.
-    elim H1; intros x0 H6 H8.
-    destruct (well_formed_sort v e0 (skipn (S v) e0) eq_refl H0 x0 H8) as [x2 Hx2].
-    apply type_conv with x x2; auto with coc core arith datatypes.
-    rewrite H6.
-    replace (sort_term x2) with (lift (S v) (sort_term x2));
-     auto with coc core arith datatypes.
-    assert (Hvl : v < length e0) by
-      (apply (proj1 (nth_error_Some e0 v)); rewrite H8; discriminate).
-    assert (Hskipn : skipn (S v) f = skipn (S v) e0) by (apply H5; reflexivity).
-    assert (Hvlf : S v <= length f) by
-      (assert (Hlen : length f = length e0) by
-        (clear - H2; induction H2; simpl; lia);
-       lia).
-    assert (Hx2f : has_type (skipn (S v) f) x0 (sort_term x2)) by
-      (rewrite Hskipn; exact Hx2).
-    apply weakening_at with (skipn (S v) f);
-      [reflexivity | exact Hvlf | exact Hx2f | exact H3].
-
-    cut (well_formed (T0 :: f)); intros.
-    apply type_abs with s1 s2; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_app with V; auto with coc core arith datatypes.
-
-    cut (well_formed (T0 :: f)); intros.
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_conv with U s; auto with coc core arith datatypes.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros f Hred Hwf.
+    - auto with coc core arith datatypes.
+    - auto with coc core arith datatypes.
+    - destruct (reduces_item v t0 e0 Hitem f Hred) as [Hleft | [Htrunc Hright]].
+      + apply type_var; auto with coc core arith datatypes.
+      + destruct Hright as [x Hred1 Hil3].
+        destruct Hil3 as [x0 Heqx Hx0f].
+        destruct Hitem as [x_orig Heq_orig Hnth_orig].
+        destruct (well_formed_sort v e0 (skipn (S v) e0) eq_refl Hwf0 x_orig Hnth_orig) as [x2 Hx2].
+        apply type_conv with x x2; auto with coc core arith datatypes.
+        * apply type_var; auto with coc core arith datatypes.
+          exists x0; auto with coc core arith datatypes.
+        * rewrite Heq_orig.
+          replace (sort_term x2) with (lift (S v) (sort_term x2));
+           auto with coc core arith datatypes.
+          assert (Hvl : v < length e0) by
+            (apply (proj1 (nth_error_Some e0 v)); rewrite Hnth_orig; discriminate).
+          assert (Hskipn : skipn (S v) f = skipn (S v) e0) by (apply Htrunc; reflexivity).
+          assert (Hvlf : S v <= length f) by
+            (assert (Hlen : length f = length e0) by
+              (clear - Hred; induction Hred; simpl; lia);
+             lia).
+          assert (Hx2f : has_type (skipn (S v) f) x_orig (sort_term x2)) by
+            (rewrite Hskipn; exact Hx2).
+          apply weakening_at with (skipn (S v) f);
+            [reflexivity | exact Hvlf | exact Hx2f | exact Hwf].
+    - assert (Hwf' : well_formed (T0 :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_abs with s1 s2; auto with coc core arith datatypes.
+    - apply type_app with V; auto with coc core arith datatypes.
+    - assert (Hwf' : well_formed (T0 :: f))
+        by (apply wf_var with s1; auto with coc core arith datatypes).
+      apply type_prod with s1; auto with coc core arith datatypes.
+    - apply type_conv with U0 s; auto with coc core arith datatypes.
   Qed.
 
 
   (** Subject reduction for one-step reduction. *)
   Lemma subject_reduction : forall e t T, has_type e t T -> forall u, reduces_once t u -> has_type e u T.
   Proof.
-    simple induction 1; intros.
-    inversion_clear H1.
+    intros e t T Hty.
+    induction Hty as
+      [ e0 Hwf0
+      | e0 Hwf0
+      | e0 Hwf0 v t0 Hitem
+      | e0 T0 s1 HT IHT M0 U0 s2 HU IHU HM IHM
+      | e0 v0 V Hv IHv u0 Ur Hu IHu
+      | e0 T0 s1 HT IHT U0 s2 HU IHU
+      | e0 t0 U0 V Ht0 IHt0 Hconv s Hs IHs ];
+      intros u Hstep.
+    - inversion_clear Hstep.
+    - inversion_clear Hstep.
+    - inversion_clear Hstep.
+    - inversion Hstep as
+        [ | T1 T1' HstepT N1 Heq1 Heq2 | M1 M1' HstepM N1 Heq1 Heq2 | | | | ]; subst.
+      + (* domain reduces: lam T0 M0 -> lam T1' M0 *)
+        assert (Hwf' : well_formed (T1' :: e0)).
+        { apply wf_var with s1; auto with coc core arith datatypes. }
+        apply type_conv with (prod T1' U0) s2; auto with coc core arith datatypes.
+        * apply type_abs with s1 s2; auto with coc core arith datatypes.
+          -- apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
+          -- apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
+        * apply type_prod with s1; auto with coc core arith datatypes.
+      + (* body reduces: lam T0 M0 -> lam T0 M1' *)
+        apply type_abs with s1 s2; auto with coc core arith datatypes.
+    - inversion Hstep as
+        [ M1 N1 T1 Heq1 Heq2
+        | | | u1 u1' HstepU M2 Heq1 Heq2 | v1 v1' HstepV M2 Heq1 Heq2 | | ]; subst.
+      + (* beta: u0 must be a lambda *)
+        destruct (type_case e0 (lam T1 M1) (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+        apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+          intros s1' s2' HV HUr Hcv.
+        apply inversion_has_type_abs with e0 T1 M1 (prod V Ur); auto with coc core arith datatypes;
+          intros s1'' s2'' T1' HT1 HM1 HT1' Hcv2.
+        apply type_conv with (subst v0 T1') s2'; auto with coc core arith datatypes.
+        * apply substitution with T1; auto with coc core arith datatypes.
+          apply type_conv with V s1''; auto with coc core arith datatypes.
+          apply sym_convertible.
+          apply inversion_convertible_product_left with T1' Ur; auto with coc core arith datatypes.
+        * unfold subst in |- *.
+          apply convertible_convertible_subst; auto with coc core arith datatypes.
+          apply inversion_convertible_product_right with T1 V; auto with coc core arith datatypes.
+        * replace (sort_term s2') with (subst v0 (sort_term s2')); auto with coc core arith datatypes.
+          apply substitution with V; auto with coc core arith datatypes.
+      + (* function reduces *)
+        apply type_app with V; auto with coc core arith datatypes.
+      + (* argument reduces *)
+        destruct (type_case e0 u0 (prod V Ur) Hu) as [[x Hx] | Hbad]; [| discriminate Hbad].
+        apply inversion_has_type_prod with e0 V Ur (sort_term x); auto with coc core arith datatypes;
+          intros s1' s2' HV HUr Hcv.
+        apply type_conv with (subst v1' Ur) s2'; auto with coc core arith datatypes.
+        apply type_app with V; auto with coc core arith datatypes.
 
-    inversion_clear H1.
+        unfold subst in |- *.
+        apply convertible_convertible_subst; auto with coc core arith datatypes.
 
-    inversion_clear H2.
-
-    inversion_clear H6.
-    cut (well_formed (M' :: e0)); intros.
-    apply type_conv with (prod M' U) s2; auto with coc core arith datatypes.
-    apply type_abs with s1 s2; auto with coc core arith datatypes.
-    apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
-
-    apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
-
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_abs with s1 s2; auto with coc core arith datatypes.
-
-    elim type_case with e0 u (prod V Ur); intros;
-     auto with coc core arith datatypes.
-    inversion_clear H5.
-    apply inversion_has_type_prod with e0 V Ur (sort_term x); intros;
-     auto with coc core arith datatypes.
-    generalize H2 H3.
-    clear H2 H3.
-    inversion_clear H4; intros.
-    apply inversion_has_type_abs with e0 T0 M (prod V Ur); intros;
-     auto with coc core arith datatypes.
-    apply type_conv with (subst v T1) s2; auto with coc core arith datatypes.
-    apply substitution with T0; auto with coc core arith datatypes.
-    apply type_conv with V s0; auto with coc core arith datatypes.
-    apply inversion_convertible_product_left with Ur T1; auto with coc core arith datatypes.
-
-    unfold subst in |- *.
-    apply convertible_convertible_subst; auto with coc core arith datatypes.
-    apply inversion_convertible_product_right with T0 V; auto with coc core arith datatypes.
-
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    apply type_app with V; auto with coc core arith datatypes.
-
-    apply type_conv with (subst N2 Ur) s2; auto with coc core arith datatypes.
-    apply type_app with V; auto with coc core arith datatypes.
-
-    unfold subst in |- *.
-    apply convertible_convertible_subst; auto with coc core arith datatypes.
-
-    replace (sort_term s2) with (subst v (sort_term s2)); auto with coc core arith datatypes.
-    apply substitution with V; auto with coc core arith datatypes.
-
-    discriminate H5.
-
-    inversion_clear H4.
-    apply type_prod with s1; auto with coc core arith datatypes.
-    apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
-    apply wf_var with s1; auto with coc core arith datatypes.
-
-    apply type_prod with s1; auto with coc core arith datatypes.
-
-    apply type_conv with U s; auto with coc core arith datatypes.
+        replace (sort_term s2') with (subst v0 (sort_term s2')); auto with coc core arith datatypes.
+        apply substitution with V; auto with coc core arith datatypes.
+    - inversion Hstep as
+        [ | | | | | T1 T1' HstepT U1 Heq1 Heq2 | U1 U1' HstepU T1 Heq1 Heq2 ]; subst.
+      + apply type_prod with s1; auto with coc core arith datatypes.
+        apply has_type_reduces_environment with (T0 :: e0); auto with coc core arith datatypes.
+        apply wf_var with s1; auto with coc core arith datatypes.
+      + apply type_prod with s1; auto with coc core arith datatypes.
+    - apply type_conv with U0 s; auto with coc core arith datatypes.
   Qed.
 
 
@@ -876,8 +912,10 @@ Section Typage.
   Theorem subject_reduction_theorem :
    forall e t u, reduces t u -> forall T, has_type e t T -> has_type e u T.
   Proof.
-    intros e t u H; induction H; intros; auto with coc core arith datatypes.
-    apply subject_reduction with y; intros; auto with coc core arith datatypes.
+    intros e t u H.
+    induction H as [ M0 | M0 P0 N0 Hstep0 Hred0 IH0 ]; intros T Hty.
+    - auto with coc core arith datatypes.
+    - apply subject_reduction with P0; auto with coc core arith datatypes.
   Qed.
 
 
@@ -885,16 +923,15 @@ Section Typage.
   Lemma type_reduction :
    forall e t T (U : term), reduces T U -> has_type e t T -> has_type e t U.
   Proof.
-    intros.
-    elim type_case with e t T; intros; auto with coc core arith datatypes.
-    inversion_clear H1.
-    apply type_conv with T x; auto with coc core arith datatypes.
-    apply subject_reduction_theorem with T; auto with coc core arith datatypes.
-
-    elim reduces_normal with T U; auto with coc core arith datatypes.
-    rewrite H1.
-    red in |- *; red in |- *; intros.
-    inversion_clear H2.
+    intros e t T U Hred Hty.
+    destruct (type_case e t T Hty) as [[x Hx] | Hbad].
+    - apply type_conv with T x; auto with coc core arith datatypes.
+      apply subject_reduction_theorem with T; auto with coc core arith datatypes.
+    - assert (Heq : T = U).
+      { apply reduces_normal; auto with coc core arith datatypes.
+        rewrite Hbad.
+        intros v Hv; inversion_clear Hv. }
+      rewrite <- Heq; auto with coc core arith datatypes.
   Qed.
 
 
@@ -903,12 +940,11 @@ Section Typage.
    forall e u (U : term) v (V : term),
    has_type e u U -> has_type e v V -> convertible u v -> convertible U V.
   Proof.
-    intros.
-    elim church_rosser_theorem with u v; auto with coc core arith datatypes; intros.
+    intros e u U v V Hu Hv Hconv.
+    destruct (church_rosser_theorem u v Hconv) as [x Hx1 Hx2].
     apply has_type_unique_sort with e x.
-    apply subject_reduction_theorem with u; auto with coc core arith datatypes.
-
-    apply subject_reduction_theorem with v; auto with coc core arith datatypes.
+    - apply subject_reduction_theorem with u; auto with coc core arith datatypes.
+    - apply subject_reduction_theorem with v; auto with coc core arith datatypes.
   Qed.
 
 End Typage.

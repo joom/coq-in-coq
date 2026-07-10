@@ -14,13 +14,14 @@
 (* 02110-1301 USA                                                     *)
 
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import eta_reduction.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import eta_typing.
-From CoqInCoq Require Import decidable_conversion.
-From CoqInCoq Require Import strong_normalization.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import eta_reduction.
+From CoC Require Import typing.
+From CoC Require Import eta_typing.
+From CoC Require Import decidable_conversion.
+From CoC Require Import strong_normalization.
+From CoC Require Import terms.
+From CoC Require Import inference.
 
 (** A term is a lam abstraction. *)
 Definition is_lambda (t : term) :=
@@ -426,11 +427,11 @@ Qed.
 (** Every typed term reduces to a normal form that is also typed. *)
 Lemma has_type_is_normal_form :
  forall (e : environment) (a Ta : term),
- has_type e a Ta -> exists a' : term, reduces a a' /\ normal a' /\ has_type e a' Ta.
+ has_type e a Ta -> { a' : term & ((reduces a a') * (normal a' * has_type e a' Ta))%type }.
 Proof.
   intros.
   elim (compute_normal_form a).
-  intros; split with x; intuition; trivial.
+  intros x Hred Hnorm; exists x; repeat split; trivial.
   apply subject_reduction_theorem with a; trivial.
   apply strong_normalization with e Ta; trivial.
 Qed.
@@ -444,10 +445,10 @@ Proof.
   intros.
   generalize (has_type_is_normal_form e a Ta H).
   generalize (has_type_is_normal_form e b Tb H0).
-  intros (x, H3) (x0, H4); intuition.
+  intros [x [H3a [H3b H3c]]] [x0 [H4a [H4b H4c]]].
   cut (x = x0).
-  intros.
-  rewrite <- H7 in H3.
+  intros Heq.
+  rewrite <- Heq in H4a.
   apply trans_convertible_convertible with x; auto with coc.
   apply sym_convertible; auto with coc.
   apply eta_convertible_eq with e Tb Ta; auto with coc ecoc.
@@ -468,7 +469,7 @@ Proof.
   intros.
   generalize (has_type_is_normal_form e V (sort_term s) H).
   generalize (has_type_is_normal_form e U (sort_term r) H0).
-  intros (x, H2) (x0, H3); intuition.
+  intros [x [H2a [H2b H2c]]] [x0 [H3a [H3b H3c]]].
   apply eta_has_type_normal_form_convertible with x0 x e e; eauto with ecoc.
   apply normal_eta_convertible_normal_form; auto with ecoc.
   apply trans_eta_convertible with U; auto with ecoc.
@@ -479,7 +480,7 @@ Proof.
   apply eta_reduces_eta_convertible; auto with ecoc.
 
   unfold not in |- *; unfold is_lambda in |- *; intros (x1, (x2, H6)).
-  rewrite H6 in H8.
+  rewrite H6 in H3c.
   apply inversion_eta_has_type_lambda with e x1 x2 (sort_term s); trivial.
   apply has_type_eta_has_type; trivial.
 
@@ -492,48 +493,95 @@ Proof.
 Qed.
 
 
+(** Mutual induction principle for the expansion-based typing judgments. *)
+Scheme eta_ht_mut := Induction for eta_has_type Sort Prop
+  with eta_wf_mut := Induction for eta_well_formed Sort Prop.
+
+(** [has_type] is decidable, so it suffices to show that a term with an
+    expansion-based typing cannot fail to have a standard type.  We prove the
+    double-negated statement by induction over the (propositional)
+    expansion-based judgments, materialising the standard-typing derivations of
+    the sub-terms through decidability whenever we need them. *)
+
+(** Materialise a standard typing derivation from its double negation, using
+    decidability of typing. *)
+Lemma has_type_of_nn :
+ forall (e : environment) (M t : term),
+ ((has_type e M t -> False) -> False) -> has_type e M t.
+Proof.
+  intros e M t Hnn.
+  destruct (decide_type e M t) as [Hyes | Hno].
+  - exact Hyes.
+  - exfalso; apply Hnn; exact Hno.
+Qed.
+
+(** Materialise a well-formedness derivation from its double negation. *)
+Lemma well_formed_of_nn :
+ forall e : environment,
+ ((well_formed e -> False) -> False) -> well_formed e.
+Proof.
+  intros e Hnn.
+  destruct (decide_well_formed e) as [Hyes | Hno].
+  - exact Hyes.
+  - exfalso; apply Hnn; exact Hno.
+Qed.
+
+(** Double-negated version of the equivalence, proved by mutual induction. *)
+Lemma eta_has_type_has_type_nn :
+ forall (e : environment) (M t : term),
+ eta_has_type e M t -> (has_type e M t -> False) -> False.
+Proof.
+  intros e M t H.
+  apply
+   (eta_ht_mut
+      (fun e M t (_ : eta_has_type e M t) => (has_type e M t -> False) -> False)
+      (fun e (_ : eta_well_formed e) => (well_formed e -> False) -> False));
+   try exact H.
+  (* eta_type_prop *)
+  - intros e0 w IHw Hnot.
+    apply Hnot; apply type_prop; apply well_formed_of_nn; exact IHw.
+  (* eta_type_set *)
+  - intros e0 w IHw Hnot.
+    apply Hnot; apply type_set; apply well_formed_of_nn; exact IHw.
+  (* eta_type_var *)
+  - intros e0 w IHw v t0 Hitem Hnot.
+    apply Hnot; apply type_var; [ apply well_formed_of_nn; exact IHw | exact Hitem ].
+  (* eta_type_abs *)
+  - intros e0 T s1 dT IHT M0 U0 s2 dU IHU dM IHM Hnot.
+    apply Hnot; apply type_abs with s1 s2;
+      apply has_type_of_nn; [ exact IHT | exact IHU | exact IHM ].
+  (* eta_type_app *)
+  - intros e0 v V dv IHv u0 Ur du IHu Hnot.
+    apply Hnot; apply type_app with V;
+      apply has_type_of_nn; [ exact IHv | exact IHu ].
+  (* eta_type_prod *)
+  - intros e0 T s1 dT IHT U0 s2 dU IHU Hnot.
+    apply Hnot; apply type_prod with s1;
+      apply has_type_of_nn; [ exact IHT | exact IHU ].
+  (* eta_type_eta_convertible *)
+  - intros e0 t0 U0 V dt0 IHt0 Hconv s dV IHV Hnot.
+    assert (Ht0 : has_type e0 t0 U0) by (apply has_type_of_nn; exact IHt0).
+    assert (HV : has_type e0 V (sort_term s)) by (apply has_type_of_nn; exact IHV).
+    generalize (type_case e0 t0 U0 Ht0).
+    intros [(x, H5)| H6].
+    + apply Hnot; apply type_conv with U0 s; trivial.
+      apply eta_convertible_convertible with e0 (sort_term x) (sort_term s); trivial.
+      apply has_type_sort_eta_convertible with e0 U0 V; auto with ecoc.
+    + rewrite H6 in Hconv.
+      apply (inversion_eta_has_type_convertible_kind e0 V (sort_term s)).
+      * apply sym_eta_convertible; exact Hconv.
+      * exact dV.
+  (* eta_well_formed_nil *)
+  - intros Hnot; apply Hnot; apply wf_nil.
+  (* eta_well_formed_var *)
+  - intros e0 T s dT IHT Hnot.
+    apply Hnot; apply wf_var with s; apply has_type_of_nn; exact IHT.
+Qed.
+
 (** Erasure typing implies standard typing. *)
 Lemma eta_has_type_has_type : forall (e : environment) (M t : term), eta_has_type e M t -> has_type e M t.
 Proof.
-  fix eta_has_type_has_type 4.
-  intros.
-  case H.
-  intros; apply type_prop.
-  case H0.
-  apply wf_nil.
-  intros; apply wf_var with s.
-  apply eta_has_type_has_type; trivial.
-  intros; apply type_set.
-  case H0.
-  apply wf_nil.
-  intros; apply wf_var with s.
-  apply eta_has_type_has_type; trivial.
-  intros; apply type_var.
-  case H0.
-  apply wf_nil.
-  intros; apply wf_var with s.
-  apply eta_has_type_has_type; trivial.
-  trivial.
-  intros.
-  apply type_abs with s1 s2.
-  apply eta_has_type_has_type; trivial.
-  apply eta_has_type_has_type; trivial.
-  apply eta_has_type_has_type; trivial.
-  intros; apply type_app with V.
-  apply eta_has_type_has_type; trivial.
-  apply eta_has_type_has_type; trivial.
-  intros.
-  apply type_prod with s1.
-  apply eta_has_type_has_type; trivial.
-  apply eta_has_type_has_type; trivial.
-  intros.
-  generalize (eta_has_type_has_type e0 t0 U H0); intros.
-  generalize (eta_has_type_has_type e0 V (sort_term s) H2); intros.
-  generalize (type_case e0 t0 U H3).
-  intros [(x, H5)| H6].
-  apply type_conv with U s; trivial.
-  apply eta_convertible_convertible with e0 (sort_term x) (sort_term s); trivial.
-  apply has_type_sort_eta_convertible with e0 U V; auto with ecoc.
-  rewrite H6 in H1.
-  elim (inversion_eta_has_type_convertible_kind e0 V (sort_term s)); auto with ecoc.
+  intros e M t H.
+  apply has_type_of_nn.
+  apply eta_has_type_has_type_nn; exact H.
 Qed.

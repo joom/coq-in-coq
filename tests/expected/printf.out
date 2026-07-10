@@ -1,0 +1,14 @@
+Str admitted.
+Nat admitted.
+Fmt admitted.
+fstop admitted.
+flit admitted.
+fint admitted.
+fstr admitted.
+sprintf admitted.
+Inferred type: Nat -> Str
+Extracted: (sprintf [Nat -> Str] ((fint [Str] fstop)))
+Inferred type: Str -> Nat -> Str
+Extracted: (sprintf [Str -> Nat -> Str] ((fstr [Nat -> Str] ((fint [Str] fstop)))))
+Extracted: λsep:Str. (sprintf [Nat -> Str -> Str] ((fint [Str -> Str] ((flit [Str -> Str] sep ((fstr [Str] fstop)))))))
+Extracted: λlabel:Str. λcolon:Str. (sprintf [Nat -> Str] ((flit [Nat -> Str] label ((flit [Nat -> Str] colon ((fint [Str] fstop)))))))

@@ -16,11 +16,11 @@
 
 From Stdlib Require Import Lia.
 
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import decidable_conversion.
-From CoqInCoq Require Import strong_normalization.
-From CoqInCoq Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import decidable_conversion.
+From CoC Require Import strong_normalization.
+From CoC Require Import terms.
 
 (** Apply a list of arguments to a term, rightmost argument applied first. *)
 Fixpoint applist (l : list term) : term -> term :=
@@ -40,10 +40,10 @@ Qed.
 
 (** The head of an applist-applied term is typable. *)
 Lemma inversion_has_type_applist_head :
- forall e t l T, has_type e (applist l t) T -> exists U : _, has_type e t U.
+ forall e t l T, has_type e (applist l t) T -> {U : _ & has_type e t U}.
 Proof.
   simple induction l; simpl in |- *; intros.
-  split with T; trivial.
+  exists T; trivial.
 
   apply inversion_has_type_app with (1 := H0); intros.
   eauto.
@@ -102,31 +102,29 @@ Qed.
 Lemma atom_reduction : forall e t u, reduces t u -> is_atom e t -> is_atom e u.
 Proof.
   intros e t u Hred; induction Hred; intros; trivial.
-  apply atom_red1 with y; auto.
+  apply atom_red1 with P; auto.
 Qed.
 
 (** A sort cannot be convertible with an atomic term. *)
-Lemma convertible_sort_atom : forall (s : sort) e u, is_atom e u -> ~ convertible (sort_term s) u.
+Lemma convertible_sort_atom : forall (s : sort) e u, is_atom e u -> convertible (sort_term s) u -> False.
 Proof.
-  red in |- *; intros.
-  elim church_rosser_theorem with (1 := H0); intros.
-  rewrite <- reduces_normal with (1 := H1) in H2.
-  specialize atom_reduction with (1 := H2) (2 := H).
-  apply sort_not_atom.
-
-  red in |- *; red in |- *; intros.
-  inversion H3.
+  intros.
+  elim church_rosser_theorem with (1 := H0); intros x p q.
+  rewrite <- reduces_normal with (1 := p) in q.
+  apply (sort_not_atom e s).
+  apply atom_reduction with (1 := q) (2 := H).
+  red in |- *; intros u0 Hu0; inversion Hu0.
 Qed.
 
 (** A prod cannot be convertible with an atomic term. *)
-Lemma convertible_product_atom : forall a b e u, is_atom e u -> ~ convertible (prod a b) u.
+Lemma convertible_product_atom : forall a b e u, is_atom e u -> convertible (prod a b) u -> False.
 Proof.
-  red in |- *; intros.
-  elim church_rosser_theorem with (1 := H0); intros.
-  apply reduces_product_product with (1 := H1); intros.
-  rewrite H3 in H2.
-  specialize atom_reduction with (1 := H2) (2 := H).
-  apply prod_not_atom.
+  intros.
+  elim church_rosser_theorem with (1 := H0); intros x p q.
+  apply reduces_product_product with (1 := p); intros a0 b0 Heq redu redv.
+  rewrite Heq in q.
+  apply (prod_not_atom e a0 b0).
+  apply atom_reduction with (1 := q) (2 := H).
 Qed.
 
 (** Normal proofs of products are either atomic or an abstraction. *)
@@ -138,9 +136,9 @@ Lemma product_inhabitants :
  normal t -> is_atom e t \/ (exists a' : _, (exists m : _, t = lam a' m)).
 Proof.
   simple induction 1; intros; eauto.
-  elim convertible_sort_product with (1 := H1).
+  elim convertible_sort_product with (1 := H0).
 
-  elim convertible_sort_product with (1 := H1).
+  elim convertible_sort_product with (1 := H0).
 
   left.
   exists v.
@@ -150,20 +148,22 @@ Proof.
 
   exists (nil (A:=term)); simpl in |- *; auto.
 
+  rename H3 into H5. rename H2 into H4. rename H1 into H3.
+  rename H0 into H2. rename h into H1.
   left.
   apply is_atom_app.
   elim H3 with V Ur; intros; auto with coc.
+  inversion_clear H0.
   inversion_clear H6.
-  inversion_clear H7.
-  rewrite H6 in H5.
+  rewrite H0 in H5.
   elim H5 with (subst v x0); auto with coc.
 
-  red in |- *; red in |- *; intros.
+  unfold normal; intros u1 Hu1.
   elim H5 with (app u1 v); auto with coc.
 
-  elim convertible_sort_product with (1 := H4).
+  elim convertible_sort_product with (1 := H2).
 
-  apply H1 with a b; auto.
+  apply H0 with a b; auto.
   apply trans_convertible_convertible with V; auto.
 Qed.
 
@@ -180,15 +180,15 @@ Lemma hnf_proofs_sound :
 Proof.
   simple induction 1; simpl in |- *; intros; auto.
   apply is_atom_app.
-  elim product_inhabitants with (1 := H2) (a := V) (b := Ur); intros;
+  elim product_inhabitants with (1 := h0) (a := V) (b := Ur); intros;
    auto with coc.
-  inversion_clear H5.
-  inversion_clear H6.
-  rewrite H5 in H4.
-  elim H4 with (subst v x0); auto with coc.
+  inversion_clear H3.
+  inversion_clear H4.
+  rewrite H3 in H2.
+  elim H2 with (subst v x0); auto with coc.
 
-  red in |- *; red in |- *; intros.
-  elim H4 with (app u0 v); auto with coc.
+  unfold normal; intros u0 Hu0.
+  elim H2 with (app u0 v); auto with coc.
 Qed.
 
 (** Normal proofs of atomic types are themselves atomic. *)
@@ -197,9 +197,9 @@ Lemma atom_inhabitants :
  has_type e t u -> convertible u u' -> is_atom e u' -> hnf_proofs e t -> is_atom e t.
 Proof.
   simple induction 1; simpl in |- *; intros; auto.
-  elim convertible_sort_atom with (1 := H2) (2 := H1).
+  elim convertible_sort_atom with (1 := H1) (2 := H0).
 
-  elim convertible_sort_atom with (1 := H2) (2 := H1).
+  elim convertible_sort_atom with (1 := H1) (2 := H0).
 
   split with v.
   match goal with H : item_lift _ _ _ |- _ => inversion_clear H end.
@@ -208,11 +208,11 @@ Proof.
 
   split with (nil (A:=term)); auto.
 
-  elim convertible_product_atom with (1 := H7) (2 := H6).
+  elim convertible_product_atom with (1 := H4) (2 := H3).
 
-  elim convertible_sort_atom with (1 := H5) (2 := H4).
+  elim convertible_sort_atom with (1 := H3) (2 := H2).
 
-  apply H1; auto.
+  apply H0; auto.
   apply trans_convertible_convertible with V; auto with coc.
 Qed.
 
@@ -220,10 +220,10 @@ Qed.
 Definition absurd_prop := prod (sort_term prop) (var 0).
 
 (** False has no proof in normal form. *)
-Lemma coc_consistency_normal_form : forall t, normal t -> ~ has_type nil t absurd_prop.
+Lemma coc_consistency_normal_form : forall t, normal t -> (has_type nil t absurd_prop -> False).
 Proof.
   unfold absurd_prop in |- *.
-  red in |- *; intros.
+  intros.
   elim product_inhabitants with (1 := H0) (a := sort_term prop) (b := var 0) (3 := H);
    auto with coc.
   (* Case 1: t atomic impossible because context is empty *)
@@ -259,17 +259,17 @@ Proof.
   change (convertible (lift_rec 1 ty 0) (lift_rec 1 (sort_term prop) 0)) in |- *.
   apply convertible_convertible_lift; auto with coc.
 
-  red in |- *; red in |- *; intros r red_n; inversion red_n.
+  red in |- *; intros r red_n; inversion red_n.
 
-  red in |- *; red in |- *; intros r red_n; inversion red_n.
+  red in |- *; intros r red_n; inversion red_n.
 
   (* Case 2.2: the head var of M is applied *)
   rewrite applist_app in H2.
   simpl in H2.
   elim inversion_has_type_applist_head with (1 := H2); intros.
   clear H2 eq_atom.
-  apply inversion_has_type_app with (1 := H0); intros.
-  apply inversion_has_type_ref with (1 := H1); intros U Hnth Hconv.
+  apply inversion_has_type_app with (1 := p); intros.
+  apply inversion_has_type_ref with (1 := H0); intros U Hnth Hconv.
   simpl in Hnth; injection Hnth as <-.
   (* Impossible because head var has type prop and cannot be applied *)
   apply convertible_sort_product with prop V Ur.
@@ -285,14 +285,14 @@ Proof.
 
   apply hnf_proofs_sound with (1 := H2).
   rewrite eq_abs in H.
-  red in |- *; red in |- *; intros.
-  elim H with (lam ty u); auto with coc.
+  red in |- *; intros u0 Hu0.
+  elim H with (lam ty u0); auto with coc.
 Qed.
 
 (** The calculus of constructions is consistent: False has no proof. *)
-Theorem coc_consistency_theorem : forall t, ~ has_type nil t absurd_prop.
+Theorem coc_consistency_theorem : forall t, (has_type nil t absurd_prop -> False).
 Proof.
-  red in |- *; intros.
+  intros.
   elim compute_normal_form with t; intros.
   specialize subject_reduction_theorem with (1 := p) (2 := H).
   apply coc_consistency_normal_form; trivial.

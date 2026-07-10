@@ -35,7 +35,7 @@ Section terms.
   Implicit Type s : sort.
 
   (** A sort is a "proposition-level" sort if it is [prop] or [set]. *)
-  Definition is_prop s := s = prop \/ s = set.
+  Definition is_prop s := sum (s = prop) (s = set).
 
   (** Induction principle that splits [kind] from the proposition-level sorts. *)
   Lemma sort_induction :
@@ -43,7 +43,10 @@ Section terms.
     P kind -> (forall s, is_prop s -> P s) -> forall s, P s.
   Proof.
     unfold is_prop in |- *.
-    simple destruct s; auto.
+    destruct s.
+    - auto.
+    - apply H0; left; auto.
+    - apply H0; right; auto.
   Qed.
 
   (** Terms of the Calculus of Constructions in de Bruijn notation. *)
@@ -151,7 +154,7 @@ Hint Resolve mem_eq mem_prod_l mem_prod_r mem_abs_l mem_abs_r mem_app_l
 Section Beta_Reduction.
 
   (** One-step beta reduction. *)
-  Inductive reduces_once : term -> term -> Prop :=
+  Inductive reduces_once : term -> term -> Type :=
     | beta : forall M N T, reduces_once (app (lam T M) N) (subst N M)
     | abs_reduces_left :
         forall M M', reduces_once M M' -> forall N, reduces_once (lam M N) (lam M' N)
@@ -166,58 +169,32 @@ Section Beta_Reduction.
     | prod_reduces_right :
         forall M2 N2, reduces_once M2 N2 -> forall M1, reduces_once (prod M1 M2) (prod M1 N2).
 
-  (** Reflexive-transitive closure of [reduces_once], via stdlib. *)
-  Definition reduces := clos_refl_trans_n1 term reduces_once.
+  (** Reflexive-transitive closure of [reduces_once], at Type level. *)
+  Inductive reduces : term -> term -> Type :=
+    | red_refl : forall M, reduces M M
+    | red_trans : forall M P N, reduces_once P N -> reduces M P -> reduces M N.
 
-  Definition refl_reduces : forall M, reduces M M := @rtn1_refl term reduces_once.
+  Definition refl_reduces : forall M, reduces M M := red_refl.
 
-  Lemma trans_red : forall M (P : term) N, reduces M P -> reduces_once P N -> reduces M N.
-  Proof.
-    intros M P N H1 H2; exact (@Relation_Operators.rtn1_trans term reduces_once M P N H2 H1).
-  Qed.
+  Definition trans_red : forall M (P : term) N, reduces M P -> reduces_once P N -> reduces M N :=
+    fun M P N H1 H2 => red_trans M P N H2 H1.
 
-  (** Induction principle with the same case structure as the former inductive. *)
-  Lemma reduces_ind : forall M (P : term -> Prop),
-    P M ->
-    (forall (Q : term) N, reduces M Q -> reduces_once Q N -> P Q -> P N) ->
-    forall t, reduces M t -> P t.
-  Proof.
-    intros M P Hbase Hstep t Hred.
-    induction Hred; auto.
-    apply Hstep with y; auto.
-  Qed.
+  (** Conversion: reflexive-symmetric-transitive closure of [reduces_once], at Type level. *)
+  Inductive convertible : term -> term -> Type :=
+    | conv_refl : forall M, convertible M M
+    | conv_red : forall M P N, reduces_once P N -> convertible M P -> convertible M N
+    | conv_exp : forall M P N, reduces_once N P -> convertible M P -> convertible M N.
 
-  (** Conversion: reflexive-symmetric-transitive closure of [reduces_once], via stdlib. *)
-  Definition convertible := clos_refl_sym_trans_n1 term reduces_once.
+  Definition refl_convertible : forall M, convertible M M := conv_refl.
 
-  Definition refl_convertible : forall M, convertible M M := @rstn1_refl term reduces_once.
+  Definition trans_conv_red : forall M (P : term) N, convertible M P -> reduces_once P N -> convertible M N :=
+    fun M P N H1 H2 => conv_red M P N H2 H1.
 
-  Lemma trans_conv_red : forall M (P : term) N, convertible M P -> reduces_once P N -> convertible M N.
-  Proof.
-    intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term reduces_once M P N (or_introl H2) H1).
-  Qed.
-
-  Lemma trans_conv_exp : forall M (P : term) N, convertible M P -> reduces_once N P -> convertible M N.
-  Proof.
-    intros M P N H1 H2; exact (@Relation_Operators.rstn1_trans term reduces_once M P N (or_intror H2) H1).
-  Qed.
-
-  (** Induction principle with the same 3-case structure as the former inductive. *)
-  Lemma convertible_ind : forall M (P : term -> Prop),
-    P M ->
-    (forall (Q : term) N, convertible M Q -> reduces_once Q N -> P Q -> P N) ->
-    (forall (Q : term) N, convertible M Q -> reduces_once N Q -> P Q -> P N) ->
-    forall t, convertible M t -> P t.
-  Proof.
-    intros M P Hbase Hfwd Hbwd t Hconv.
-    induction Hconv; auto.
-    destruct H as [Hred | Hexp].
-    - apply Hfwd with y; auto.
-    - apply Hbwd with y; auto.
-  Qed.
+  Definition trans_conv_exp : forall M (P : term) N, convertible M P -> reduces_once N P -> convertible M N :=
+    fun M P N H1 H2 => conv_exp M P N H2 H1.
 
   (** One-step parallel beta reduction. *)
-  Inductive parallel_reduces_once : term -> term -> Prop :=
+  Inductive parallel_reduces_once : term -> term -> Type :=
     | par_beta :
         forall M M',
         parallel_reduces_once M M' ->
@@ -238,26 +215,31 @@ Section Beta_Reduction.
         parallel_reduces_once M M' ->
         forall N N', parallel_reduces_once N N' -> parallel_reduces_once (prod M N) (prod M' N').
 
-  (** Transitive closure of parallel reduction. *)
-  Definition parallel_reduces := clos_trans term parallel_reduces_once.
+  (** Transitive closure of parallel reduction, at Type level. *)
+  Inductive parallel_reduces : term -> term -> Type :=
+    | t_step : forall M N, parallel_reduces_once M N -> parallel_reduces M N
+    | t_trans : forall M P N, parallel_reduces M P -> parallel_reduces P N -> parallel_reduces M N.
 
 End Beta_Reduction.
 
 Hint Resolve beta abs_reduces_left abs_reduces_right app_reduces_left app_reduces_right prod_reduces_left
   prod_reduces_right: coc.
-Hint Resolve refl_reduces refl_convertible: coc.
+Hint Resolve refl_reduces refl_convertible red_refl: coc.
 Hint Resolve par_beta sort_par_red ref_par_red abs_par_red app_par_red
   prod_par_red: coc.
-Hint Unfold parallel_reduces: coc.
+Hint Resolve t_step: coc.
 
 
 Section Strong_Normalization.
 
   (** A term is normal when no reduction step is possible. *)
-  Definition normal t : Prop := forall u, ~ reduces_once t u.
+  Definition normal t : Prop := forall u, reduces_once t u -> False.
 
-  (** Strong normalization: well-foundedness of reverse [reduces_once]. *)
-  Definition strongly_normalizing : term -> Prop := Acc (transp _ reduces_once).
+  (** Prop-level wrapper for reduces_once, used for Acc-based strong normalization. *)
+  Definition reduces_once_prop (t u : term) : Prop := inhabited (reduces_once t u).
+
+  (** Strong normalization: well-foundedness of reverse [reduces_once_prop]. *)
+  Definition strongly_normalizing : term -> Prop := Acc (transp _ reduces_once_prop).
 
 End Strong_Normalization.
 
@@ -582,25 +564,24 @@ Lemma reduces_reverse_ind :
   (forall M (R : term), reduces_once M R -> reduces R N -> P R -> P M) ->
   forall M, reduces M N -> P M.
 Proof.
-  cut
-    (forall M N,
-     reduces M N ->
-     forall P : term -> Prop,
-     P N -> (forall M (R : term), reduces_once M R -> reduces R N -> P R -> P M) -> P M).
-  intros; apply (H M N); auto.
-  intros M0 N0 Hred; induction Hred; intros; auto.
-  apply IHHred.
-  - apply H1 with z; auto with coc core arith sets.
-  - intros. apply H1 with R; auto.
-    apply trans_red with y; auto.
+  intros N0 P0 HN Hstep M0 Hred.
+  assert (Hgen : forall Q : term -> Prop,
+     Q N0 -> (forall M (R : term), reduces_once M R -> reduces R N0 -> Q R -> Q M) -> Q M0).
+  { clear HN Hstep P0.
+    induction Hred as [| M0 P1 N1 Hr Hred IHHred]; intros; auto.
+    apply IHHred.
+    - apply H0 with N1; auto with coc core arith sets.
+    - intros. apply H0 with R; auto.
+      apply trans_red with P1; auto. }
+  apply Hgen; auto.
 Qed.
 
 (** Reduction is transitive. *)
 Lemma trans_reduces_reduces : forall M N (P : term), reduces M N -> reduces N P -> reduces M P.
 Proof.
-  intros M N P H1 H2.
-  induction H2; auto.
-  apply trans_red with y; auto.
+  intros M N P0 H1 H2.
+  induction H2 as [| ? P1 ? Hstep Hred IH]; auto.
+  apply trans_red with P1; auto.
 Qed.
 
 (** Reduction is compatible with [app]. *)
@@ -608,10 +589,10 @@ Lemma reduces_reduces_application :
   forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (app u v) (app u0 v0).
 Proof.
   intros u u0 v v0 H1 H2.
-  induction H1.
-  - induction H2; auto with coc core arith sets.
-    apply trans_red with (app u y); auto with coc core arith sets.
-  - apply trans_red with (app y v0); auto with coc core arith sets.
+  induction H1 as [M0 | M0 P1 N0 Hstep Hred IH].
+  - induction H2 as [M1 | M1 P2 N1 Hstep2 Hred2 IH2]; auto with coc core arith sets.
+    apply trans_red with (app M0 P2); auto with coc core arith sets.
+  - apply trans_red with (app P1 v0); auto with coc core arith sets.
 Qed.
 
 (** Reduction is compatible with [lam]. *)
@@ -619,10 +600,10 @@ Lemma reduces_reduces_lambda :
   forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (lam u v) (lam u0 v0).
 Proof.
   intros u u0 v v0 H1 H2.
-  induction H1.
-  - induction H2; auto with coc core arith sets.
-    apply trans_red with (lam u y); auto with coc core arith sets.
-  - apply trans_red with (lam y v0); auto with coc core arith sets.
+  induction H1 as [M0 | M0 P1 N0 Hstep Hred IH].
+  - induction H2 as [M1 | M1 P2 N1 Hstep2 Hred2 IH2]; auto with coc core arith sets.
+    apply trans_red with (lam M0 P2); auto with coc core arith sets.
+  - apply trans_red with (lam P1 v0); auto with coc core arith sets.
 Qed.
 
 (** Reduction is compatible with [prod]. *)
@@ -630,10 +611,10 @@ Lemma reduces_reduces_product :
   forall u u0 v v0, reduces u u0 -> reduces v v0 -> reduces (prod u v) (prod u0 v0).
 Proof.
   intros u u0 v v0 H1 H2.
-  induction H1.
-  - induction H2; auto with coc core arith sets.
-    apply trans_red with (prod u y); auto with coc core arith sets.
-  - apply trans_red with (prod y v0); auto with coc core arith sets.
+  induction H1 as [M0 | M0 P1 N0 Hstep Hred IH].
+  - induction H2 as [M1 | M1 P2 N1 Hstep2 Hred2 IH2]; auto with coc core arith sets.
+    apply trans_red with (prod M0 P2); auto with coc core arith sets.
+  - apply trans_red with (prod P1 v0); auto with coc core arith sets.
 Qed.
 
 Hint Resolve reduces_reduces_application reduces_reduces_lambda reduces_reduces_product: coc.
@@ -676,28 +657,31 @@ Hint Resolve reduces_once_subst_left reduces_once_subst_right: coc.
 Lemma reduces_product_product :
   forall u v t,
   reduces (prod u v) t ->
-  forall P : Prop,
-  (forall a b : term, t = prod a b -> reduces u a -> reduces v b -> P) -> P.
+  forall Q : Type,
+  (forall a b : term, t = prod a b -> reduces u a -> reduces v b -> Q) -> Q.
 Proof.
   intros u v t Hred.
-  induction Hred; intros.
-  - apply H with u v; auto with coc core arith sets.
-  - apply IHHred; intros.
-    subst y. inversion H.
-    apply H0 with N1 b; auto with coc core arith sets.
-    apply trans_red with a; auto with coc core arith sets.
-    apply H0 with a N2; auto with coc core arith sets.
-    apply trans_red with b; auto with coc core arith sets.
+  remember (prod u v) as puv eqn:Hpuv.
+  induction Hred as [M0 | M0 P0 N0 Hstep Hred IHHred];
+    intros Q Hcont.
+  - subst. apply Hcont with u v; auto with coc core arith sets.
+  - apply IHHred; auto; intros a b Heq Ha Hb.
+    subst. inversion Hstep; subst.
+    + apply Hcont with N1 b; auto with coc core arith sets.
+      apply trans_red with a; auto with coc core arith sets.
+    + apply Hcont with a N2; auto with coc core arith sets.
+      apply trans_red with b; auto with coc core arith sets.
 Qed.
 
 (** A sort does not reduce to a different term. *)
 Lemma reduces_sort_sort : forall s t, reduces (sort_term s) t -> t <> sort_term s -> False.
 Proof.
   intros s t Hred Hneq.
+  remember (sort_term s) as ss eqn:Hss.
   induction Hred; auto.
-  apply IHHred; intro; subst y.
+  apply IHHred; auto; intro; subst.
   apply Hneq.
-  inversion H.
+  inversion r.
 Qed.
 
 (** A single expansion step embeds into conversion. *)
@@ -711,28 +695,35 @@ Qed.
 Lemma reduces_convertible : forall M N, reduces M N -> convertible M N.
 Proof.
   intros M N H; induction H; auto with coc core arith sets.
-  apply trans_conv_red with y; auto with coc core arith sets.
+  apply trans_conv_red with P; auto with coc core arith sets.
 Qed.
 
 Hint Resolve one_step_convertible_expansion reduces_convertible: coc.
-
-(** Conversion is symmetric. *)
-Lemma sym_convertible : forall M N, convertible M N -> convertible N M.
-Proof.
-  intros M N H.
-  apply clos_rst_rstn1_iff.
-  apply rst_sym.
-  apply clos_rst_rstn1_iff; auto.
-Qed.
-
-Hint Immediate sym_convertible: coc.
 
 (** Conversion is transitive. *)
 Lemma trans_convertible_convertible :
   forall M N (P : term), convertible M N -> convertible N P -> convertible M P.
 Proof.
-  intros; eapply clos_rstn1_trans; eassumption.
+  intros M N P0 H1 H2; induction H2 as [| ? Q ? Hstep ? IH | ? Q ? Hstep ? IH].
+  exact H1.
+  apply conv_red with Q; auto.
+  apply conv_exp with Q; auto.
 Qed.
+
+(** Conversion is symmetric. *)
+Lemma sym_convertible : forall M N, convertible M N -> convertible N M.
+Proof.
+  intros M N H. induction H as [M0 | M0 P0 N0 Hr Hconv IH | M0 P0 N0 Hr Hconv IH].
+  exact (conv_refl M0).
+  apply trans_convertible_convertible with P0.
+    exact (conv_exp N0 N0 P0 Hr (conv_refl N0)).
+    exact IH.
+  apply trans_convertible_convertible with P0.
+    exact (conv_red N0 N0 P0 Hr (conv_refl N0)).
+    exact IH.
+Qed.
+
+Hint Immediate sym_convertible: coc.
 
 (** Conversion is compatible with [prod]. *)
 Lemma convertible_convertible_product :
@@ -741,13 +732,11 @@ Proof.
   intros a b c d H1 H2.
   apply trans_convertible_convertible with (prod a d).
   - induction H2; auto with coc core arith sets.
-    destruct H as [Hfwd | Hbwd].
-    + apply trans_conv_red with (prod a y); auto with coc core arith sets.
-    + apply trans_conv_exp with (prod a y); auto with coc core arith sets.
+    + apply trans_conv_red with (prod a P); auto with coc core arith sets.
+    + apply trans_conv_exp with (prod a P); auto with coc core arith sets.
   - induction H1; auto with coc core arith sets.
-    destruct H as [Hfwd | Hbwd].
-    + apply trans_conv_red with (prod y d); auto with coc core arith sets.
-    + apply trans_conv_exp with (prod y d); auto with coc core arith sets.
+    + apply trans_conv_red with (prod P d); auto with coc core arith sets.
+    + apply trans_conv_exp with (prod P d); auto with coc core arith sets.
 Qed.
 
 (** Conversion is preserved by lifting. *)
@@ -757,9 +746,8 @@ Lemma convertible_convertible_lift :
 Proof.
   intros a b n k H.
   induction H; auto with coc core arith sets.
-  destruct H as [Hfwd | Hbwd].
-  - apply trans_conv_red with (lift_rec n y k); auto with coc core arith sets.
-  - apply trans_conv_exp with (lift_rec n y k); auto with coc core arith sets.
+  - apply trans_conv_red with (lift_rec n P k); auto with coc core arith sets.
+  - apply trans_conv_exp with (lift_rec n P k); auto with coc core arith sets.
 Qed.
 
 (** Conversion is preserved by substitution on both sides. *)
@@ -770,13 +758,11 @@ Proof.
   intros a b c d k H1 H2.
   apply trans_convertible_convertible with (subst_rec a d k).
   - induction H2; auto with coc core arith sets.
-    destruct H as [Hfwd | Hbwd].
-    + apply trans_conv_red with (subst_rec a y k); auto with coc core arith sets.
-    + apply trans_conv_exp with (subst_rec a y k); auto with coc core arith sets.
+    + apply trans_conv_red with (subst_rec a P k); auto with coc core arith sets.
+    + apply trans_conv_exp with (subst_rec a P k); auto with coc core arith sets.
   - induction H1; auto with coc core arith sets.
-    destruct H as [Hfwd | Hbwd].
-    + apply trans_convertible_convertible with (subst_rec y d k); auto with coc core arith sets.
-    + apply trans_convertible_convertible with (subst_rec y d k); auto with coc core arith sets.
+    + apply trans_convertible_convertible with (subst_rec P d k); auto with coc core arith sets.
+    + apply trans_convertible_convertible with (subst_rec P d k); auto with coc core arith sets.
       apply sym_convertible; auto with coc core arith sets.
 Qed.
 
@@ -801,17 +787,17 @@ Hint Resolve reduces_once_parallel_reduces_once: coc.
 (** Reduction embeds into parallel reduction. *)
 Lemma reduces_parallel_reduces : forall M N, reduces M N -> parallel_reduces M N.
 Proof.
-  intros M N H; red in |- *; induction H; auto with coc core arith sets.
-  apply t_trans with y; auto with coc core arith sets.
+  intros M N H; induction H; auto with coc core arith sets.
+  apply t_trans with P; auto with coc core arith sets.
 Qed.
 
 (** Parallel reduction embeds back into reduction. *)
 Lemma parallel_reduces_reduces : forall M N, parallel_reduces M N -> reduces M N.
 Proof.
-  intros M N H; induction H.
-  - induction H; auto with coc core arith sets.
+  intros M N H; induction H as [M0 N0 Hpar | M0 P0 N0 H1 IH1 H2 IH2].
+  - induction Hpar; auto with coc core arith sets.
     apply trans_red with (app (lam T M') N'); auto with coc core arith sets.
-  - apply trans_reduces_reduces with y; auto with coc core arith sets.
+  - apply trans_reduces_reduces with P0; auto with coc core arith sets.
 Qed.
 
 Hint Resolve reduces_parallel_reduces parallel_reduces_reduces: coc.
@@ -912,29 +898,46 @@ Proof.
   elim H0 with a (S n) s; intros; auto with coc core arith sets.
 Qed.
 
+(** Sort occurrence is preserved backward across a single reduction step. *)
+Lemma sort_occurs_reduces_once_back :
+  forall M N s, reduces_once M N -> sort_occurs_in s N -> sort_occurs_in s M.
+Proof.
+  intros M N s Hstep.
+  induction Hstep as
+    [ M0 N0 T0
+    | M0 M0' N0 Hstep0 IH0
+    | M0 N0 N0' Hstep0 IH0
+    | M0 M0' N0 Hstep0 IH0
+    | M0 N0 N0' Hstep0 IH0
+    | M0 M0' N0 Hstep0 IH0
+    | M0 N0 N0' Hstep0 IH0 ]; intros Hocc.
+  - (* beta *)
+    destruct (sort_occurs_in_subst M0 N0 0 s Hocc) as [HN | HM];
+      auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+  - inversion_clear Hocc; auto with coc core arith sets.
+Qed.
+
 (** If a term reduces to a sort, that sort occurs in the original term. *)
 Lemma reduces_sort_occurs : forall t s, reduces t (sort_term s) -> sort_occurs_in s t.
 Proof.
   intros.
   pattern t in |- *.
   apply reduces_reverse_ind with (sort_term s); auto with coc core arith sets.
-  do 4 intro.
-  elim H0; intros.
-  elim sort_occurs_in_subst with M0 N 0 s; intros; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
-  inversion_clear H4; auto with coc core arith sets.
+  intros M0 R Hstep Hred Hocc.
+  apply sort_occurs_reduces_once_back with R; auto with coc core arith sets.
 Qed.
 
 (** A normal term is a fixed point of reduction. *)
 Lemma reduces_normal : forall u v, reduces u v -> normal u -> u = v.
 Proof.
-  intros u v H Hn; induction H as [| y z Hyz Huy IH]; auto.
-  assert (u = y) as Heq by auto.
-  subst y. elim (Hn z); auto.
+  intros u v H Hn; induction H as [| M0 P0 N0 Hstep Hred IH]; auto.
+  assert (M0 = P0) as Heq by auto.
+  subst P0. elim (Hn N0); auto.
 Qed.
 
 (** Strong normalization is preserved by reduction. *)
@@ -942,22 +945,25 @@ Lemma strongly_normalizing_reduces : forall a b : term, strongly_normalizing a -
 Proof.
   unfold strongly_normalizing in |- *.
   intros a b Hsn Hred; induction Hred; auto with coc core arith sets.
-  apply Acc_inv with y; auto with coc core arith sets.
+  apply Acc_inv with P; auto with coc core arith sets.
+  constructor; auto.
 Qed.
 
 (** One-step reduction commutes with the subterm relation. *)
-Lemma commute_reduces_once_subterm : commut _ subterm (transp _ reduces_once).
+Lemma commute_reduces_once_subterm : commut _ subterm (transp _ reduces_once_prop).
 Proof.
   red in |- *.
-  simple induction 1; intros.
-  inversion_clear H0.
-  exists (lam t z); auto with coc core arith sets.
-  exists (prod t z); auto with coc core arith sets.
-  inversion_clear H0.
-  exists (lam z n); auto with coc core arith sets.
-  exists (app z v); auto with coc core arith sets.
-  exists (app u z); auto with coc core arith sets.
-  exists (prod z n); auto with coc core arith sets.
+  intros x y Hsub z Hred.
+  destruct Hred as [Hred].
+  destruct Hsub as [t Hbind | Hnobind].
+  - inversion_clear Hbind.
+    + exists (lam t z); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
+    + exists (prod t z); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
+  - inversion_clear Hnobind.
+    + exists (lam z n); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
+    + exists (app z v); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
+    + exists (app u z); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
+    + exists (prod z n); auto with coc core arith sets. constructor; constructor; auto with coc core arith sets.
 Qed.
 
 (** Strong normalization of a term implies strong normalization of all subterms. *)
@@ -974,13 +980,16 @@ Qed.
 (** A [prod] is strongly normalizing when both components are. *)
 Lemma strongly_normalizing_product : forall A, strongly_normalizing A -> forall B, strongly_normalizing B -> strongly_normalizing (prod A B).
 Proof.
-  unfold strongly_normalizing in |- *.
-  simple induction 1.
-  simple induction 3; intros.
-  apply Acc_intro; intros.
-  inversion_clear H5; auto with coc core arith sets.
-  apply H1; auto with coc core arith sets.
-  apply Acc_intro; auto with coc core arith sets.
+  unfold strongly_normalizing.
+  intros A HA. induction HA as [a Ha IHa].
+  intros B HB. induction HB as [b Hb IHb].
+  apply Acc_intro. intros y [Hy].
+  inversion_clear Hy.
+  - apply IHa; auto.
+    + constructor; auto.
+    + apply Acc_intro; auto.
+  - apply IHb; auto.
+    constructor; auto.
 Qed.
 
 (** If [subst T M] is strongly normalizing, then [M] is. *)
@@ -993,7 +1002,8 @@ Proof.
   unfold strongly_normalizing in |- *.
   simple induction 1; intros.
   apply Acc_intro; intros.
+  destruct H4 as [H4].
   apply H2 with (subst T y); auto with coc core arith sets.
   rewrite H3.
-  unfold subst in |- *; auto with coc core arith sets.
+  unfold subst in |- *. constructor; auto with coc core arith sets.
 Qed.

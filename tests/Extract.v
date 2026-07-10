@@ -19,21 +19,34 @@ From Stdlib Require Import ExtrOcamlBasic.
 From Stdlib Require Import ExtrOcamlNatInt.
 From Stdlib Require Import ExtrOCamlPString.
 
-From CoqInCoq Require Import terms.
-From CoqInCoq Require Import confluence.
-From CoqInCoq Require Import typing.
-From CoqInCoq Require Import decidable_conversion.
-From CoqInCoq Require Import inference.
-From CoqInCoq Require Import names.
-From CoqInCoq Require Import expressions.
-From CoqInCoq Require Import machine.
+From CoC Require Import terms.
+From CoC Require Import confluence.
+From CoC Require Import typing.
+From CoC Require Import decidable_conversion.
+From CoC Require Import inference.
+From CoC Require Import names.
+From CoC Require Import expressions.
+From CoC Require Import machine.
+From BlameFOmega Require syntax infrastructure semantics typing subtyping safety blame subtyping_safety simulation.
+From BlameFOmega Require expressions.
+From Extraction Require extraction.
+From Extraction Require proofs.
+From Extraction Require translation.
 
+Set Extraction Output Directory "tests".
+
+Extract Inductive name => "string"
+  ["Fun.id" "(fun n -> Pstring.unsafe_of_string (""x"" ^ string_of_int n))"]
+  "(fun f_str f_gen s -> f_str s)".
 Extract Constant name_eq_dec => "(=)".
-Extract Constant name_of_nat => "fun n -> Pstring.unsafe_of_string (""x"" ^ (string_of_int n))".
 
 Extraction
  NoInline list_index is_free_var check_type reduces_to_sort reduces_to_prod execute_axiom
          glob_ctx glob_names empty_state name_dec find_free_var synthesis
          interpret_command translate_message_string translate_error_string interpret_ast.
 
-Extraction "core.ml" is_free_var empty_state interpret_ast.
+Extraction "core.ml" is_free_var empty_state interpret_ast
+  synthesis infer translation.extract
+  collect_binder_names
+  BlameFOmega.expressions.fterm_expression_of BlameFOmega.expressions.ftyp_expression_of
+  BlameFOmega.expressions.fterm_expr BlameFOmega.expressions.ftyp_expr.

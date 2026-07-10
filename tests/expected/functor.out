@@ -1,0 +1,12 @@
+Functor admitted.
+fmap admitted.
+Extracted: ΛF:(* => *). λFF:Functor F. ΛA:*. ΛB:*. ΛC:*. λf:A -> B. λg:B -> C. λxs:F A. (fmap [F] FF [B] [C] g ((fmap [F] FF [A] [B] f xs)))
+Nat admitted.
+Sym admitted.
+lit admitted.
+add admitted.
+Extracted: ΛR:(* => *). λS:Sym R. λn:Nat. (add [R] S ((lit [R] S n)) ((lit [R] S n)))
+Monad admitted.
+ret admitted.
+bind admitted.
+Extracted: ΛM:(* => *). λMM:Monad M. ΛA:*. ΛB:*. ΛC:*. λma:M A. λf:A -> M B. λg:B -> M C. (bind [M] MM [B] [C] ((bind [M] MM [A] [B] ma f)) g)
