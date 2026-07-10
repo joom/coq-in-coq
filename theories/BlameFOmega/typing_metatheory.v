@@ -2,8 +2,8 @@
 
     Structural lemmas for the [typing] and [wf_typ] judgments of the target
     calculus: weakening (inserting a term or type binding) and substitution
-    (term-for-term and type-for-type).  These are intended prerequisites for
-    a future subject-reduction theorem.
+    (term-for-term and type-for-type).  These support the subject-reduction
+    theorem in [preservation.v].
 
     The context is a single list carrying both term bindings ([has_type]) and
     type bindings ([has_kind]/[has_def]); term variables index the [has_type]
@@ -454,7 +454,7 @@ Lemma q_par_subst_gen : forall ks g K B1 B2,
 Proof.
   intros ks g K B1 B2 HB A1 A2 H.
   remember (kctx ks ++ has_kind K :: g) as g0 eqn:Hg. revert ks Hg.
-  induction H as [ m | m K0 A0 Hlook | | A A' B B' HA IHA HB' IHB | K0 A A' HA IHA | K0 A A' HA IHA | A A' B B' HA IHA HB' IHB | K0 A A' B B' HA IHA HB' IHB ]; intros ks Hg; subst.
+  induction H as [ gg m | gg m K0 A0 Hlook | gg | gg A A' B B' HA IHA HB' IHB | gg K0 A A' HA IHA | gg K0 A A' HA IHA | gg A A' B B' HA IHA HB' IHB | gg K0 A A' B B' HA IHA HB' IHB ]; intros ks Hg; subst.
   - (* qpar_tvar *)
     destruct (lt_eq_lt_dec (length ks) m) as [[Hlt|Heq]|Hgt].
     + rewrite (tsubst_ref_gt B1 m (length ks)) by lia.
@@ -477,9 +477,8 @@ Proof.
       rewrite Hlook in HL.
       destruct (lookup_def (kctx ks ++ g) m') as [[K0' A0']|] eqn:E; [| discriminate].
       injection HL as HK HA. subst K0'.
-      rewrite (tsubst_ref_gt B2 (S m') (length ks)) by lia.
       rewrite HA. rewrite (simplify_tsubst_rec A0' B2 0 (length ks) (length ks)) by lia.
-      apply qpar_reveal. exact E.
+      rewrite tlift_zero. simpl. eapply qpar_reveal. exact E.
     + (* m = length ks: this is exactly the [has_kind K] binder itself, which
          has no [lookup_def] entry — contradicts [Hlook]. *)
       subst m. rewrite (lookup_def_kctx_none_at_len ks K g) in Hlook. discriminate.
@@ -494,19 +493,19 @@ Proof.
       destruct (lookup_def (kctx ks ++ g) m) as [[K0' A0']|] eqn:E; [| discriminate].
       injection HL as HK HA. subst K0'.
       rewrite HA. rewrite (simplify_tsubst_rec A0' B2 0 (length ks) (length ks)) by lia.
-      apply qpar_reveal. exact E.
+      rewrite tlift_zero. simpl. eapply qpar_reveal. exact E.
   - simpl. apply qpar_dyn.
   - simpl. apply qpar_arrow; auto.
   - simpl. apply qpar_all. apply (IHA (K0 :: ks)). reflexivity.
   - simpl. apply qpar_tyabs. apply (IHA (K0 :: ks)). reflexivity.
   - simpl. apply qpar_tyapp; auto.
   - simpl.
-    replace (tsubst B0' (length ks) (tsubst B' 0 A'))
-      with (tsubst (tsubst B0' (length ks) B') 0 (tsubst B0' (S (length ks)) A'))
+    replace (tsubst B2 (length ks) (tsubst B' 0 A'))
+      with (tsubst (tsubst B2 (length ks) B') 0 (tsubst B2 (S (length ks)) A'))
       by (symmetry; apply distribute_tsubst).
     eapply qpar_beta.
     + apply (IHA (K0 :: ks)). reflexivity.
-    + apply (IHB' ks). reflexivity.
+    + apply (IHB ks). reflexivity.
 Qed.
 
 (** The [ks = nil] corollary actually needed downstream: eliminating the
@@ -547,18 +546,24 @@ Proof.
   intros G1 g e A K H. remember (G1 ++ g) as g0 eqn:Hg. revert G1 Hg.
   induction H; intros G1 Hg; subst.
   - (* var *) simpl. apply typing_var. rewrite lookup_term_weaken_kind. rewrite H. reflexivity.
-  - (* abs *) simpl. apply typing_abs. apply (IHtyping (has_type t1 :: G1)). reflexivity.
+  - (* abs *) simpl. apply typing_abs.
+    + apply wf_typ_weaken_kind; auto.
+    + apply (IHtyping (has_type t1 :: G1)). reflexivity.
   - (* app *) simpl. eapply typing_app; [ apply (IHtyping1 G1) | apply (IHtyping2 G1) ]; reflexivity.
   - (* tabs *) simpl. apply typing_tabs. apply (IHtyping (has_kind K0 :: G1)). reflexivity.
   - (* tapp *) simpl.
     replace (tlift 1 (ntype G1) (tsubst s 0 t))
       with (tsubst (tlift 1 (ntype G1) s) 0 (tlift 1 (S (ntype G1)) t))
       by (symmetry; apply distribute_tlift_tsubst).
-    eapply typing_tapp. apply (IHtyping G1). reflexivity.
-  - (* cast *) simpl. eapply typing_cast; [ apply (IHtyping G1); reflexivity | apply compat_tlift; auto ].
-  - (* gnd *) simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | apply ground_tlift; auto ].
+    eapply typing_tapp; [ apply (IHtyping G1); reflexivity | apply wf_typ_weaken_kind; auto ].
+  - (* cast *) simpl. eapply typing_cast;
+      [ apply (IHtyping G1); reflexivity | apply compat_tlift; auto
+      | apply wf_typ_weaken_kind; auto | apply wf_typ_weaken_kind; auto ].
+  - (* gnd *) simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | ].
+    inversion H0; subst; constructor;
+      [ apply ground_tlift; auto | apply wf_typ_weaken_kind; auto ].
   - (* is_gnd *) simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)). apply (IHtyping G1). reflexivity.
-  - (* blame *) simpl. apply typing_blame.
+  - (* blame *) simpl. apply typing_blame. apply wf_typ_weaken_kind; auto.
   - (* nu *) simpl.
     replace (tlift 1 (ntype G1) (tsubst A 0 B))
       with (tsubst (tlift 1 (ntype G1) A) 0 (tlift 1 (S (ntype G1)) B))
@@ -568,7 +573,7 @@ Proof.
     + apply wf_typ_weaken_kind; auto.
   - (* conv *) simpl. eapply typing_conv;
       [ apply (IHtyping G1); reflexivity
-      | apply ty_equiv_tlift; auto
+      | apply defeq_weaken_kind; auto
       | apply wf_typ_weaken_kind; auto ].
 Qed.
 
@@ -871,18 +876,24 @@ Proof.
   intros G1 g e A K C H. remember (G1 ++ g) as g0 eqn:Hg. revert G1 Hg.
   induction H; intros G1 Hg; subst.
   - simpl. apply typing_var. rewrite lookup_term_weaken_def. rewrite H. reflexivity.
-  - simpl. apply typing_abs. apply (IHtyping (has_type t1 :: G1)). reflexivity.
+  - simpl. apply typing_abs.
+    + apply wf_typ_weaken_def; auto.
+    + apply (IHtyping (has_type t1 :: G1)). reflexivity.
   - simpl. eapply typing_app; [ apply (IHtyping1 G1) | apply (IHtyping2 G1) ]; reflexivity.
   - simpl. apply typing_tabs. apply (IHtyping (has_kind K0 :: G1)). reflexivity.
   - simpl.
     replace (tlift 1 (ntype G1) (tsubst s 0 t))
       with (tsubst (tlift 1 (ntype G1) s) 0 (tlift 1 (S (ntype G1)) t))
       by (symmetry; apply distribute_tlift_tsubst).
-    eapply typing_tapp. apply (IHtyping G1). reflexivity.
-  - simpl. eapply typing_cast; [ apply (IHtyping G1); reflexivity | apply compat_tlift; auto ].
-  - simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | apply ground_tlift; auto ].
+    eapply typing_tapp; [ apply (IHtyping G1); reflexivity | apply wf_typ_weaken_def; auto ].
+  - simpl. eapply typing_cast;
+      [ apply (IHtyping G1); reflexivity | apply compat_tlift; auto
+      | apply wf_typ_weaken_def; auto | apply wf_typ_weaken_def; auto ].
+  - simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | ].
+    inversion H0; subst; constructor;
+      [ apply ground_tlift; auto | apply wf_typ_weaken_def; auto ].
   - simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)). apply (IHtyping G1). reflexivity.
-  - simpl. apply typing_blame.
+  - simpl. apply typing_blame. apply wf_typ_weaken_def; auto.
   - simpl.
     replace (tlift 1 (ntype G1) (tsubst A 0 B))
       with (tsubst (tlift 1 (ntype G1) A) 0 (tlift 1 (S (ntype G1)) B))
@@ -892,7 +903,7 @@ Proof.
     + apply wf_typ_weaken_def; auto.
   - simpl. eapply typing_conv;
       [ apply (IHtyping G1); reflexivity
-      | apply ty_equiv_tlift; auto
+      | apply defeq_weaken_def; auto
       | apply wf_typ_weaken_def; auto ].
 Qed.
 
@@ -912,6 +923,28 @@ Proof.
   - apply wf_tyabs. apply (IHwf_typ (has_kind K1 :: G1)). reflexivity.
   - eapply wf_tyapp; eauto.
   - apply wf_dyn.
+Qed.
+
+(** [defeq] doesn't depend on term bindings either: removing one (the converse
+    of [defeq_weaken_type]) preserves it, since [lookup_def] skips [has_type]
+    bindings ([lookup_def_weaken_type]) and every [wf_typ] witness strengthens
+    by [wf_typ_strengthen_type]. *)
+Lemma defeq_strengthen_type : forall G1 g C A B K,
+  defeq (G1 ++ has_type C :: g) A B K -> defeq (G1 ++ g) A B K.
+Proof.
+  intros G1 g C A B K H. remember (G1 ++ has_type C :: g) as g0 eqn:Hg. revert G1 Hg.
+  induction H; intros G1 Hg; subst.
+  - apply deq_refl. eapply wf_typ_strengthen_type; eauto.
+  - apply deq_sym. apply IHdefeq. reflexivity.
+  - eapply deq_trans; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - apply deq_ty_equiv; eauto using wf_typ_strengthen_type.
+  - eapply deq_def.
+    + rewrite lookup_def_weaken_type in H. eauto.
+    + eapply wf_typ_strengthen_type; eauto.
+  - apply deq_arrow; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - apply deq_all. apply (IHdefeq (has_kind K :: G1)). reflexivity.
+  - apply deq_tyabs. apply (IHdefeq (has_kind K1 :: G1)). reflexivity.
+  - eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
 Qed.
 
 
@@ -1065,7 +1098,9 @@ Proof.
       apply typing_weaken_prefix. exact Hu.
     + (* n < nterm G1: variable from G1, unchanged *)
       apply typing_var. rewrite <- (lookup_term_below G1 g T n Hgt). exact H.
-  - (* abs *) apply typing_abs. apply (IHHe (has_type t1 :: G1)). reflexivity.
+  - (* abs *) apply typing_abs.
+    + eapply wf_typ_strengthen_type; eauto.
+    + apply (IHHe (has_type t1 :: G1)). reflexivity.
   - (* app *) eapply typing_app; eauto.
   - (* tabs *)
     apply typing_tabs.
@@ -1075,11 +1110,12 @@ Proof.
           replace (1 + ntype G1) with (S (ntype G1)) by lia; reflexivity).
     apply (IHHe (has_kind K :: G1)). reflexivity.
   - (* tapp *)
-    eapply typing_tapp. apply (IHHe G1). reflexivity.
-  - (* cast *) eapply typing_cast; eauto.
+    eapply typing_tapp; [ apply (IHHe G1); reflexivity | eapply wf_typ_strengthen_type; eauto ].
+  - (* cast *) eapply typing_cast; eauto; eapply wf_typ_strengthen_type; eauto.
   - (* gnd *) apply typing_gnd; eauto.
+    inversion H; subst; constructor; [ auto | eapply wf_typ_strengthen_type; eauto ].
   - (* is_gnd *) apply (typing_is_gnd _ _ G); eauto.
-  - (* blame *) apply typing_blame.
+  - (* blame *) apply typing_blame. eapply wf_typ_strengthen_type; eauto.
   - (* nu *)
     replace (term_tlift 1 0 (term_tlift (ntype G1) 0 u))
       with (term_tlift (S (ntype G1)) 0 u)
@@ -1088,8 +1124,9 @@ Proof.
     apply typing_nu.
     + apply (IHHe (has_def K A :: G1)). reflexivity.
     + eapply wf_typ_strengthen_type; eauto.
-  - (* conv *) eapply typing_conv; [ eauto | auto |].
-    eapply wf_typ_strengthen_type; eauto.
+  - (* conv *) eapply typing_conv; [ eauto | |].
+    + eapply defeq_strengthen_type; eauto.
+    + eapply wf_typ_strengthen_type; eauto.
 Qed.
 
 (** Front term substitution (the common case): substituting for the outermost bound variable. *)
@@ -1315,6 +1352,104 @@ Proof.
   - apply ground_neutral. apply neutral_tsubst; assumption.
 Qed.
 
+(** [lookup_def] at the [has_kind K] binder's own index is [None] (the
+    arbitrary-prefix version of [lookup_def_kctx_none_at_len]): a [has_kind]
+    binding carries no definition. *)
+Lemma lookup_def_kind_none : forall G1 g K,
+  lookup_def (G1 ++ has_kind K :: g) (ntype G1) = None.
+Proof.
+  induction G1 as [|b G1 IH]; intros g K; simpl.
+  - reflexivity.
+  - destruct b as [D | K' | K' D]; simpl.
+    + apply IH.
+    + rewrite IH. reflexivity.
+    + rewrite IH. reflexivity.
+Qed.
+
+(** How [lookup_def] transports across removing the [has_kind K] binding at
+    [ntype G1] and [tsubst_ctx]-rewriting the prefix: the *new* context's entry
+    at index [n] is the old entry at [sh (ntype G1) n], with the vacated
+    variable substituted in its payload (mirrors [lookup_term_tsubst]). *)
+Lemma lookup_def_tsubst : forall G1 g K s n,
+  lookup_def (tsubst_ctx s G1 ++ g) n
+    = match lookup_def (G1 ++ has_kind K :: g) (sh (ntype G1) n) with
+      | None => None
+      | Some (K', A) => Some (K', tsubst s (ntype G1) A)
+      end.
+Proof.
+  induction G1 as [|b G1 IH]; intros g K s n; simpl.
+  - unfold sh; simpl.
+    destruct (lookup_def g n) as [[K' A]|]; simpl; [| reflexivity].
+    f_equal. f_equal. symmetry. apply tsubst_tlift_cancel.
+  - destruct b as [D | K' | K' D]; simpl.
+    + apply IH.
+    + unfold sh; simpl. destruct n as [|n']; simpl.
+      * reflexivity.
+      * specialize (IH g K s n'). unfold sh in IH.
+        destruct (le_gt_dec (ntype G1) n') eqn:E; simpl; rewrite IH;
+          destruct (lookup_def (G1 ++ has_kind K :: g) _) as [[K'' A]|]; simpl;
+          try reflexivity;
+          f_equal; f_equal;
+          rewrite (commute_tlift_tsubst_rec A s 1 (ntype G1) 0) by lia;
+          reflexivity.
+    + unfold sh; simpl. destruct n as [|n']; simpl.
+      * f_equal; f_equal.
+        rewrite (commute_tlift_tsubst_rec D s 1 (ntype G1) 0) by lia.
+        reflexivity.
+      * specialize (IH g K s n'). unfold sh in IH.
+        destruct (le_gt_dec (ntype G1) n') eqn:E; simpl; rewrite IH;
+          destruct (lookup_def (G1 ++ has_kind K :: g) _) as [[K'' A]|]; simpl;
+          try reflexivity;
+          f_equal; f_equal;
+          rewrite (commute_tlift_tsubst_rec A s 1 (ntype G1) 0) by lia;
+          reflexivity.
+Qed.
+
+(** [defeq] is preserved by substituting a well-kinded type for a [has_kind]-
+    bound variable: the type-level substitution lemma for the full
+    definitional equality (no neutrality needed — [defeq] never inspects
+    [ground]/[compat] shapes). *)
+Lemma defeq_tsubst : forall G1 g Kv s X Y J,
+  defeq (G1 ++ has_kind Kv :: g) X Y J ->
+  wf_typ g s Kv ->
+  defeq (tsubst_ctx s G1 ++ g) (tsubst s (ntype G1) X) (tsubst s (ntype G1) Y) J.
+Proof.
+  intros G1 g Kv s X Y J H Hs.
+  remember (G1 ++ has_kind Kv :: g) as g0 eqn:Hg. revert G1 Hg.
+  induction H; intros G1 Hg; subst.
+  - apply deq_refl. eapply wf_typ_tsubst; eauto.
+  - apply deq_sym. apply IHdefeq. reflexivity.
+  - eapply deq_trans; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - apply deq_ty_equiv;
+      [ eapply wf_typ_tsubst; eauto
+      | eapply wf_typ_tsubst; eauto
+      | apply ty_equiv_tsubst; auto ].
+  - (* deq_def *)
+    assert (Hwf' : wf_typ (tsubst_ctx s G1 ++ g) (tsubst s (ntype G1) (tvar n)) K)
+      by (eapply wf_typ_tsubst; eauto).
+    destruct (lt_eq_lt_dec (ntype G1) n) as [[Hlt|Heq]|Hgt].
+    + (* n > ntype G1: entry from [g], found at [pred n] after removal *)
+      rewrite (tsubst_ref_gt s n (ntype G1)) by lia.
+      rewrite (tsubst_ref_gt s n (ntype G1)) in Hwf' by lia.
+      eapply deq_def; [| exact Hwf'].
+      rewrite (lookup_def_tsubst G1 g Kv s (pred n)).
+      unfold sh. destruct (le_gt_dec (ntype G1) (pred n)); [| lia].
+      replace (S (pred n)) with n by lia. rewrite H. reflexivity.
+    + (* n = ntype G1: the [has_kind] binder itself has no definition *)
+      subst n. rewrite lookup_def_kind_none in H. discriminate.
+    + (* n < ntype G1: entry from [G1], payload substituted *)
+      rewrite (tsubst_ref_lt s n (ntype G1)) by lia.
+      rewrite (tsubst_ref_lt s n (ntype G1)) in Hwf' by lia.
+      eapply deq_def; [| exact Hwf'].
+      rewrite (lookup_def_tsubst G1 g Kv s n).
+      unfold sh. destruct (le_gt_dec (ntype G1) n); [lia |].
+      rewrite H. reflexivity.
+  - simpl. apply deq_arrow; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - simpl. apply deq_all. apply (IHdefeq (has_kind K :: G1)). reflexivity.
+  - simpl. apply deq_tyabs. apply (IHdefeq (has_kind K1 :: G1)). reflexivity.
+  - simpl. eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+Qed.
+
 (** ν-aware type substitution lemma.  Substituting an abstract (neutral) type
     name [S] for a type variable preserves typing.  The [neutral S] hypothesis
     is what keeps the [gnd] and [cast] cases sound now that ground tags include
@@ -1330,16 +1465,23 @@ Proof.
   remember (G1 ++ has_kind K :: g) as g0 eqn:Hg. revert G1 Hg.
   induction He; intros G1 Hg; subst; simpl.
   - (* var *) apply typing_var. rewrite (lookup_term_tsubst G1 g K). rewrite H. reflexivity.
-  - (* abs *) apply typing_abs. apply (IHHe (has_type t1 :: G1)). reflexivity.
+  - (* abs *) apply typing_abs.
+    + eapply wf_typ_tsubst; eauto.
+    + apply (IHHe (has_type t1 :: G1)). reflexivity.
   - (* app *) eapply typing_app; eauto.
   - (* tabs *) apply typing_tabs. apply (IHHe (has_kind K0 :: G1)). reflexivity.
   - (* tapp *)
     pose proof (distribute_tsubst_rec t s S (ntype G1) 0) as Hd. simpl in Hd.
-    rewrite Hd. eapply typing_tapp. apply (IHHe G1). reflexivity.
-  - (* cast *) eapply typing_cast; [ apply (IHHe G1); reflexivity | apply compat_tsubst; assumption ].
-  - (* gnd *) apply typing_gnd; [ apply (IHHe G1); reflexivity | apply ground_tsubst; assumption ].
+    rewrite Hd. eapply typing_tapp;
+      [ apply (IHHe G1); reflexivity | eapply wf_typ_tsubst; eauto ].
+  - (* cast *) eapply typing_cast;
+      [ apply (IHHe G1); reflexivity | apply compat_tsubst; assumption
+      | eapply wf_typ_tsubst; eauto | eapply wf_typ_tsubst; eauto ].
+  - (* gnd *) apply typing_gnd; [ apply (IHHe G1); reflexivity | ].
+    inversion H; subst; constructor;
+      [ apply ground_tsubst; assumption | eapply wf_typ_tsubst; eauto ].
   - (* is_gnd *) apply (typing_is_gnd _ _ (tsubst S (ntype G1) G)). apply (IHHe G1). reflexivity.
-  - (* blame *) apply typing_blame.
+  - (* blame *) apply typing_blame. eapply wf_typ_tsubst; eauto.
   - (* nu *)
     pose proof (distribute_tsubst_rec B A S (ntype G1) 0) as Hd. simpl in Hd.
     rewrite Hd.
@@ -1348,7 +1490,7 @@ Proof.
     + eapply wf_typ_tsubst; eauto.
   - (* conv *) eapply typing_conv;
       [ apply (IHHe G1); reflexivity
-      | apply ty_equiv_tsubst; auto
+      | eapply defeq_tsubst; eauto
       | eapply wf_typ_tsubst; eauto ].
 Qed.
 
@@ -1359,4 +1501,673 @@ Corollary typing_tsubst0 : forall g e s K A,
 Proof.
   intros. pose proof (typing_tsubst nil g e s K A H H0 H1) as P.
   simpl in P. exact P.
+Qed.
+
+(** ** [has_kind] <-> [has_def] context refinement, for the type-level judgments
+
+    [has_kind K] and [has_def K A] occupy the same lookup namespace
+    ([lookup_kind] returns [K] for both), so [wf_typ] can move freely between
+    them; [lookup_def] gains an entry moving kind->def and every *existing*
+    entry is untouched, so [defeq] moves kind->def too (the reverse direction
+    would erase a [deq_def] equation and is false for [defeq]). *)
+
+Lemma lookup_kind_kind_to_def : forall G1 g K A n,
+  lookup_kind (G1 ++ has_kind K :: g) n = lookup_kind (G1 ++ has_def K A :: g) n.
+Proof.
+  induction G1 as [|b G1 IH]; intros g K A n; simpl.
+  - reflexivity.
+  - destruct b as [D | K' | K' D]; simpl.
+    + apply IH.
+    + destruct n; [reflexivity | apply IH].
+    + destruct n; [reflexivity | apply IH].
+Qed.
+
+Lemma lookup_term_kind_to_def : forall G1 g K A n,
+  lookup_term (G1 ++ has_kind K :: g) n = lookup_term (G1 ++ has_def K A :: g) n.
+Proof.
+  induction G1 as [|b G1 IH]; intros g K A n; simpl.
+  - reflexivity.
+  - destruct b as [D | K' | K' D]; simpl.
+    + destruct n; [reflexivity | apply IH].
+    + rewrite (IH _ _ A). reflexivity.
+    + rewrite (IH _ _ A). reflexivity.
+Qed.
+
+(** Refining [has_kind K] into [has_def K A] preserves every existing
+    [lookup_def] entry (the new binding adds an entry at [ntype G1] where
+    there was [None] before, and leaves every other index's payload alone). *)
+Lemma lookup_def_kind_to_def : forall G1 g K A n D,
+  lookup_def (G1 ++ has_kind K :: g) n = Some D ->
+  lookup_def (G1 ++ has_def K A :: g) n = Some D.
+Proof.
+  induction G1 as [|b G1 IH]; intros g K A n D H; simpl in *.
+  - destruct n as [|n']; [discriminate | exact H].
+  - destruct b as [T | K' | K' T]; simpl in *.
+    + eauto.
+    + destruct n as [|n']; [exact H |].
+      destruct (lookup_def (G1 ++ has_kind K :: g) n') as [[K0 A0]|] eqn:E; [|discriminate].
+      rewrite (IH g K A n' (K0, A0) E). exact H.
+    + destruct n as [|n']; [exact H |].
+      destruct (lookup_def (G1 ++ has_kind K :: g) n') as [[K0 A0]|] eqn:E; [|discriminate].
+      rewrite (IH g K A n' (K0, A0) E). exact H.
+Qed.
+
+Lemma wf_typ_kind_to_def : forall G1 g K A T K0,
+  wf_typ (G1 ++ has_kind K :: g) T K0 ->
+  wf_typ (G1 ++ has_def K A :: g) T K0.
+Proof.
+  intros G1 g K A T K0 H.
+  remember (G1 ++ has_kind K :: g) as g0 eqn:Hg. revert G1 Hg.
+  induction H; intros G1 Hg; subst.
+  - apply wf_tvar. rewrite <- lookup_kind_kind_to_def. auto.
+  - apply wf_arrow; auto.
+  - apply wf_all. apply (IHwf_typ (has_kind K0 :: G1)). reflexivity.
+  - apply wf_tyabs. apply (IHwf_typ (has_kind K1 :: G1)). reflexivity.
+  - eapply wf_tyapp; eauto.
+  - apply wf_dyn.
+Qed.
+
+Lemma wf_typ_def_to_kind : forall G1 g K A T K0,
+  wf_typ (G1 ++ has_def K A :: g) T K0 ->
+  wf_typ (G1 ++ has_kind K :: g) T K0.
+Proof.
+  intros G1 g K A T K0 H.
+  remember (G1 ++ has_def K A :: g) as g0 eqn:Hg. revert G1 Hg.
+  induction H; intros G1 Hg; subst.
+  - apply wf_tvar. rewrite (lookup_kind_kind_to_def _ _ _ A). auto.
+  - apply wf_arrow; auto.
+  - apply wf_all. apply (IHwf_typ (has_kind K0 :: G1)). reflexivity.
+  - apply wf_tyabs. apply (IHwf_typ (has_kind K1 :: G1)). reflexivity.
+  - eapply wf_tyapp; eauto.
+  - apply wf_dyn.
+Qed.
+
+Lemma defeq_kind_to_def : forall G1 g K A X Y J,
+  defeq (G1 ++ has_kind K :: g) X Y J ->
+  defeq (G1 ++ has_def K A :: g) X Y J.
+Proof.
+  intros G1 g K A X Y J H.
+  remember (G1 ++ has_kind K :: g) as g0 eqn:Hg. revert G1 Hg.
+  induction H; intros G1 Hg; subst.
+  - apply deq_refl. apply wf_typ_kind_to_def; auto.
+  - apply deq_sym. apply IHdefeq. reflexivity.
+  - eapply deq_trans; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - apply deq_ty_equiv; auto using wf_typ_kind_to_def.
+  - eapply deq_def.
+    + apply lookup_def_kind_to_def. eauto.
+    + apply wf_typ_kind_to_def; auto.
+  - apply deq_arrow; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+  - apply deq_all. apply (IHdefeq (has_kind K0 :: G1)). reflexivity.
+  - apply deq_tyabs. apply (IHdefeq (has_kind K1 :: G1)). reflexivity.
+  - eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
+Qed.
+
+(** ** Completing the [q_par] Church-Rosser development
+
+    [qdev] is Takahashi's complete development for [q_par]: contract every
+    beta redex *and* reveal every [lookup_def]-defined variable, recursively.
+    The triangle property gives the diamond, then confluence, then
+    Church-Rosser for [q_conv] (the equivalence closure of [q_par]), which is
+    what turns [defeq] facts into common-reduct facts. *)
+
+Fixpoint qdev (g : context) (t : typ) : typ :=
+  match t with
+  | tvar n => match lookup_def g n with Some (_, A) => A | None => tvar n end
+  | dyn => dyn
+  | arrow A B => arrow (qdev g A) (qdev g B)
+  | all K A => all K (qdev (has_kind K :: g) A)
+  | tyabs K A => tyabs K (qdev (has_kind K :: g) A)
+  | tyapp A B =>
+      match A with
+      | tyabs K A0 => tsubst (qdev g B) 0 (qdev (has_kind K :: g) A0)
+      | _ => tyapp (qdev g A) (qdev g B)
+      end
+  end.
+
+(** Takahashi's triangle for [q_par]. *)
+Lemma q_par_triangle : forall g A B, q_par g A B -> q_par g B (qdev g A).
+Proof.
+  induction 1 as
+    [ g n | g n K A Hlook | g | g A A' B B' HA IHA HB IHB
+    | g K A A' HA IHA | g K A A' HA IHA
+    | g A A' B B' HA IHA HB IHB | g K A A' B B' HA IHA HB IHB ].
+  - (* qpar_tvar *) simpl. destruct (lookup_def g n) as [[K A]|] eqn:E.
+    + eapply qpar_reveal. exact E.
+    + apply qpar_tvar.
+  - (* qpar_reveal *) simpl. rewrite Hlook. apply q_par_refl.
+  - simpl. apply qpar_dyn.
+  - simpl. apply qpar_arrow; auto.
+  - simpl. apply qpar_all; auto.
+  - simpl. apply qpar_tyabs; auto.
+  - (* qpar_tyapp: contract iff the head A is a tyabs *)
+    destruct A as [ | | | K0 A0 | | ]; try (simpl; apply qpar_tyapp; auto; fail).
+    inversion HA; subst. simpl in IHA. inversion IHA; subst.
+    simpl. apply qpar_beta; auto.
+  - (* qpar_beta *) simpl. apply q_par_subst with (K := K); auto.
+Qed.
+
+Lemma q_par_diamond : forall g A B C, q_par g A B -> q_par g A C ->
+  exists D, q_par g B D /\ q_par g C D.
+Proof.
+  intros g A B C HB HC. exists (qdev g A). split; apply q_par_triangle; auto.
+Qed.
+
+(** [q_par*] at a fixed context, and its confluence. *)
+Definition q_star (g : context) : typ -> typ -> Prop :=
+  clos_refl_trans typ (q_par g).
+
+Lemma q_star_refl : forall g A, q_star g A A.
+Proof. intros; apply rt_refl. Qed.
+Lemma q_star_step : forall g A B, q_par g A B -> q_star g A B.
+Proof. intros; apply rt_step; auto. Qed.
+Lemma q_star_trans : forall g A B C, q_star g A B -> q_star g B C -> q_star g A C.
+Proof. intros; eapply rt_trans; eauto. Qed.
+Hint Resolve q_star_refl q_star_step : blame.
+
+Lemma q_par_strip : forall g A C, q_star g A C ->
+  forall B, q_par g A B -> exists D, q_star g B D /\ q_par g C D.
+Proof.
+  intros g A C H. apply clos_rt_rt1n_iff in H.
+  induction H as [A | A A1 C H1 Hrest IH]; intros B HB.
+  - exists B; split; [apply q_star_refl | exact HB].
+  - destruct (q_par_diamond g A A1 B H1 HB) as [E [HA1E HBE]].
+    destruct (IH E HA1E) as [D [HED HCD]].
+    exists D; split; [ eapply q_star_trans; [ apply rt_step; exact HBE | exact HED ] | exact HCD ].
+Qed.
+
+Lemma q_star_confluent : forall g A B, q_star g A B ->
+  forall C, q_star g A C -> exists D, q_star g B D /\ q_star g C D.
+Proof.
+  intros g A B H. apply clos_rt_rt1n_iff in H.
+  induction H as [A | A A1 B H1 Hrest IH]; intros C HC.
+  - exists C; split; [exact HC | apply q_star_refl].
+  - destruct (q_par_strip g A C HC A1 H1) as [E [HA1E HCE]].
+    destruct (IH E HA1E) as [D [HBD HED]].
+    exists D; split; [ exact HBD | eapply q_star_trans; [ apply rt_step; exact HCE | exact HED ] ].
+Qed.
+
+(** [q_conv]: the equivalence closure of [q_par] at a fixed context. *)
+Definition q_conv (g : context) : typ -> typ -> Prop :=
+  clos_refl_sym_trans typ (q_par g).
+
+Lemma q_conv_step : forall g A B, q_par g A B -> q_conv g A B.
+Proof. intros; apply rst_step; auto. Qed.
+Lemma q_conv_refl : forall g A, q_conv g A A.
+Proof. intros; apply rst_refl. Qed.
+Lemma q_conv_sym : forall g A B, q_conv g A B -> q_conv g B A.
+Proof. intros; apply rst_sym; auto. Qed.
+Lemma q_conv_trans : forall g A B C, q_conv g A B -> q_conv g B C -> q_conv g A C.
+Proof. intros; eapply rst_trans; eauto. Qed.
+
+(** [q_conv] congruences (pointwise from the [q_par] congruence constructors). *)
+Lemma q_conv_arrow_l : forall g A A' B, q_conv g A A' -> q_conv g (arrow A B) (arrow A' B).
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_arrow; auto with blame.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_arrow_r : forall g A B B', q_conv g B B' -> q_conv g (arrow A B) (arrow A B').
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_arrow; auto with blame.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_arrow : forall g A A' B B',
+  q_conv g A A' -> q_conv g B B' -> q_conv g (arrow A B) (arrow A' B').
+Proof.
+  intros; eapply q_conv_trans; [apply q_conv_arrow_l | apply q_conv_arrow_r]; eauto.
+Qed.
+Lemma q_conv_all : forall g K A A',
+  q_conv (has_kind K :: g) A A' -> q_conv g (all K A) (all K A').
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_all; auto.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_tyabs : forall g K A A',
+  q_conv (has_kind K :: g) A A' -> q_conv g (tyabs K A) (tyabs K A').
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_tyabs; auto.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_tyapp_l : forall g A A' B, q_conv g A A' -> q_conv g (tyapp A B) (tyapp A' B).
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_tyapp; auto with blame.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_tyapp_r : forall g A B B', q_conv g B B' -> q_conv g (tyapp A B) (tyapp A B').
+Proof.
+  induction 1.
+  - apply rst_step. apply qpar_tyapp; auto with blame.
+  - apply rst_refl.
+  - apply rst_sym; auto.
+  - eapply rst_trans; eauto.
+Qed.
+Lemma q_conv_tyapp : forall g A A' B B',
+  q_conv g A A' -> q_conv g B B' -> q_conv g (tyapp A B) (tyapp A' B').
+Proof.
+  intros; eapply q_conv_trans; [apply q_conv_tyapp_l | apply q_conv_tyapp_r]; eauto.
+Qed.
+
+(** [ty_equiv] embeds into [q_conv] at any context ([q_par] contains [ty_par],
+    which contains [ty_step]). *)
+Lemma ty_equiv_q_conv : forall A B, ty_equiv A B -> forall g, q_conv g A B.
+Proof.
+  unfold ty_equiv. induction 1; intros g.
+  - apply rst_step. apply ty_par_q_par. apply ty_step_ty_par. assumption.
+  - apply rst_refl.
+  - apply rst_sym. apply IHclos_refl_sym_trans.
+  - eapply rst_trans;
+      [apply IHclos_refl_sym_trans1 | apply IHclos_refl_sym_trans2].
+Qed.
+
+(** [defeq] embeds into [q_conv]: every [defeq] equation is realized by
+    [q_par] conversions (this direction needs no kinding at all). *)
+Lemma defeq_q_conv : forall g X Y J, defeq g X Y J -> q_conv g X Y.
+Proof.
+  induction 1.
+  - apply q_conv_refl.
+  - apply q_conv_sym; auto.
+  - eapply q_conv_trans; eauto.
+  - apply ty_equiv_q_conv; auto.
+  - apply q_conv_step. eapply qpar_reveal. eauto.
+  - apply q_conv_arrow; auto.
+  - apply q_conv_all; auto.
+  - apply q_conv_tyabs; auto.
+  - apply q_conv_tyapp; auto.
+Qed.
+
+(** Church-Rosser for [q_conv]. *)
+Lemma q_conv_church_rosser : forall g A B, q_conv g A B ->
+  exists C, q_star g A C /\ q_star g B C.
+Proof.
+  induction 1.
+  - exists y; split; [apply q_star_step; auto | apply q_star_refl].
+  - exists x; split; apply q_star_refl.
+  - destruct IHclos_refl_sym_trans as [C [H1 H2]]. exists C; split; auto.
+  - destruct IHclos_refl_sym_trans1 as [C1 [H1a H1b]].
+    destruct IHclos_refl_sym_trans2 as [C2 [H2a H2b]].
+    destruct (q_star_confluent _ y C1 H1b C2 H2a) as [D [HD1 HD2]].
+    exists D; split; eapply q_star_trans; eauto.
+Qed.
+
+(** ** Head-constructor shape preservation under [q_star]
+
+    Rigid heads ([dyn]/[arrow]/[all]/[tyabs]) are preserved by [q_par] (only
+    [tvar]s can be revealed), hence by [q_star]. *)
+
+Lemma q_par_dyn_inv : forall g C, q_par g dyn C -> C = dyn.
+Proof. intros g C H; inversion H; reflexivity. Qed.
+
+Lemma q_star_dyn_inv : forall g C, q_star g dyn C -> C = dyn.
+Proof.
+  intros g C H. apply clos_rt_rt1n_iff in H.
+  remember dyn as A eqn:HA. induction H; subst; [reflexivity |].
+  apply q_par_dyn_inv in H. subst. auto.
+Qed.
+
+Lemma q_par_arrow_inv : forall g A B C, q_par g (arrow A B) C ->
+  exists A' B', C = arrow A' B' /\ q_par g A A' /\ q_par g B B'.
+Proof. intros g A B C H; inversion H; subst; eauto. Qed.
+
+Lemma q_star_arrow_inv : forall g A B C, q_star g (arrow A B) C ->
+  exists A' B', C = arrow A' B' /\ q_star g A A' /\ q_star g B B'.
+Proof.
+  intros g A B C H. apply clos_rt_rt1n_iff in H.
+  remember (arrow A B) as T eqn:HT. revert A B HT.
+  induction H as [T | T T1 C H1 Hrest IH]; intros A B HT; subst.
+  - exists A, B. auto using q_star_refl.
+  - apply q_par_arrow_inv in H1. destruct H1 as [A1 [B1 [-> [HA HB]]]].
+    destruct (IH A1 B1 eq_refl) as [A' [B' [-> [HA' HB']]]].
+    exists A', B'. split; [reflexivity |].
+    split; eapply q_star_trans; eauto using q_star_step.
+Qed.
+
+Lemma q_par_all_inv : forall g K A C, q_par g (all K A) C ->
+  exists A', C = all K A' /\ q_par (has_kind K :: g) A A'.
+Proof. intros g K A C H; inversion H; subst; eauto. Qed.
+
+Lemma q_star_all_inv : forall g K A C, q_star g (all K A) C ->
+  exists A', C = all K A' /\ q_star (has_kind K :: g) A A'.
+Proof.
+  intros g K A C H. apply clos_rt_rt1n_iff in H.
+  remember (all K A) as T eqn:HT. revert A HT.
+  induction H as [T | T T1 C H1 Hrest IH]; intros A HT; subst.
+  - exists A. auto using q_star_refl.
+  - apply q_par_all_inv in H1. destruct H1 as [A1 [-> HA]].
+    destruct (IH A1 eq_refl) as [A' [-> HA']].
+    exists A'. split; [reflexivity |].
+    eapply q_star_trans; eauto using q_star_step.
+Qed.
+
+Lemma q_par_tyabs_inv : forall g K A C, q_par g (tyabs K A) C ->
+  exists A', C = tyabs K A' /\ q_par (has_kind K :: g) A A'.
+Proof. intros g K A C H; inversion H; subst; eauto. Qed.
+
+Lemma q_star_tyabs_inv : forall g K A C, q_star g (tyabs K A) C ->
+  exists A', C = tyabs K A' /\ q_star (has_kind K :: g) A A'.
+Proof.
+  intros g K A C H. apply clos_rt_rt1n_iff in H.
+  remember (tyabs K A) as T eqn:HT. revert A HT.
+  induction H as [T | T T1 C H1 Hrest IH]; intros A HT; subst.
+  - exists A. auto using q_star_refl.
+  - apply q_par_tyabs_inv in H1. destruct H1 as [A1 [-> HA]].
+    destruct (IH A1 eq_refl) as [A' [-> HA']].
+    exists A'. split; [reflexivity |].
+    eapply q_star_trans; eauto using q_star_step.
+Qed.
+
+(** ** Head distinctness for [defeq]
+
+    Two [defeq]-related types with different rigid heads are impossible:
+    Church-Rosser joins them at a common reduct, but rigid heads survive
+    [q_star]. *)
+
+Lemma defeq_dyn_arrow : forall g A B J, ~ defeq g dyn (arrow A B) J.
+Proof.
+  intros g A B J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [C [H1 H2]].
+  apply q_star_dyn_inv in H1. subst.
+  apply q_star_arrow_inv in H2. destruct H2 as [? [? [Heq _]]]. discriminate.
+Qed.
+
+Lemma defeq_dyn_all : forall g K A J, ~ defeq g dyn (all K A) J.
+Proof.
+  intros g K A J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [C [H1 H2]].
+  apply q_star_dyn_inv in H1. subst.
+  apply q_star_all_inv in H2. destruct H2 as [? [Heq _]]. discriminate.
+Qed.
+
+Lemma defeq_dyn_tyabs : forall g K A J, ~ defeq g dyn (tyabs K A) J.
+Proof.
+  intros g K A J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [C [H1 H2]].
+  apply q_star_dyn_inv in H1. subst.
+  apply q_star_tyabs_inv in H2. destruct H2 as [? [Heq _]]. discriminate.
+Qed.
+
+Lemma defeq_arrow_all : forall g A B K C J, ~ defeq g (arrow A B) (all K C) J.
+Proof.
+  intros g A B K C J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [D [H1 H2]].
+  apply q_star_arrow_inv in H1. destruct H1 as [? [? [-> _]]].
+  apply q_star_all_inv in H2. destruct H2 as [? [Heq _]]. discriminate.
+Qed.
+
+Lemma defeq_arrow_tyabs : forall g A B K C J, ~ defeq g (arrow A B) (tyabs K C) J.
+Proof.
+  intros g A B K C J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [D [H1 H2]].
+  apply q_star_arrow_inv in H1. destruct H1 as [? [? [-> _]]].
+  apply q_star_tyabs_inv in H2. destruct H2 as [? [Heq _]]. discriminate.
+Qed.
+
+Lemma defeq_all_tyabs : forall g K A K' C J, ~ defeq g (all K A) (tyabs K' C) J.
+Proof.
+  intros g K A K' C J H.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [D [H1 H2]].
+  apply q_star_all_inv in H1. destruct H1 as [? [-> _]].
+  apply q_star_tyabs_inv in H2. destruct H2 as [? [Heq _]]. discriminate.
+Qed.
+
+(** ** Bringing [q_star] facts back into [defeq] (under kinding)
+
+    A [q_par] step out of a well-kinded type is a [defeq] equation: reveals
+    are [deq_def] (using [wf_ctx]-regularity of the revealed payload), betas
+    are [deq_ty_equiv].  This is the direction that needs kinding. *)
+
+(** [lookup_def] and [lookup_kind] agree on the kind of a [has_def] binding. *)
+Lemma lookup_def_lookup_kind : forall g n K A,
+  lookup_def g n = Some (K, A) -> lookup_kind g n = Some K.
+Proof.
+  induction g as [|b g IH]; intros n K A H; simpl in *.
+  - discriminate.
+  - destruct b as [T | K' | K' D].
+    + eauto.
+    + destruct n as [|n']; [discriminate |].
+      destruct (lookup_def g n') as [[K0 A0]|] eqn:E; [|discriminate].
+      injection H as <- _. eauto.
+    + destruct n as [|n'].
+      * injection H as <- _. reflexivity.
+      * destruct (lookup_def g n') as [[K0 A0]|] eqn:E; [|discriminate].
+        injection H as <- _. eauto.
+Qed.
+
+(** [q_par] preserves kinding (forward), given a well-formed context. *)
+Lemma q_par_wf : forall g A B, q_par g A B ->
+  wf_ctx g -> forall K, wf_typ g A K -> wf_typ g B K.
+Proof.
+  induction 1 as
+    [ g n | g n K0 A0 Hlook | g | g A A' B B' HA IHA HB IHB
+    | g K0 A A' HA IHA | g K0 A A' HA IHA
+    | g A A' B B' HA IHA HB IHB | g K0 A A' B B' HA IHA HB IHB ];
+    intros Hwfc K1 Hwf.
+  - exact Hwf.
+  - (* reveal *)
+    inversion Hwf; subst.
+    pose proof (lookup_def_lookup_kind g n K0 A0 Hlook) as HK.
+    match goal with HL : lookup_kind g n = Some K1 |- _ =>
+      rewrite HK in HL; injection HL as -> end.
+    eapply lookup_def_wf; eauto.
+  - exact Hwf.
+  - inversion Hwf; subst. apply wf_arrow; auto.
+  - inversion Hwf; subst. apply wf_all. apply IHA; auto. constructor; auto.
+  - inversion Hwf; subst. apply wf_tyabs. apply IHA; auto. constructor; auto.
+  - inversion Hwf; subst. eapply wf_tyapp; eauto.
+  - (* beta *)
+    inversion Hwf; subst.
+    match goal with HF : wf_typ g (tyabs _ A) (KArr _ _) |- _ =>
+      inversion HF; subst end.
+    match goal with HAw : wf_typ (has_kind ?KA :: g) A K1 |- _ =>
+      match goal with HBw : wf_typ g B KA |- _ =>
+        assert (HA' : wf_typ (has_kind KA :: g) A' K1)
+          by (apply IHA; [constructor; auto | exact HAw]);
+        assert (HB' : wf_typ g B' KA) by (apply IHB; auto);
+        exact (wf_typ_tsubst nil g KA B' A' K1 HA' HB')
+      end
+    end.
+Qed.
+
+(** A [q_par] step out of a well-kinded type is a [defeq] equation. *)
+Lemma q_par_defeq : forall g A B, q_par g A B ->
+  wf_ctx g -> forall K, wf_typ g A K -> defeq g A B K.
+Proof.
+  induction 1 as
+    [ g n | g n K0 A0 Hlook | g | g A A' B B' HA IHA HB IHB
+    | g K0 A A' HA IHA | g K0 A A' HA IHA
+    | g A A' B B' HA IHA HB IHB | g K0 A A' B B' HA IHA HB IHB ];
+    intros Hwfc K1 Hwf.
+  - apply deq_refl; exact Hwf.
+  - (* reveal *)
+    inversion Hwf; subst.
+    pose proof (lookup_def_lookup_kind g n K0 A0 Hlook) as HK.
+    match goal with HL : lookup_kind g n = Some K1 |- _ =>
+      rewrite HK in HL; injection HL as -> end.
+    eapply deq_def; eauto.
+  - apply deq_refl; exact Hwf.
+  - inversion Hwf; subst. apply deq_arrow; auto.
+  - inversion Hwf; subst. apply deq_all. apply IHA; auto. constructor; auto.
+  - inversion Hwf; subst. apply deq_tyabs. apply IHA; auto. constructor; auto.
+  - inversion Hwf; subst. eapply deq_tyapp; eauto.
+  - (* beta *)
+    inversion Hwf; subst.
+    match goal with HF : wf_typ g (tyabs _ A) (KArr _ _) |- _ =>
+      inversion HF; subst end.
+    match goal with HAw : wf_typ (has_kind ?KA :: g) A K1 |- _ =>
+      match goal with HBw : wf_typ g B KA |- _ =>
+        assert (Hwfc' : wf_ctx (has_kind KA :: g)) by (constructor; auto);
+        (* the two IH-provided defeqs *)
+        assert (HdA : defeq (has_kind KA :: g) A A' K1) by (apply IHA; auto);
+        assert (HdB : defeq g B B' KA) by (apply IHB; auto);
+        (* wf of the reducts, for the final beta conversion *)
+        assert (HwfA' : wf_typ (has_kind KA :: g) A' K1)
+          by (eapply q_par_wf; eauto);
+        assert (HwfB' : wf_typ g B' KA) by (eapply q_par_wf; eauto);
+        eapply deq_trans;
+        [ eapply deq_tyapp; [apply deq_tyabs; exact HdA | exact HdB]
+        | apply deq_ty_equiv;
+          [ eapply wf_tyapp; [apply wf_tyabs; exact HwfA' | exact HwfB']
+          | exact (wf_typ_tsubst nil g KA B' A' K1 HwfA' HwfB')
+          | apply ty_equiv_beta ] ]
+      end
+    end.
+Qed.
+
+(** Fold [q_par_defeq] over a [q_star] sequence. *)
+Lemma q_star_defeq : forall g A B, q_star g A B ->
+  wf_ctx g -> forall K, wf_typ g A K -> defeq g A B K.
+Proof.
+  intros g A B H. apply clos_rt_rt1n_iff in H.
+  induction H as [A | A A1 B H1 Hrest IH]; intros Hwfc K Hwf.
+  - apply deq_refl; exact Hwf.
+  - eapply deq_trans.
+    + eapply q_par_defeq; eauto.
+    + apply IH; auto. eapply q_par_wf; eauto.
+Qed.
+
+(** ** Head inversions for [defeq] (under kinding) *)
+
+Lemma defeq_arrow_inv : forall g A B A' B',
+  wf_ctx g -> defeq g (arrow A B) (arrow A' B') KStar ->
+  defeq g A A' KStar /\ defeq g B B' KStar.
+Proof.
+  intros g A B A' B' Hwfc H.
+  pose proof (defeq_regular _ _ _ _ Hwfc H) as [Hw1 Hw2].
+  inversion Hw1; subst. inversion Hw2; subst.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [C [H1 H2]].
+  apply q_star_arrow_inv in H1. destruct H1 as [CA [CB [-> [HA1 HB1]]]].
+  apply q_star_arrow_inv in H2. destruct H2 as [CA' [CB' [Heq [HA2 HB2]]]].
+  injection Heq as <- <-.
+  split.
+  - eapply deq_trans; [eapply q_star_defeq; eauto |].
+    apply deq_sym. eapply q_star_defeq; eauto.
+  - eapply deq_trans; [eapply q_star_defeq; eauto |].
+    apply deq_sym. eapply q_star_defeq; eauto.
+Qed.
+
+Lemma defeq_all_inv : forall g K A K' A',
+  wf_ctx g -> defeq g (all K A) (all K' A') KStar ->
+  K = K' /\ defeq (has_kind K :: g) A A' KStar.
+Proof.
+  intros g K A K' A' Hwfc H.
+  pose proof (defeq_regular _ _ _ _ Hwfc H) as [Hw1 Hw2].
+  inversion Hw1; subst. inversion Hw2; subst.
+  destruct (q_conv_church_rosser g _ _ (defeq_q_conv _ _ _ _ H)) as [C [HC1 HC2]].
+  apply q_star_all_inv in HC1. destruct HC1 as [CA [-> HA1]].
+  apply q_star_all_inv in HC2. destruct HC2 as [CA' [Heq HA2]].
+  injection Heq as <- <-.
+  split; [reflexivity |].
+  assert (Hwfc' : wf_ctx (has_kind K :: g)) by (constructor; auto).
+  eapply deq_trans; [eapply q_star_defeq; eauto |].
+  apply deq_sym. eapply q_star_defeq; eauto.
+Qed.
+
+(** ** Regularity for the (kind-regular) [typing] judgment *)
+
+Lemma typing_regular : forall g e A,
+  wf_ctx g -> typing g e A -> wf_typ g A KStar.
+Proof.
+  intros g e A Hwf H. revert Hwf. induction H; intros Hwf.
+  - eapply wf_ctx_lookup_term; eauto.
+  - apply wf_arrow; auto.
+    apply (wf_typ_strengthen_type nil g t1 t2 KStar).
+    apply IHtyping. constructor; assumption.
+  - specialize (IHtyping1 Hwf). inversion IHtyping1; subst; assumption.
+  - apply wf_all. apply IHtyping. constructor; assumption.
+  - specialize (IHtyping Hwf). inversion IHtyping; subst.
+    eapply (wf_typ_tsubst nil g K s t KStar); eauto.
+  - assumption.
+  - apply wf_dyn.
+  - apply wf_arrow; [apply wf_dyn |]. apply wf_arrow; apply wf_dyn.
+  - assumption.
+  - specialize (IHtyping (wf_ctx_def g K A Hwf H0)).
+    pose proof (wf_typ_def_to_kind nil g K A B KStar IHtyping) as W.
+    pose proof (wf_typ_tsubst nil g K A B KStar W H0) as P.
+    simpl in P. exact P.
+  - assumption.
+Qed.
+
+(** ** Inversion of [typing] through [typing_conv]
+
+    Each introduction form's typing is pinned up to an accumulated [defeq]
+    (or on-the-nose equality when no conversion was used). *)
+
+Lemma typing_abs_inv : forall g t e C,
+  typing g (abs t e) C ->
+  exists B, (arrow t B = C \/ defeq g (arrow t B) C KStar)
+            /\ typing (has_type t :: g) e B /\ wf_typ g t KStar.
+Proof.
+  intros g t e C H. remember (abs t e) as tm eqn:Htm.
+  induction H; try discriminate.
+  - injection Htm as -> ->. exists t2. split; [left; reflexivity | split; assumption].
+  - destruct (IHtyping Htm) as [B0 [Hconv [Hbody Hwft]]].
+    exists B0. split; [| split; assumption].
+    right. destruct Hconv as [<- | Hdq]; [assumption | eapply deq_trans; eauto].
+Qed.
+
+Lemma typing_tabs_inv : forall g K e C,
+  typing g (tabs K e) C ->
+  exists B, (all K B = C \/ defeq g (all K B) C KStar)
+            /\ typing (has_kind K :: g) e B.
+Proof.
+  intros g K e C H. remember (tabs K e) as tm eqn:Htm.
+  induction H; try discriminate.
+  - injection Htm as -> ->. exists t. split; [left; reflexivity | assumption].
+  - destruct (IHtyping Htm) as [B0 [Hconv Hbody]].
+    exists B0. split; [| assumption].
+    right. destruct Hconv as [<- | Hdq]; [assumption | eapply deq_trans; eauto].
+Qed.
+
+Lemma typing_gnd_inv : forall g e G C,
+  typing g (gnd e G) C ->
+  (dyn = C \/ defeq g dyn C KStar) /\ typing g e G /\ ground G.
+Proof.
+  intros g e G C H. remember (gnd e G) as tm eqn:Htm.
+  induction H; try discriminate.
+  - injection Htm as -> ->. inversion H0; subst.
+    repeat split; [left; reflexivity | assumption | assumption].
+  - destruct (IHtyping Htm) as [Hconv [Hty Hg]].
+    repeat split; [| assumption | assumption].
+    right. destruct Hconv as [<- | Hdq]; [assumption | eapply deq_trans; eauto].
+Qed.
+
+(** ** Canonical forms *)
+
+Lemma canonical_arrow : forall g v A B,
+  value v -> typing g v (arrow A B) -> exists t e, v = abs t e.
+Proof.
+  intros g v A B Hv Hty. destruct Hv.
+  - eauto.
+  - apply typing_tabs_inv in Hty. destruct Hty as [B0 [Hconv _]].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_arrow_all; apply deq_sym; eauto].
+  - apply typing_gnd_inv in Hty. destruct Hty as [Hconv _].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_dyn_arrow; eauto].
+Qed.
+
+Lemma canonical_all : forall g v K B,
+  value v -> typing g v (all K B) -> exists K' e, v = tabs K' e.
+Proof.
+  intros g v K B Hv Hty. destruct Hv.
+  - apply typing_abs_inv in Hty. destruct Hty as [B0 [Hconv _]].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_arrow_all; eauto].
+  - eauto.
+  - apply typing_gnd_inv in Hty. destruct Hty as [Hconv _].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_dyn_all; eauto].
 Qed.

@@ -11,4 +11,4 @@ Extracted: λlen:Dim. λtime:Dim. λd:Qty. λt:Qty. (qmul len ((dinv time)) d ((
 Extracted: λmass:Dim. λvel:Dim. λm:Qty. λv:Qty. (qmul ((dmul mass vel)) vel ((qmul mass vel m v)) v)
 Extracted: λd:Dim. λx:Qty. λy:Qty. (qadd d x y)
 Extracted: λd:Dim. λx:Qty. λy:Qty. (qmul d ((dinv d)) x ((qinv d y)))
-Extracted: λd:Dim. ((<? => Dim -> ?>^0+ (<? => ?>^0+ blame(0+))) d)
+Extracted: λd:Dim. ((<? => Dim -> ?>^0+ blame(0+)) d)

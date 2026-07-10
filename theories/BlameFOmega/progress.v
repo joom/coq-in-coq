@@ -1,20 +1,22 @@
 (** * BlameFOmega.progress: Progress.
 
     Proves that well-typed closed terms either are values, step, or are blame,
-    for the current permissive target typing judgment.  This file proves
-    PROGRESS only; a preservation / subject-reduction theorem for a kind-regular
-    target typing judgment remains future work (see the README "Known
-    limitations" and the paper's Limitations section). *)
+    for the (kind-regular, [defeq]-converting) target typing judgment.  The
+    companion preservation theorem lives in [preservation.v]. *)
 
 From Stdlib Require Import Arith Lia List Relations.
 Import ListNotations.
 From BlameFOmega Require Import syntax infrastructure semantics
   typing typing_metatheory ty_confluence.
 
-(** ** Convertibility with well-kindedness witness *)
+(** ** Convertibility with well-kindedness witness
+
+    [ty_conv_to g A C] records the accumulated [typing_conv] conversions of an
+    inversion: either no conversion happened ([A = C]) or the two types are
+    [defeq] and the target is well-kinded (exactly [typing_conv]'s premises). *)
 
 Definition ty_conv_to (g : context) (A C : typ) : Prop :=
-  A = C \/ (ty_equiv A C /\ wf_typ g C KStar).
+  A = C \/ (defeq g A C KStar /\ wf_typ g C KStar).
 
 Lemma apply_ty_conv_to : forall g e A C,
   typing g e A -> ty_conv_to g A C -> typing g e C.
@@ -28,23 +30,24 @@ Lemma ty_conv_to_refl : forall g A, ty_conv_to g A A.
 Proof. left. reflexivity. Qed.
 
 Lemma ty_conv_to_conv : forall g A B C,
-  ty_conv_to g A B -> ty_equiv B C -> wf_typ g C KStar -> ty_conv_to g A C.
+  ty_conv_to g A B -> defeq g B C KStar -> wf_typ g C KStar -> ty_conv_to g A C.
 Proof.
   intros g A B C [<- | [Heq1 _]] Heq2 Hwf; right; split; auto.
-  eapply ty_equiv_trans; eauto.
+  eapply deq_trans; eauto.
 Qed.
 
 (** ** Inversion lemmas with convertibility *)
 
 Lemma typing_abs_inv2 : forall g t e C,
   typing g (abs t e) C ->
-  exists B, ty_conv_to g (arrow t B) C /\ typing (has_type t :: g) e B.
+  exists B, ty_conv_to g (arrow t B) C /\ typing (has_type t :: g) e B
+            /\ wf_typ g t KStar.
 Proof.
   intros g t e C H. remember (abs t e) as tm eqn:Htm.
   induction H; try discriminate.
-  - injection Htm as -> ->. exists t2. split; [left; reflexivity | assumption].
-  - destruct (IHtyping Htm) as [B0 [Hconv Hbody]].
-    exists B0. split; [eapply ty_conv_to_conv; eauto | assumption].
+  - injection Htm as -> ->. exists t2. split; [left; reflexivity | split; assumption].
+  - destruct (IHtyping Htm) as [B0 [Hconv [Hbody Hwft]]].
+    exists B0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
 Lemma typing_tabs_inv2 : forall g K e C,
@@ -71,36 +74,41 @@ Qed.
 
 Lemma typing_tapp_inv2 : forall g e s C,
   typing g (tapp e s) C ->
-  exists K t, ty_conv_to g (tsubst s 0 t) C /\ typing g e (all K t).
+  exists K t, ty_conv_to g (tsubst s 0 t) C /\ typing g e (all K t)
+              /\ wf_typ g s K.
 Proof.
   intros g e s C H. remember (tapp e s) as tm eqn:Htm.
   induction H; try discriminate.
-  - injection Htm as -> ->. exists K, t. split; [left; reflexivity | assumption].
-  - destruct (IHtyping Htm) as [K0 [t0 [Hconv Hty]]].
-    exists K0, t0. split; [eapply ty_conv_to_conv; eauto | assumption].
+  - injection Htm as -> ->. exists K, t. split; [left; reflexivity | split; assumption].
+  - destruct (IHtyping Htm) as [K0 [t0 [Hconv [Hty Hwf]]]].
+    exists K0, t0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
 Lemma typing_cast_inv2 : forall g e A B p C,
   typing g (cast e A B p) C ->
-  ty_conv_to g B C /\ typing g e A /\ compat A B.
+  ty_conv_to g B C /\ typing g e A /\ compat A B
+  /\ wf_typ g A KStar /\ wf_typ g B KStar.
 Proof.
   intros g e A B p C H. remember (cast e A B p) as tm eqn:Htm.
   induction H; try discriminate.
   - injection Htm as -> -> -> ->.
-    repeat split; [left; reflexivity | assumption | assumption].
-  - destruct (IHtyping Htm) as [Hconv [Hty Hc]].
-    repeat split; [eapply ty_conv_to_conv; eauto | assumption | assumption].
+    repeat split; [left; reflexivity | assumption | assumption | assumption | assumption].
+  - destruct (IHtyping Htm) as [Hconv [Hty [Hc [HwfA HwfB]]]].
+    repeat split;
+      [eapply ty_conv_to_conv; eauto | assumption | assumption | assumption | assumption].
 Qed.
 
 Lemma typing_gnd_inv2 : forall g e G C,
   typing g (gnd e G) C ->
-  ty_conv_to g dyn C /\ typing g e G /\ ground G.
+  ty_conv_to g dyn C /\ typing g e G /\ ground G /\ wf_typ g G KStar.
 Proof.
   intros g e G C H. remember (gnd e G) as tm eqn:Htm.
   induction H; try discriminate.
-  - injection Htm as -> ->. repeat split; [left; reflexivity | assumption | assumption].
-  - destruct (IHtyping Htm) as [Hconv [Hty Hg]].
-    repeat split; [eapply ty_conv_to_conv; eauto | assumption | assumption].
+  - injection Htm as -> ->. inversion H0; subst.
+    repeat split; [left; reflexivity | assumption | assumption | assumption].
+  - destruct (IHtyping Htm) as [Hconv [Hty [Hg Hwf]]].
+    repeat split;
+      [eapply ty_conv_to_conv; eauto | assumption | assumption | assumption].
 Qed.
 
 Lemma typing_nu_inv2 : forall g K A e C,
@@ -127,74 +135,33 @@ Proof.
     split; [eapply ty_conv_to_conv; eauto | assumption].
 Qed.
 
-(** ** Canonical forms *)
+(** ** Canonical forms
+
+    [canonical_arrow]/[canonical_all] live in [typing_metatheory.v] (they only
+    need the typing inversions and the [defeq] head-distinctness facts proved
+    there); [canonical_dyn] is their [dyn]-typed sibling. *)
 
 Lemma canonical_dyn : forall g v,
   value v -> typing g v dyn ->
   exists w G, v = gnd w G /\ value w /\ ground G.
 Proof.
   intros g v Hv Hty. destruct Hv.
-  - apply typing_abs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    exfalso. eapply ty_equiv_dyn_arrow. apply ty_equiv_sym. exact Heq.
-  - apply typing_tabs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    exfalso. eapply ty_equiv_dyn_all. apply ty_equiv_sym. exact Heq.
-  - apply typing_gnd_inv in Hty. destruct Hty as [Heq [Hty' Hg]].
+  - apply typing_abs_inv in Hty. destruct Hty as [B0 [Hconv _]].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_dyn_arrow; apply deq_sym; eauto].
+  - apply typing_tabs_inv in Hty. destruct Hty as [B0 [Hconv _]].
+    destruct Hconv as [Heq | Hdq];
+      [discriminate | exfalso; eapply defeq_dyn_all; apply deq_sym; eauto].
+  - apply typing_gnd_inv in Hty. destruct Hty as [_ [Hty' Hg]].
     eexists; eexists; repeat split; eauto.
 Qed.
 
-(** ** Context refinement: [has_kind] ↔ [has_def] *)
+(** ** Context refinement: [has_kind] → [has_def]
 
-Lemma lookup_kind_kind_to_def : forall G1 g K A n,
-  lookup_kind (G1 ++ has_kind K :: g) n = lookup_kind (G1 ++ has_def K A :: g) n.
-Proof.
-  induction G1 as [|b G1 IH]; intros g K A n; simpl.
-  - reflexivity.
-  - destruct b as [D | K' | K' D]; simpl.
-    + apply IH.
-    + destruct n; [reflexivity | apply IH].
-    + destruct n; [reflexivity | apply IH].
-Qed.
-
-Lemma lookup_term_kind_to_def : forall G1 g K A n,
-  lookup_term (G1 ++ has_kind K :: g) n = lookup_term (G1 ++ has_def K A :: g) n.
-Proof.
-  induction G1 as [|b G1 IH]; intros g K A n; simpl.
-  - reflexivity.
-  - destruct b as [D | K' | K' D]; simpl.
-    + destruct n; [reflexivity | apply IH].
-    + rewrite (IH _ _ A). reflexivity.
-    + rewrite (IH _ _ A). reflexivity.
-Qed.
-
-Lemma wf_typ_kind_to_def : forall G1 g K A T K0,
-  wf_typ (G1 ++ has_kind K :: g) T K0 ->
-  wf_typ (G1 ++ has_def K A :: g) T K0.
-Proof.
-  intros G1 g K A T K0 H.
-  remember (G1 ++ has_kind K :: g) as g0 eqn:Hg. revert G1 Hg.
-  induction H; intros G1 Hg; subst.
-  - apply wf_tvar. rewrite <- lookup_kind_kind_to_def. auto.
-  - apply wf_arrow; auto.
-  - apply wf_all. apply (IHwf_typ (has_kind K0 :: G1)). reflexivity.
-  - apply wf_tyabs. apply (IHwf_typ (has_kind K1 :: G1)). reflexivity.
-  - eapply wf_tyapp; eauto.
-  - apply wf_dyn.
-Qed.
-
-Lemma wf_typ_def_to_kind : forall G1 g K A T K0,
-  wf_typ (G1 ++ has_def K A :: g) T K0 ->
-  wf_typ (G1 ++ has_kind K :: g) T K0.
-Proof.
-  intros G1 g K A T K0 H.
-  remember (G1 ++ has_def K A :: g) as g0 eqn:Hg. revert G1 Hg.
-  induction H; intros G1 Hg; subst.
-  - apply wf_tvar. rewrite (lookup_kind_kind_to_def _ _ _ A). auto.
-  - apply wf_arrow; auto.
-  - apply wf_all. apply (IHwf_typ (has_kind K0 :: G1)). reflexivity.
-  - apply wf_tyabs. apply (IHwf_typ (has_kind K1 :: G1)). reflexivity.
-  - eapply wf_tyapp; eauto.
-  - apply wf_dyn.
-Qed.
+    Refining a [has_kind K] binding into [has_def K A] preserves typing (the
+    kinding/[defeq]/lookup transport lemmas live in [typing_metatheory.v]).
+    The reverse direction is *false* for this judgment: erasing a definition
+    forgets the [deq_def] equations [typing_conv] may have used. *)
 
 Lemma typing_kind_to_def : forall G1 g K A e B,
   typing (G1 ++ has_kind K :: g) e B ->
@@ -204,62 +171,24 @@ Proof.
   remember (G1 ++ has_kind K :: g) as g0 eqn:Hg. revert G1 Hg.
   induction H; intros G1 Hg; subst.
   - apply typing_var. rewrite <- lookup_term_kind_to_def. auto.
-  - apply typing_abs. apply (IHtyping (has_type t1 :: G1)). reflexivity.
+  - apply typing_abs;
+      [ apply wf_typ_kind_to_def; auto
+      | apply (IHtyping (has_type t1 :: G1)); reflexivity ].
   - eapply typing_app; eauto.
   - apply typing_tabs. apply (IHtyping (has_kind K0 :: G1)). reflexivity.
-  - eapply typing_tapp; eauto.
-  - eapply typing_cast; eauto.
+  - eapply typing_tapp; eauto. apply wf_typ_kind_to_def; auto.
+  - eapply typing_cast; eauto; apply wf_typ_kind_to_def; auto.
   - apply typing_gnd; eauto.
+    inversion H0; subst; constructor; [auto | apply wf_typ_kind_to_def; auto].
   - apply typing_is_gnd; eauto.
-  - apply typing_blame.
+  - apply typing_blame. apply wf_typ_kind_to_def; auto.
   - apply typing_nu.
     + apply (IHtyping (has_def K0 A0 :: G1)). reflexivity.
     + apply wf_typ_kind_to_def; auto.
-  - eapply typing_conv; [ eauto | auto | apply wf_typ_kind_to_def; auto ].
-Qed.
-
-Lemma typing_def_to_kind : forall G1 g K A e B,
-  typing (G1 ++ has_def K A :: g) e B ->
-  typing (G1 ++ has_kind K :: g) e B.
-Proof.
-  intros G1 g K A e B H.
-  remember (G1 ++ has_def K A :: g) as g0 eqn:Hg. revert G1 Hg.
-  induction H; intros G1 Hg; subst.
-  - apply typing_var. rewrite (lookup_term_kind_to_def _ _ _ A). auto.
-  - apply typing_abs. apply (IHtyping (has_type t1 :: G1)). reflexivity.
-  - eapply typing_app; eauto.
-  - apply typing_tabs. apply (IHtyping (has_kind K0 :: G1)). reflexivity.
-  - eapply typing_tapp; eauto.
-  - eapply typing_cast; eauto.
-  - apply typing_gnd; eauto.
-  - apply typing_is_gnd; eauto.
-  - apply typing_blame.
-  - apply typing_nu.
-    + apply (IHtyping (has_def K0 A0 :: G1)). reflexivity.
-    + eapply wf_typ_def_to_kind; eauto.
-  - eapply typing_conv; [ eauto | auto | eapply wf_typ_def_to_kind; eauto ].
-Qed.
-
-Lemma canonical_not_tvar : forall g v n, value v -> typing g v (tvar n) -> False.
-Proof.
-  intros g v n Hv Hty. destruct Hv.
-  - apply typing_abs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    eapply ty_equiv_arrow_tvar. exact Heq.
-  - apply typing_tabs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    eapply ty_equiv_all_tvar. exact Heq.
-  - apply typing_gnd_inv in Hty. destruct Hty as [Heq _].
-    eapply ty_equiv_dyn_tvar. exact Heq.
-Qed.
-
-Lemma canonical_not_tyabs : forall g v K A, value v -> typing g v (tyabs K A) -> False.
-Proof.
-  intros g v K A Hv Hty. destruct Hv.
-  - apply typing_abs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    eapply ty_equiv_arrow_tyabs. exact Heq.
-  - apply typing_tabs_inv in Hty. destruct Hty as [B0 [Heq _]].
-    eapply ty_equiv_all_tyabs. exact Heq.
-  - apply typing_gnd_inv in Hty. destruct Hty as [Heq _].
-    eapply ty_equiv_dyn_tyabs. exact Heq.
+  - eapply typing_conv;
+      [ eauto
+      | apply defeq_kind_to_def; auto
+      | apply wf_typ_kind_to_def; auto ].
 Qed.
 
 (** ** Deciding executable compatibility (for COLLAPSE vs CONFLICT)

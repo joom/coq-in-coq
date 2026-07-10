@@ -98,17 +98,14 @@ Inductive wf_typ : context -> typ -> kind -> Prop :=
 
 Hint Constructors wf_typ: blame.
 
-(** Well-formed ground types for a future kind-regular typing judgment.
+(** Well-formed ground types for the kind-regular typing judgment.
 
     The operational [ground] predicate in syntax.v is syntactic: it contains
     [arrow dyn dyn] ([ground_arrow]) and every neutral Fω type name
     ([ground_neutral]: a type variable [α] or a type-family application
     [α B1 ... Bn]).  [wf_ground] is the kind-aware analogue intended for a
-    future kind-regular [typing_gnd]: a ground tag must additionally have kind
-    [KStar] in the current context (here restricted to [tvar] and [? -> ?]).
-    The current [typing_gnd] still uses the syntactic [ground] instead; the
-    [wf_ground_tvar] constructor is retained as infrastructure for that future
-    strengthening. *)
+    kind-regular [typing_gnd]: a ground tag must additionally have kind
+    [KStar] in the current context. *)
 Inductive wf_ground : context -> typ -> Prop :=
   | wf_ground_intro : forall g G,
     ground G -> wf_typ g G KStar -> wf_ground g G.

@@ -38,17 +38,17 @@ language combines ideas from:
 The formalization (`theories/BlameFOmega/`) defines the syntax, a small-step
 operational semantics (proved **deterministic**, `step_deterministic`), a kinding
 relation, type-level β-reduction with its definitional-equality closure
-(`ty_equiv`) and a typing conversion rule (`typing_conv`), a target typing
+(`ty_equiv`), context-indexed definitional equality (`defeq`), and a typing
+conversion rule (`typing_conv`), a target typing
 judgment used by the extraction theorem, the subtyping/blame-safety metatheory,
 and the `sim`/`sim_star` simulation relation used to state the extraction
 theorems. `dyn` lives at kind `*`, and the rules that instantiate a quantifier
 with `dyn` are restricted to `∀α:*` accordingly. Target **progress** is now
 mechanized (`progress`, `progress.v`): every closed, well-typed term is a
 value, steps, or is `blame`. Target **preservation** is also mechanized
-(`preservation`, `preservation.v`), for a separate kind-regular judgment
-`typing_kr` and a well-formed-context invariant `wf_ctx`, and for `step_ok`
-(`step` minus two constructors, `step_nu_abs`/`step_nu_tabs`, that are
-formally proved to break preservation — see "Known limitations").
+(`preservation`, `preservation_star`, `preservation.v`) for the same
+kind-regular `typing` judgment, a well-formed-context invariant `wf_ctx`, and
+the full `step` relation, including `step_nu_abs` and `step_nu_tabs`.
 The key types are:
 
 | Layer  | Constructors |
@@ -366,100 +366,7 @@ since they manipulate variable `name`s; the core metatheory does not.
    arrows, and type application, with no dependent types or higher kinds beyond
    `Type -> ... -> Type`. Full CoC types may extract to types containing `dyn`.
 
-5. **Term typing is not kind-regular; preservation holds for a separate
-   kind-regular judgment, restricted to `step` minus two constructors that
-   are formally proved to break it.**
-   The target `typing` judgment (`typing.v`) used by `extract_well_typed` does
-   not embed `wf_typ` premises, so it certifies term formation rather than
-   full kind-regularity. Preservation is *not* provable for this permissive
-   judgment as literally stated — this is a genuine counterexample, not
-   merely a hard proof: an ill-kinded `abs` domain (reachable because
-   `typing_conv` can promote it via an unconditional, kind-unaware type-level
-   β-step) can leak into a later position where it is load-bearing for
-   typability, then β-reduce to a term with no typing derivation at any type
-   (see `preservation.v`'s header for the concrete witness).
-
-   **Design decision (deliberate, now carried out):** `preservation.v` defines
-   a separate kind-regular judgment `typing_kr` (mirroring `typing`'s ten
-   rules but adding the missing `wf_typ`/`wf_ground` premises — `typing.v`
-   itself is untouched) and a well-formed-context invariant `wf_ctx`, proves
-   `typing_kr` sound for `typing` (`typing_kr_sound`) and regular
-   (`typing_regular`: every `typing_kr`-derivable type is well-kinded), and
-   proves preservation for it:
-   ```coq
-   Theorem preservation : forall g e A e',
-     wf_ctx g -> typing_kr g e A -> step_ok e e' -> typing_kr g e' A.
-   ```
-   `step_ok` is `step` with exactly two constructors removed,
-   `step_nu_abs`/`step_nu_tabs`, which push a `nu` binder under an `abs`/
-   `tabs`. This exclusion is *not* a proof-effort shortfall: both are
-   formally proved to break preservation, even against `typing_kr`/`wf_ctx`
-   (`step_nu_abs_breaks_preservation`, `preservation.v`), for a reason
-   orthogonal to kinding — reordering a context binding underneath a moved
-   binder can silently invalidate an unrelated, exactly-pinned type
-   annotation elsewhere in the term (e.g. inside a nested `cast`). No
-   invariant phrased in terms of type-kinding can fix this, because every
-   type involved in the counterexample is already well-kinded; the failure is
-   about term-level annotation identity, not kinding.
-
-   The extraction-side obstacle to kind-regularity is now **resolved**. Emitting
-   well-kinded types is subtle because the naive kind index (`extract_typ e T`
-   has kind `extract_kind_L U` for `T`'s CoC type `U`) is *false*
-   (`extract_kind_L` does not commute with the application rule's substitution —
-   substituting a type for a variable can flip a domain's syntactic
-   `classifier`). The fix threads the target kind through the CoC kinding
-   derivation, restricted to genuinely type-level subterms (`type_expr`), which
-   makes the index correct: `extract_typ_wf_sort` (type extraction is well kinded
-   at `KStar`) is proved **axiom-free** via the stronger induction
-   `extract_typ_L_wf_kind` (`type_extraction_facts.v`). It, together with the
-   kind-namespace context-lookup lemma (`extract_ctx_lookup_kind`) and the
-   compatibility inversions (`compat_arrow_inv`, `compat_all_l_inv`,
-   `compat_all_r_inv`, for the structural cast rules WRAP/GENERALIZE/INSTANTIATE),
-   are the building blocks for a target subject-reduction proof. The *conversion*
-   companion of kind-regularity, `extract_typ_tsubst_coc_equiv`, is also now
-   proved (in `well_typed.v`), so the extraction side of the large-`App`
-   `typing_conv` step is fully discharged and admit-free (see "Main results").
-
-   A substantial target metatheory library is now in place (all axiom-free):
-   - `ty_confluence.v`: the full type-level substitution-lemma chain for `typ`,
-     parallel reduction, **confluence** and **Church–Rosser** for `ty_step`,
-     the `ty_equiv` head inversions (`ty_equiv_arrow_inv`, `ty_equiv_all_inv`),
-     and head-distinctness lemmas for every pair of type-former heads
-     (`tvar`/`tyabs` included, needed by `progress`'s canonical-forms cases).
-   - `typing_metatheory.v`: **term weakening** and **type weakening** (with the
-     two-namespace context-shift bookkeeping), **term substitution**
-     (`typing_subst`) and **neutral type substitution** (`typing_tsubst`,
-     which requires the substituted type to be `neutral`; also
-     `wf_typ_tsubst`, `compat_tsubst`, `ground_tsubst`),
-     `tlift`-preservation of `compat` and `ty_equiv`,
-     **inversion through `typing_conv`** (`typing_abs_inv`,
-     `typing_tabs_inv`, `typing_gnd_inv`), and **canonical forms**
-     (`canonical_arrow`, `canonical_all`).
-   - Determinism (`step_deterministic`), the type-level equational theory
-     (`ty_equiv`/`typing_conv`), the `dyn:*` instantiation restriction, and
-     now **progress** (`progress`, `progress.v`) itself.
-
-   The operational `ground` predicate now contains `arrow dyn dyn` and any
-   `neutral` type (`α` or `α B₁ ... Bₙ` — a type variable, or a type-family
-   application headed by one), generalizing Blame-for-All's bare
-   type-variable ground tag to Fω's type-level applications. The
-   `wf_ground` kinding relation in `typing.v` is the kind-aware analogue used
-   by a future kind-regular typing judgment; the current `typing_gnd` uses the
-   syntactic `ground`/`neutral` predicates, which is what keeps
-   `ground_tsubst` and `typing_tsubst` provable without threading kinding
-   through every substitution.
-
-   What remains for full target type-safety, in order: (a) rewire `typing` to
-   the kind-regular form (embed `wf_typ`/`wf_ground` premises); (b) prove
-   preservation for it (the weakening, substitution, inversion, and
-   canonical-forms lemmas already proved are the intended prerequisites). The
-   extraction side is already complete and admit-free: both the kind-indexed
-   invariant (`extract_typ_wf_sort`) and the conversion companion
-   (`extract_typ_tsubst_coc_equiv`) that discharge the large-`App` `typing_conv`
-   step are proved, so only the target-judgment rewiring and its preservation
-   proof (pure target metatheory) remain.
-
-6. **No irrelevance/proof erasure.** The extractor does not perform irrelevance
+5. **No irrelevance/proof erasure.** The extractor does not perform irrelevance
    erasure. Term indices are erased from target types, but the corresponding
    source term arguments remain as ordinary target term arguments whenever the
    source program uses them computationally. A future proof/irrelevance-erasing

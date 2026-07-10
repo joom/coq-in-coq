@@ -11,4 +11,4 @@ tag admitted.
 Extracted: λc:U. λx:El. (box c x)
 Extracted: λd:Dyn. (tag d)
 Inferred type: U -> Set
-Extracted: λc:U. ((<? => U -> ?>^0+ (<? => ?>^0+ blame(0+))) c)
+Extracted: λc:U. ((<? => U -> ?>^0+ blame(0+)) c)

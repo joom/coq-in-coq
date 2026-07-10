@@ -53,13 +53,13 @@ Print Assumptions ground_tsubst.
 (* Target type safety *)
 Print Assumptions progress.
 
-(* Target preservation (kind-regular typing, [step] minus [step_nu_abs]/
-   [step_nu_tabs] -- see theories/BlameFOmega/preservation.v's header for why
-   those two are excluded: they are formally proved to break preservation,
-   not merely hard to prove). *)
+(* Target preservation for the unified kind-regular typing judgment and the
+   full [step] relation, including the two [nu] binder-commuting rules. *)
 Print Assumptions preservation.
+Print Assumptions preservation_star.
 Print Assumptions typing_regular.
-Print Assumptions step_nu_abs_breaks_preservation.
+Print Assumptions typing_swap_type_def.
+Print Assumptions typing_swap_kind_def.
 
 (* Subtyping / blame safety corollary *)
 Print Assumptions subtyping_theorem.

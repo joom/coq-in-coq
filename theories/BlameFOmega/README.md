@@ -13,13 +13,10 @@ decisions a reader/reviewer should know; the paper's §3 is the fuller account.
 - **Structural metatheory**: term/type weakening, term substitution, neutral
   type substitution, inversion-through-conversion, canonical forms
   (`typing_metatheory.v`).
-- **Preservation** for a kind-regular typing judgment `typing_kr` and a
-  well-formed-context invariant `wf_ctx`, for `step_ok` — `step` minus the
-  two constructors (`step_nu_abs`, `step_nu_tabs`) that are formally proved
-  to break preservation for *any* invariant phrased in terms of type-kinding
-  (`preservation`, `typing_regular`, `step_nu_abs_breaks_preservation`,
-  `preservation.v`; see that file's header for the counterexample and why the
-  exclusion is unavoidable, not merely a proof-effort shortfall).
+- **Preservation** for the kind-regular `typing` judgment and a
+  well-formed-context invariant `wf_ctx`, for the full `step` relation,
+  including `step_nu_abs` and `step_nu_tabs` (`preservation`,
+  `preservation_star`, `typing_regular`, `preservation.v`).
 - **Blame safety**: the Blame Theorem (`blame.v`) and the subtyping/blame-safety
   corollary (`subtyping_safety.v`).
 
@@ -38,21 +35,14 @@ not `compat Γ A B`); a kind-regular version would add `wf_typ` premises.
 Exception: `compat_refl` (identity) steps without inspecting its annotation; every
 other constructor decomposes a canonical cast-form head.
 
-### Permissive term typing (`typing.v`)
-The `typing` judgment used by extraction is intentionally **permissive**: it does
-not embed `wf_typ`/`wf_ground` premises at every constructor (e.g. `typing_tapp`
-has no `wf_typ` premise, `typing_blame` types `blame p` at any type, `typing_gnd`
-uses the syntactic `ground`). It certifies term *formation*, and **progress** is
-proved for it. Preservation is *not* provable for this permissive judgment as
-stated (a genuine counterexample, not just a hard proof: an ill-kinded `abs`
-domain can leak into a later position where it is load-bearing for typability
-— see `preservation.v`'s header). `preservation.v` instead defines a
-kind-regular judgment `typing_kr` (mirroring `typing`'s ten rules but adding
-the missing `wf_typ`/`wf_ground` premises) and proves preservation for it,
-restricted to `step_ok` (`step` minus `step_nu_abs`/`step_nu_tabs`, which are
-*also* formally proved to break preservation — for a different, non-kinding
-reason: pushing `nu` under a binder can silently invalidate an unrelated,
-exactly-pinned type annotation elsewhere in the term).
+### Kind-regular term typing (`typing.v`)
+The `typing` judgment used by extraction embeds the `wf_typ`/`wf_ground`
+premises needed for regularity. Its conversion rule uses context-indexed
+`defeq`, which contains ordinary Fω `ty_equiv` and can reveal a `nu`-sealed type
+variable through its `has_def` binding. This is what makes the two binder
+commutations `step_nu_abs` and `step_nu_tabs` type preserving: after the
+context entries are reordered, the shifted annotation remains definitionally
+equal to its payload-substituted form.
 
 ### Neutral type substitution (`typing_tsubst`, `typing_metatheory.v`)
 Type substitution through target terms is sound **only for neutral type names**
@@ -71,8 +61,8 @@ neutral tag as tampering.
 ## Relationship to the extraction
 
 The extraction emits raw `tapp` for large (type) applications and relies on the
-target `typing_conv` (Fω definitional equality `ty_equiv`) to mediate the result
-type, rather than a runtime cast. The two facts that discharge that step —
-`extract_typ_wf_sort` (kind regularity) and `extract_typ_tsubst_coc_equiv`
-(substitution/extraction commutation up to `ty_equiv`) — are proved in
-`theories/Extraction/{type_extraction_facts,well_typed}.v`.
+target `typing_conv` to mediate the result type rather than a runtime cast.
+`extract_typ_wf_sort` supplies kind regularity,
+`extract_typ_tsubst_coc_equiv` supplies substitution/extraction commutation up
+to `ty_equiv`, and `deq_ty_equiv` embeds that equivalence into `defeq`. These
+facts are proved in `theories/Extraction/{type_extraction_facts,well_typed}.v`.

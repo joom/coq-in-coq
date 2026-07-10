@@ -1252,19 +1252,26 @@ Proof.
   - (* set *) cbn [extract]. unfold extract_typ. rewrite (nf_sort kind sn).
     cbn [extract_typ_L]. apply typing_dyn_token.
   - (* var *) destruct il as [u Heq Hnth]. cbn [extract].
+    destruct (well_formed_sort_lift v e0 T0 w0
+                (existT2 _ _ u Heq Hnth)) as [sT HT0sort].
     replace (extract_typ e0 T0 sn)
       with (extract_typ e0 T0 (sn_of_type e0 (terms.var v) T0
               (typing.type_var e0 (w0) v T0 (existT2 _ _ u Heq Hnth))))
       by (apply extract_typ_pi).
     destruct (is_large_dec e0 T0) as [HL | HL].
-    + eapply typing_coerce. apply typing.typing_blame.
     + eapply typing_coerce.
-      assert (Hnl : (is_large (skipn (S v) e0) u -> False)).
-      { intro Hc. apply HL. rewrite Heq.
-        apply (snd (is_large_item_lift e0 v u (w0) Hnth)). exact Hc. }
-      apply typing.typing_var.
-      rewrite (extract_ctx_pi e0 w (w0)).
-      exact (extract_ctx_lookup_term e0 v u Hnth Hnl (w0)).
+      * apply extract_ctx_wf.
+      * apply typing.typing_blame. apply typing.wf_dyn.
+      * apply (extract_typ_wf_sort e0 T0 sT HT0sort w).
+    + eapply typing_coerce.
+      * apply extract_ctx_wf.
+      * assert (Hnl : (is_large (skipn (S v) e0) u -> False)).
+        { intro Hc. apply HL. rewrite Heq.
+          apply (snd (is_large_item_lift e0 v u (w0) Hnth)). exact Hc. }
+        apply typing.typing_var.
+        rewrite (extract_ctx_pi e0 w (w0)).
+        exact (extract_ctx_lookup_term e0 v u Hnth Hnl (w0)).
+      * apply (extract_typ_wf_sort e0 T0 sT HT0sort w).
   - (* abs *)
     pose (HT0p := HT).
     pose (HUp := HU).
@@ -1282,10 +1289,11 @@ Proof.
     + rewrite (extract_typ_prod_small e0 T0 U s1 s2 HT0p HUp sn
                  (strong_normalization e0 T0 (sort_term s1) HT0p) sndU HL).
       apply typing.typing_abs.
-      pose proof (IH (T0 :: e0) M U HM w' sndU) as HM'.
-      rewrite (extract_ctx_cons_small T0 e0 w' w
-                 (strong_normalization e0 T0 (sort_term s1) HT0p) HL) in HM'.
-      exact HM'.
+      * apply (extract_typ_wf_sort e0 T0 s1 HT w).
+      * pose proof (IH (T0 :: e0) M U HM w' sndU) as HM'.
+        rewrite (extract_ctx_cons_small T0 e0 w' w
+                   (strong_normalization e0 T0 (sort_term s1) HT0p) HL) in HM'.
+        exact HM'.
   - (* app *)
     pose (Hup := Hu).
     pose (Hvp := Hv).
@@ -1298,29 +1306,44 @@ Proof.
               (sn_of_type e0 (terms.app u v0) (terms.subst v0 Ur)
                  (typing.type_app e0 v0 V0 Hvp u Ur Hup)))
       by (apply extract_typ_pi).
+    assert (Hsub_ty : has_type e0 (terms.subst v0 Ur) (sort_term sUr)).
+    { change (sort_term sUr) with (terms.subst v0 (sort_term sUr)).
+      exact (substitution e0 V0 Ur (sort_term sUr) HUrp v0 Hvp). }
     destruct (is_large_dec e0 V0) as [HL | HL].
     + (* large (type) argument: type the raw [tapp] at its natural type, then
          convert to the expected type via [typing_conv] (target Fω conversion). *)
-      assert (Hsub_ty : has_type e0 (terms.subst v0 Ur) (sort_term sUr)).
-      { change (sort_term sUr) with (terms.subst v0 (sort_term sUr)).
-        exact (substitution e0 V0 Ur (sort_term sUr) HUrp v0 Hvp). }
+      pose (snV := strong_normalization e0 V0 (sort_term sV) HV0p).
+      pose (snv := strong_normalization e0 v0 V0 Hvp).
+      pose (snUr := sn_of_prod_cod e0 u V0 Ur Hup).
+      assert (Htapp :
+        typing.typing (extract_ctx e0 w)
+          (syntax.tapp (extract e0 u (terms.prod V0 Ur) Hu)
+                       (extract_typ e0 v0 snv))
+          (infrastructure.tsubst (extract_typ e0 v0 snv) 0
+             (extract_typ (V0 :: e0) Ur snUr))).
+      { eapply typing.typing_tapp.
+        - pose proof (IH e0 u (terms.prod V0 Ur) Hu w sn_prod) as HHu.
+          rewrite (extract_typ_prod_large e0 V0 Ur sV sUr HV0p HUrp sn_prod
+                     snV snUr HL) in HHu.
+          exact HHu.
+        - exact (extract_typ_wf_large e0 v0 V0 Hvp HL w snV snv). }
       eapply typing.typing_conv.
-      * eapply typing.typing_tapp.
-        pose proof (IH e0 u (terms.prod V0 Ur) Hu w sn_prod) as HHu.
-        rewrite (extract_typ_prod_large e0 V0 Ur sV sUr HV0p HUrp sn_prod
-                   (strong_normalization e0 V0 (sort_term sV) HV0p)
-                   (sn_of_prod_cod e0 u V0 Ur Hup) HL) in HHu.
-        exact HHu.
-      * apply (extract_typ_tsubst_coc_equiv e0 V0 v0 Hvp HL Ur sUr HUrp).
+      * exact Htapp.
+      * apply typing.deq_ty_equiv.
+        -- exact (typing_metatheory.typing_regular _ _ _ (extract_ctx_wf e0 w) Htapp).
+        -- apply (extract_typ_wf_sort e0 (terms.subst v0 Ur) sUr Hsub_ty w).
+        -- apply (extract_typ_tsubst_coc_equiv e0 V0 v0 Hvp HL Ur sUr HUrp).
       * apply (extract_typ_wf_sort e0 (terms.subst v0 Ur) sUr Hsub_ty w).
     + eapply typing_coerce.
-      eapply typing.typing_app.
-      * pose proof (IH e0 u (terms.prod V0 Ur) Hu w sn_prod) as HHu.
-        rewrite (extract_typ_prod_small e0 V0 Ur sV sUr HV0p HUrp sn_prod
-                   (strong_normalization e0 V0 (sort_term sV) HV0p)
-                   (sn_of_prod_cod e0 u V0 Ur Hup) HL) in HHu.
-        exact HHu.
-      * exact (IH e0 v0 V0 Hv w (strong_normalization e0 V0 (sort_term sV) HV0p)).
+      * apply extract_ctx_wf.
+      * eapply typing.typing_app.
+        -- pose proof (IH e0 u (terms.prod V0 Ur) Hu w sn_prod) as HHu.
+           rewrite (extract_typ_prod_small e0 V0 Ur sV sUr HV0p HUrp sn_prod
+                      (strong_normalization e0 V0 (sort_term sV) HV0p)
+                      (sn_of_prod_cod e0 u V0 Ur Hup) HL) in HHu.
+           exact HHu.
+        -- exact (IH e0 v0 V0 Hv w (strong_normalization e0 V0 (sort_term sV) HV0p)).
+      * apply (extract_typ_wf_sort e0 (terms.subst v0 Ur) sUr Hsub_ty w).
   - (* prod *) cbn [extract]. unfold extract_typ. rewrite (nf_sort s2 sn).
     cbn [extract_typ_L]. apply typing_dyn_token.
   - (* conv *)
@@ -1330,5 +1353,7 @@ Proof.
               (HV)))
       by (apply extract_typ_pi).
     eapply typing_coerce.
-    exact (IH e0 t0 U0 Htu w (sn_of_type e0 t0 U0 (Htu))).
+    + apply extract_ctx_wf.
+    + exact (IH e0 t0 U0 Htu w (sn_of_type e0 t0 U0 (Htu))).
+    + apply (extract_typ_wf_sort e0 V0 s0 HV w).
 Qed.

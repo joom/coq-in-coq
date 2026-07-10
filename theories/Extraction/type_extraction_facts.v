@@ -450,3 +450,38 @@ Proof.
   rewrite <- Hkb.
   exact (extract_typ_L_wf_kind (nf T sn) e w (sort_term s) snB Hn Ht Hte).
 Qed.
+
+(** A source term whose type is itself large extracts to a target type at the
+    kind skeleton of that source type.  This is the kinding premise needed by
+    target type application. *)
+Lemma extract_typ_wf_large :
+  forall e t T (Ht : has_type e t T) (HL : is_large e T)
+         (w : well_formed e) snT sn,
+  typing.wf_typ (extract_ctx e w) (extract_typ e t sn) (extract_kind T snT).
+Proof.
+  intros e t T Ht HL w snT sn. unfold extract_typ.
+  assert (Htnf : has_type e (nf t sn) T)
+    by (eapply subject_reduction_theorem; [apply nf_reduces | exact Ht]).
+  apply (extract_typ_L_wf_kind (nf t sn) e w T snT).
+  - apply nf_normal.
+  - exact Htnf.
+  - apply (snd (type_expr_iff e (nf t sn) T Htnf)).
+    right. exact HL.
+Qed.
+
+(** A well-formed CoC environment extracts to a well-formed target context.
+    Large source bindings become kind bindings; small bindings carry the
+    well-kinded extracted source type established above. *)
+Lemma extract_ctx_wf : forall e (w : well_formed e),
+  typing_metatheory.wf_ctx (extract_ctx e w).
+Proof.
+  induction e as [|T e IH]; intro w; simpl.
+  - apply typing_metatheory.wf_ctx_nil.
+  - destruct (is_large_dec e T) as [HL | Hsmall].
+    + apply typing_metatheory.wf_ctx_kind.
+      apply IH.
+    + apply typing_metatheory.wf_ctx_type.
+      * apply IH.
+      * destruct (well_formed_sort 0 (T :: e) e eq_refl w T eq_refl) as [s HT].
+        apply (extract_typ_wf_sort e T s HT (wf_tail T e w)).
+Qed.

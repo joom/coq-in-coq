@@ -6,7 +6,8 @@ From CoC Require Import confluence.
 From CoC Require Import inference.
 From CoC Require Import strong_normalization.
 From CoC Require Import decidable_conversion.
-From BlameFOmega Require syntax infrastructure semantics typing subtyping safety blame subtyping_safety simulation.
+From BlameFOmega Require syntax infrastructure semantics typing typing_metatheory
+  subtyping safety blame subtyping_safety simulation.
 From Extraction Require extraction.
 From Extraction Require Import common.
 From Extraction Require Import source_facts.
@@ -21,23 +22,30 @@ Lemma typing_dyn_token : forall g,
 Proof.
   intro g. unfold dyn_token, dyn_fun.
   apply typing.typing_gnd.
-  - apply typing.typing_abs. apply typing.typing_var. reflexivity.
-  - apply syntax.ground_arrow.
+  - apply typing.typing_abs.
+    + apply typing.wf_dyn.
+    + apply typing.typing_var. reflexivity.
+  - constructor.
+    + apply syntax.ground_arrow.
+    + apply typing.wf_arrow; apply typing.wf_dyn.
 Qed.
 
 (** [coerce s A B] is well-typed at [B] whenever [s : A].  When [compat A B]
     holds, a real cast is emitted (typed by [typing_cast]).  When it does not,
     [blame internal_label] is emitted, which is typable at any type. *)
 Lemma typing_coerce : forall g s A B,
+  typing_metatheory.wf_ctx g ->
   typing.typing g s A ->
+  typing.wf_typ g B syntax.KStar ->
   typing.typing g (coerce s A B) B.
 Proof.
-  intros g s A B Hs. unfold coerce.
+  intros g s A B Hg Hs HwfB. unfold coerce.
   destruct (syntax.typ_eq_dec A B) as [-> | Hneq].
   - exact Hs.
   - destruct (infrastructure.compat_dec A B) as [Hc | _].
-    + eapply typing.typing_cast; [ exact Hs | exact Hc ].
-    + apply typing.typing_blame.
+    + eapply typing.typing_cast; eauto.
+      exact (typing_metatheory.typing_regular g s A Hg Hs).
+    + apply typing.typing_blame. exact HwfB.
 Qed.
 
 (** [dyn_token] contains no cast blaming an external label. *)
@@ -1065,4 +1073,3 @@ Proof.
   - exfalso. apply HL. exact Hd.
   - f_equal; [ f_equal; apply extract_typ_pi | apply extract_ctx_pi ].
 Qed.
-
