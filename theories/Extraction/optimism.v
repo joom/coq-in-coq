@@ -25,6 +25,9 @@ From Extraction Require Import substitution_simulation.
 From Extraction Require Import reduction_simulation.
 
 
+(** The "first-order" fragment of source types: no bare sort, and every
+    term-level subterm used in type position is a bound variable, so
+    extraction never needs to fall back to [dyn]. *)
 Fixpoint fo_typ_L (e: environment) (t: terms.term) : Prop :=
   match t with
   | sort_term _ => False
@@ -97,6 +100,8 @@ Theorem extract_typ_dyn_free : forall e t sn,
   fo_typ_L e (nf t sn) -> typ_dyn_free (extract_typ e t sn).
 Proof. intros e t sn Hfo. unfold extract_typ. apply extract_typ_L_dyn_free. exact Hfo. Qed.
 
+(** Exact characterization for the normalize-then-extract pipeline: [extract_typ]
+    is [dyn]-free iff the normal form lies in [fo_typ_L]. *)
 Theorem extract_typ_dyn_free_iff : forall e t sn,
   typ_dyn_free (extract_typ e t sn) <-> fo_typ_L e (nf t sn).
 Proof. intros e t sn. unfold extract_typ. apply extract_typ_L_dyn_free_iff. Qed.

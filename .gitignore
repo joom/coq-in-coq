@@ -44,6 +44,7 @@ paper/*.log
 paper/*.out
 paper/*.fls
 paper/*.fdb_latexmk
+paper/*.xdv
 Makefile.coq
 Makefile.coq.conf
 CoqMakefile
@@ -56,3 +57,6 @@ main
 result.html
 _build
 *.conflicts
+
+CLAUDE.md
+AGENTS.md

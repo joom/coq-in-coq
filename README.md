@@ -140,10 +140,13 @@ Commands (each terminated by `.`):
 
 - `Infer <expr>` — infer the type of an expression
 - `Check <expr> : <expr>` — check that a term has a given type
+- `Compute <expr>` — reduce an expression to its normal form
 - `Extract <expr>` — extract to System Fω + blame
 - `Axiom <name> : <expr>` — add an axiom to the context
-- `Delete` — remove the last axiom
-- `List` — list current axioms
+- `Inductive T (a : A) : arity := | C1 : … | C2 : …` — add an inductive type
+  (desugars to its indexed impredicative Boehm–Berarducci encoding: the type,
+  constructors, and an index-dependent recursor `T_rec`, all computing)
+- `Print Axioms` — show the current axioms
 - `Help` — show help
 - `Quit` — exit
 
@@ -226,7 +229,7 @@ dune exec tests/top.exe < examples/newman.v
 │       ├── optimism.v                      Exact syntactic characterization of dyn-free extracted types
 │       ├── instantiation.v                 Syntactic instantiation simulation
 │       ├── proofs.v                        Compatibility facade: Require Export of the modules above
-│       └── Assumptions.v                   Print Assumptions audit of the headline theorems
+│       └── assumptions.v                   Print Assumptions audit of the headline theorems
 │
 ├── tests/                                OCaml REPL
 │   ├── Extract.v                           Rocq extraction commands → core.ml
@@ -251,7 +254,12 @@ dune exec tests/top.exe < examples/newman.v
 │   ├── stlc.v                              Intrinsically-typed interpreter signature
 │   ├── universe.v                          Tarski universe / dynamic type (dyn + blame)
 │   ├── functor.v                           Higher-kinded (functors, tagless-final, monads)
-│   └── tagless.v                           Computed return types via type-level codes; dyn-free
+│   ├── tagless.v                           Computed return types via type-level codes; dyn-free
+│   ├── lists.v                             Polymorphic list library; fully static baseline
+│   ├── scoped.v                            Well-scoped de Bruijn terms; capture-avoiding renaming
+│   ├── hlist.v                             Heterogeneous lists indexed by a type-level list
+│   ├── ordered.v                           Provably-sorted lists over the Le inductive predicate
+│   └── inductive.v                         The Inductive command + Compute (Church encodings)
 │
 └── paper/                                 POPL-style paper (LaTeX, acmart)
     ├── main.tex                            The paper
@@ -308,7 +316,7 @@ The six former simulation admits (`term_tlift_extract_sim`,
 `extract_tsubst_gen`, and — transitively — `extract_reduces_once`) are likewise
 proved (in `substitution_simulation.v`/`reduction_simulation.v`).
 
-`theories/Extraction/Assumptions.v` runs `Print Assumptions` on the headline
+`theories/Extraction/assumptions.v` runs `Print Assumptions` on the headline
 theorem set; compiling it shows that audited set depends only on `eq_rect_eq`
 (`extract_typ_wf_sort` is even free of that). The script `./check-assumptions.sh`
 rebuilds that file and rejects unexpected assumptions, proof-hole commands, and

@@ -1176,6 +1176,7 @@ Proof.
     + exact (extract_typ_L_reduces_once_equiv P N Hstep e B HP HteP).
 Qed.
 
+(** [extract_typ_L] on a term agrees, up to [ty_equiv], with [extract_typ_L] on its normal form. *)
 Lemma extract_typ_L_reduces_nf_equiv : forall e W B (sn : strongly_normalizing W),
   has_type e W B -> type_expr e W = true ->
   infrastructure.ty_equiv (extract_typ_L e W) (extract_typ_L e (nf W sn)).
@@ -1238,6 +1239,8 @@ Proof.
   exact Step2.
 Qed.
 
+(** The main type-preservation theorem: the extraction of a well-typed CoC term is
+    a well-typed Fω+blame term, at its extracted type in the extracted context. *)
 Theorem extract_well_typed : forall e t T (H: has_type e t T)
   (w: well_formed e) (sn: strongly_normalizing T),
   typing.typing (extract_ctx e w) (extract e t T H) (extract_typ e T sn).

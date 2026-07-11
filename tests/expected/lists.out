@@ -1,0 +1,29 @@
+bool is defined.
+true is defined.
+false is defined.
+bool_rec is defined.
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
+list is defined.
+nil is defined.
+cons is defined.
+list_rec is defined.
+app is defined.
+Inferred type: forall (A : Set), (fun (x0 : Set) => forall (x1 : Set), x1 -> (x0 -> x1 -> x1) -> x1) A -> (fun (x0 : Set) => forall (x1 : Set), x1 -> (x0 -> x1 -> x1) -> x1) A -> forall (x0 : Set), x0 -> (A -> x0 -> x0) -> x0
+Extracted: fun (A : *) (xs ys : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0] ys (fun (x0 : A) (x1 : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 : *) (x2 : x0) (x3 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) (x1 : *) (x4 : x1) (x5 : x0 -> x1 -> x1) => x5 x2 (x3 [x1] x4 x5)) [A] x0 x1) xs
+map is defined.
+Inferred type: forall (A B : Set), (A -> B) -> (fun (x0 : Set) => forall (x1 : Set), x1 -> (x0 -> x1 -> x1) -> x1) A -> forall (x0 : Set), x0 -> (B -> x0 -> x0) -> x0
+Extracted: fun (A B : *) (f : A -> B) (xs : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [forall (x0 : *), x0 -> (B -> x0 -> x0) -> x0] ((fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) => x0) [B]) (fun (x0 : A) (x1 : forall (x0 : *), x0 -> (B -> x0 -> x0) -> x0) => (fun (x0 : *) (x2 : x0) (x3 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) (x1 : *) (x4 : x1) (x5 : x0 -> x1 -> x1) => x5 x2 (x3 [x1] x4 x5)) [B] (f x0) x1) xs
+fold_right is defined.
+Extracted: fun (A B : *) (f : A -> B -> B) (z : B) (xs : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [B] z (fun (x0 : A) (x1 : B) => f x0 x1) xs
+length is defined.
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 x1)
+rev is defined.
+Inferred type: forall (A : Set), (fun (x0 : Set) => forall (x1 : Set), x1 -> (x0 -> x1 -> x1) -> x1) A -> forall (x0 : Set), x0 -> (A -> x0 -> x0) -> x0
+Extracted: fun (A : *) (xs : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [(forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) -> forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0] (fun (x0 : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => x0) (fun (x0 : A) (x1 : (forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) -> forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) (x2 : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => x1 ((fun (x0 : *) (x3 : x0) (x4 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) (x1 : *) (x5 : x1) (x6 : x0 -> x1 -> x1) => x6 x3 (x4 [x1] x5 x6)) [A] x0 x2)) xs ((fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) => x0) [A])
+filter is defined.
+Extracted: fun (A : *) (p : A -> forall (x0 : *), x0 -> x0 -> x0) (xs : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0] ((fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) => x0) [A]) (fun (x0 : A) (x1 : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 : *) (x2 x3 : x0) (x4 : forall (x1 : *), x1 -> x1 -> x1) => x4 [x0] x2 x3) [forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0] ((fun (x0 : *) (x2 : x0) (x3 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) (x1 : *) (x4 : x1) (x5 : x0 -> x1 -> x1) => x5 x2 (x3 [x1] x4 x5)) [A] x0 x1) x1 (p x0)) xs
+flat_map is defined.
+Extracted: fun (A B : *) (f : A -> forall (x0 : *), x0 -> (B -> x0 -> x0) -> x0) (xs : forall (x0 : *), x0 -> (A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x0 -> x2 -> x2) -> x2) => x2 [x1] x0 x1) [A] [forall (x0 : *), x0 -> (B -> x0 -> x0) -> x0] ((fun (x0 x1 : *) (x0 : x1) (x1 : x0 -> x1 -> x1) => x0) [B]) (fun (x0 : A) (x1 : forall (x0 : *), x0 -> (B -> x0 -> x0) -> x0) => (fun (x0 : *) (x2 x3 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) => (fun (x1 x2 : *) (x4 : x2) (x5 : x1 -> x2 -> x2) (x6 : forall (x3 : *), x3 -> (x1 -> x3 -> x3) -> x3) => x6 [x2] x4 x5) [x0] [forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1] x3 (fun (x4 : x0) (x5 : forall (x1 : *), x1 -> (x0 -> x1 -> x1) -> x1) => (fun (x1 : *) (x6 : x1) (x7 : forall (x2 : *), x2 -> (x1 -> x2 -> x2) -> x2) (x2 : *) (x8 : x2) (x9 : x1 -> x2 -> x2) => x9 x6 (x7 [x2] x8 x9)) [x0] x4 x5) x2) [B] (f x0) x1) xs

@@ -1,13 +1,22 @@
 \documentclass[aspectratio=169]{beamer}
 
 %% ---------------------------------------------------------------------------
-%%  Extracting Blame — talk slides
+%%  Extracting Blame — talk slides  (target: 20–25 min + Q&A)
 %%  Theme: Metropolis (mtheme). Build: make slides  (XeLaTeX + Fira preferred)
 %%
-%%  Color system (used consistently throughout):
+%%  SPEAKER NOTES / SCRIPT
+%%    Every frame carries a \note{...} with a spoken script and a rough time
+%%    budget. The slides total ~16 content frames ≈ 22 min at the noted pace.
+%%    To rehearse with the script on a second screen:
+%%        uncomment  \setbeameroption{show notes on second screen=right}
+%%    To print a notes-only handout:
+%%        uncomment  \setbeameroption{show only notes}
+%%    Leave both commented for the clean presentation PDF.
+%%
+%%  Color system (cued verbally in the legend frame):
 %%    srcBlue   — the source language (CoC)
-%%    tgtTeal   — the target language (F-omega + blame) and its casts
-%%    dynOrange — the dynamic type ? / Dyn: the boundary
+%%    tgtTeal   — the target language (Fω + blame) and its casts
+%%    dynOrange — the dynamic type Dyn: the boundary
 %%    blameRed  — blame, failure, alerts
 %%    okGreen   — mechanized/proved facts (Rocq theorem names)
 %% ---------------------------------------------------------------------------
@@ -20,6 +29,11 @@
 \usepackage{listings}
 \usepackage{booktabs}
 \usepackage{xcolor}
+\usepackage{pgfpages}
+
+%% --- speaker notes: uncomment ONE to rehearse / print the script -----------
+% \setbeameroption{show notes on second screen=right}
+% \setbeameroption{show only notes}
 
 %% --- palette ----------------------------------------------------------------
 \definecolor{srcBlue}{HTML}{2A6099}
@@ -34,8 +48,8 @@
 \setbeamercolor{alerted text}{fg=blameRed}
 \setbeamercolor{example text}{fg=okGreen}
 
-%% --- notation macros (colored variants of main.tex's) -----------------------
-\newcommand{\dyn}{{\color{dynOrange}\mathord{?}}}
+%% --- notation macros --------------------------------------------------------
+\newcommand{\dyn}{{\color{dynOrange}\mathsf{Dyn}}}
 \newcommand{\kstar}{\ensuremath{\star}}
 \newcommand{\karr}{\ensuremath{\Rightarrow}}
 \newcommand{\PropS}{\mathsf{Prop}}
@@ -79,7 +93,7 @@
   columns=fullflexible,
   keepspaces=true,
   showstringspaces=false,
-  breaklines=true,
+  breaklines=false,
   xleftmargin=1em
 }
 %% REPL output: shaded box, teal text, boundary constructs highlighted
@@ -92,7 +106,7 @@
   keywords={Dyn}, keywordstyle=\color{dynOrange}\bfseries,
   morekeywords=[2]{blame}, keywordstyle={[2]\color{blameRed}\bfseries},
   morekeywords=[3]{cast}, keywordstyle={[3]\color{tgtTeal}\bfseries},
-  columns=fullflexible, keepspaces=true, breaklines=true
+  columns=fullflexible, keepspaces=true, breaklines=false
 }
 
 \title{Extracting Blame}
@@ -104,565 +118,721 @@
 \begin{document}
 
 \maketitle
+\note{%
+  \textbf{[0:00 — 0:30]}\\
+  Hi, I'm Joomy. This talk is about extracting programs from proofs --- but,
+  unlike usual extraction, \emph{keeping the types}.\\[1ex]
+  One-line pitch: dependently typed languages let you \emph{prove} things about
+  code; but to \emph{run} that code you extract it, and today extraction throws
+  all the rich types away. I'll show a \emph{verified} translation from the
+  Calculus of Constructions into a \emph{typed} target --- System~F$\omega$ plus
+  a dynamic type and blame --- that keeps as much type structure as it can, and
+  marks the rest explicitly. All of it is mechanized in Rocq, with no admits.
+}
 
-\begin{frame}{The color code for this talk}
+%% ==========================================================================
+\section{Motivation}
+%% ==========================================================================
+
+\begin{frame}{A quick color key}
   \begin{center}
-  \Large
-  \src{source: CoC} \qquad \tgt{target: F$\omega$ + blame} \\[2ex]
-  ${\dyn}$ \ \textcolor{dynOrange}{the dynamic type --- the boundary} \\[1ex]
-  $\blame{p}$ \ \textcolor{blameRed}{run-time cast failure} \\[1ex]
-  \mech{theorem\_name} \ \textcolor{okGreen}{mechanized in Rocq, admit-free}
+  \large
+  \src{source: CoC} \qquad \tgt{target: F$\omega$ + blame} \\[2.2ex]
+  ${\dyn}$ \quad \textcolor{dynOrange}{the dynamic type --- the boundary} \\[1.4ex]
+  $\blame{p}$ \quad \textcolor{blameRed}{a run-time cast failure} \\[1.4ex]
+  \mech{theorem\_name} \quad \textcolor{okGreen}{mechanized in Rocq, admit-free}
   \end{center}
+  \note{%
+    \textbf{[0:30 — 1:00]}\\
+    One slide of color key so the rest reads easily --- I'll cue these as we go,
+    you don't need to memorize them:\\
+    blue is the \emph{source}, CoC; teal is the \emph{target}, F$\omega$ + blame;
+    orange is \emph{Dyn}, the dynamic type --- our boundary; red is \emph{blame},
+    a run-time cast failure; and green is a \emph{theorem name} that's mechanized
+    and admit-free in Rocq.\\
+    Say: ``Whenever you see green, it's a real machine-checked theorem, not a
+    claim.''
+  }
 \end{frame}
 
-%% ==========================================================================
-\section{The Problem}
-%% ==========================================================================
-
-\begin{frame}{Program extraction today}
-  Dependently typed languages (Rocq, Agda, Lean, Idris) let us
-  \emph{prove} properties of code.
-
-  \medskip
-  To \emph{run} that code, extraction erases the static parts:
-  Gallina $\to$ OCaml / Haskell / Scheme.
+\begin{frame}{Extraction throws the types away}
+  Dependently typed languages (Rocq, Agda, Lean, Idris) let us \emph{prove}
+  properties of code. To \emph{run} it, extraction erases the static parts:
+  \[
+    \text{Gallina} \;\longrightarrow\; \text{OCaml / Haskell / Scheme}
+  \]
 
   \pause
   \medskip
   This makes \alert{two concessions}:
   \begin{enumerate}
     \item<3-> The target types \alert<3>{cannot express the source's dependent
-      invariants} --- a verified program becomes an ML term whose safety is no
-      longer in its type.
-    \item<4-> The extractor is part of the \alert<4>{trusted computing base}
-      --- its correctness is argued informally.
+      invariants} --- a verified program becomes an untyped-ish ML term whose
+      safety is no longer in its type.
+    \item<4-> The extractor joins the \alert<4>{trusted computing base} --- its
+      correctness is argued informally.
   \end{enumerate}
 
-  \onslide<5->{
+  \onslide<5->{%
   \medskip
-  Forster, Sozeau \& Tabareau (PLDI '24) address \#2: verified extraction to
-  OCaml.\\
-  \textbf{We address \#1.}}
+  Forster, Sozeau \& Tabareau (PLDI~'24) tackle \#2: verified extraction to
+  OCaml. \quad\textbf{We tackle \#1.}}
+  \note{%
+    \textbf{[1:00 — 2:30]}\\
+    Here's the setting. In Rocq, Agda, Lean, Idris we prove properties of code.
+    But to run it we extract to OCaml, Haskell, Scheme --- and extraction erases
+    the static parts.\\[1ex]
+    \emph{(click)} That costs us two things.\\
+    \emph{(click)} First: the target's types can't say what the source's types
+    said. Your ``\texttt{Vec} of length \texttt{n}'' becomes just a list --- the
+    proof that made it safe is gone from the type.\\
+    \emph{(click)} Second: the extractor itself is trusted --- usually justified
+    only on paper.\\
+    \emph{(click)} There's great recent work --- Forster, Sozeau, Tabareau ---
+    on the \emph{second} problem: a verified extractor, but to an untyped target.
+    This talk is about the \emph{first} problem: can we extract into a
+    \emph{typed} target and keep the structure? Pause here.
+  }
 \end{frame}
 
-\begin{frame}{The question}
+\begin{frame}{The question, and this work}
   \begin{center}
-    \Large
+    \large
     How much of a dependently typed program's structure can we
-    \alert{preserve} if we extract into a \alert{typed} target ---\\[1ex]
+    \alert{preserve} when we extract into a \alert{typed} target ---\\[0.5ex]
     and can the translation be \alert{proved correct}?
   \end{center}
 
   \pause
   \medskip
   \begin{itemize}
-    \item \textbf{Source:} \src{the Calculus of Constructions (CoC)}, as a
-      pure type system --- mechanized following Barras' \emph{Coq-in-Coq}.
-    \pause
-    \item \textbf{Target:} \tgt{System~F$\omega$} + a dynamic type $\dyn$ +
-      casts + \textcolor{blameRed}{blame}\\
-      --- a \emph{polymorphic blame calculus} in the line of
-      Ahmed--Findler--Siek--Wadler, lifted to higher kinds.
-    \pause
-    \item \textbf{Lineage:} Paulin-Mohring (POPL '89) extracted F$\omega$
-      programs from CoC proofs.\\
-      We return to that design point, with an explicit dynamic/blame boundary.
+    \item \textbf{Source:} \src{the Calculus of Constructions}, a pure type
+      system --- mechanized on Barras' \emph{Coq-in-Coq}.
+    \item<3-> \textbf{Target:} \tgt{System~F$\omega$} $+$ a dynamic type $\dyn$
+      $+$ casts $+$ \textcolor{blameRed}{blame} --- a \emph{polymorphic blame
+      calculus} (Ahmed--Findler--Siek--Wadler), lifted to higher kinds.
+    \item<4-> \textbf{Lineage:} Paulin-Mohring (POPL~'89) extracted F$\omega$
+      programs from CoC proofs; we return to that point with an explicit
+      \emph{dynamic/blame} boundary.
   \end{itemize}
-\end{frame}
-
-\begin{frame}{Why a dynamic/blame target?}
-  \tgt{F$\omega$} preserves a large skeleton: type abstraction, type
-  application, higher-kinded families.
-
-  \src{CoC} has strictly more: \alert{full dependency} --- types may mention
-  terms.
-
-  \pause
-  \medskip
-  Three things happen at the boundary:
-  \begin{enumerate}
-    \item<3-> \textbf{Term indices are erased from types.}\\
-      \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}} --- the
-      invariant disappears, not the runtime index.
-    \item<4-> \textbf{Type indices are kept.}\\
-      Type families extract to type applications; parametricity survives.
-    \item<5-> \textbf{Values used as types become dynamic residue.}\\
-      A decoder \src{\texttt{El : U -> Set}} has no F$\omega$ image
-      $\rightsquigarrow$ $\dyn$ + \textcolor{blameRed}{internal blame}.
-  \end{enumerate}
-
-  \onslide<6->{
-  \medskip
-  We call the translation \alert{optimistic}: it never protectively dynamizes
-  what F$\omega$ can express.}
+  \note{%
+    \textbf{[2:30 — 4:00]}\\
+    So the question, stated plainly: how much structure survives if the target
+    is \emph{typed}, and can we \emph{prove} the translation right?\\[1ex]
+    \emph{(click)} Source: the Calculus of Constructions --- full dependent
+    types, as a pure type system, built on Barras' classic Coq-in-Coq.\\
+    \emph{(click)} Target: System~F$\omega$ --- higher-kinded polymorphism ---
+    plus a dynamic type ``Dyn'', casts, and blame. That's a \emph{polymorphic
+    blame calculus}, in the Ahmed--Findler--Siek--Wadler line, but I lift it to
+    higher kinds.\\
+    \emph{(click)} And the lineage: Paulin-Mohring did CoC-to-F$\omega$ back in
+    '89. We revisit that design point, but add an explicit dynamic/blame
+    boundary for the parts F$\omega$ can't reach.
+  }
 \end{frame}
 
 %% ==========================================================================
-\section{Overview by Example}
+\section{The idea, by example}
 %% ==========================================================================
 
-\begin{frame}[fragile]{Term indices disappear from types}
-  A bounds-checked lookup on length-indexed vectors --- a real
-  \texttt{Definition} over the axiomatized eliminators:
+\begin{frame}{The idea: be \emph{optimistic}}
+  \tgt{F$\omega$} already preserves a lot: type abstraction, type application,
+  higher-kinded families. \quad \src{CoC} has strictly more: \alert{full
+  dependency} --- types may mention terms.
+
+  \bigskip
+  At the boundary, exactly three things happen:
+  \begin{itemize}
+    \item<2-> \tgt{\textbf{Preserve}} type structure --- type arguments stay as
+      type applications; parametric skeleton survives.
+    \item<3-> \textbf{Erase} term indices from types ---
+      \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}.
+    \item<4-> \textcolor{dynOrange}{\textbf{Dynamize}} values used \emph{as
+      types} --- \src{\texttt{El : U -> Set}} $\rightsquigarrow$ $\dyn$ $+$
+      \textcolor{blameRed}{blame}.
+  \end{itemize}
+
+  \onslide<5->{%
+  \bigskip
+  \begin{block}{Optimistic}
+    Never defensively dynamize what F$\omega$ \emph{can} express. Reach for
+    $\dyn$ only for the genuine residue of dependency.
+  \end{block}}
+  \note{%
+    \textbf{[4:00 — 6:00] --- the conceptual core; slow down.}\\
+    This is the heart of the talk. F$\omega$ already gives us a lot: polymorphism,
+    type-level functions, higher-kinded families. CoC gives \emph{more} --- types
+    can mention \emph{terms}. So a translation has to decide what to do with that
+    extra dependency.\\[1ex]
+    Three cases --- I'll show one example of each next.\\
+    \emph{(click)} Preserve: anything that's really type structure stays type
+    structure.\\
+    \emph{(click)} Erase: an index like the \emph{length} of a vector is dropped
+    \emph{from the type} --- \texttt{Vec A n} becomes \texttt{Vec A}. The value
+    \texttt{n} may still be around as data; it's the \emph{invariant} that leaves.\\
+    \emph{(click)} Dynamize: the hard residue --- a \emph{value used as a type},
+    like a decoder \texttt{El : U -> Set} --- goes through Dyn with blame.\\
+    \emph{(click)} The word ``optimistic'' is the design principle: we never
+    dynamize defensively. We use Dyn \emph{only} where F$\omega$ genuinely can't
+    express the thing.
+  }
+\end{frame}
+
+\begin{frame}[fragile,shrink]{Erase: term indices leave the types}
+  A bounds-checked vector lookup --- an ordinary \texttt{Definition} over the
+  eliminators:
 \begin{lstlisting}
-Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n) : A :=
+Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n)
+  : A :=
   vrec A (fun (m : Nat) => Fin m -> A)
     (fun (i0 : Fin NZ) => fin0 A i0)
     (fun (m : Nat) (a : A) (rest : Fin m -> A) (j : Fin (NS m)) =>
-     fin_case m A a rest j)
+       fin_case m A a rest j)
     n xs i.
-
-Extract vnth.
 \end{lstlisting}
   \pause
 \begin{lstlisting}[style=replout]
-fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) => vrec [A] [Fin -> A] (fun (x0 : Fin) => fin0 [A] x0) (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) => fin_case x0 [A] x1 x2 x3) n xs i
+fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) =>
+  vrec [A] [Fin -> A]
+    (fun (x0 : Fin) => fin0 [A] x0)
+    (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) =>
+       fin_case x0 [A] x1 x2 x3)
+    n xs i
 \end{lstlisting}
   \pause
-  \begin{itemize}
-    \item \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}, \
-      \src{\texttt{Fin n}} $\rightsquigarrow$ \tgt{\texttt{Fin}} --- the
-      \alert{typing invariant} is gone; the implementation survives.
-    \item The terms \texttt{n}, \texttt{i} remain: they are ordinary data.
-  \end{itemize}
+  \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}, \
+  \src{\texttt{Fin n}} $\rightsquigarrow$ \tgt{\texttt{Fin}}: the \alert{invariant}
+  is gone, the implementation survives; \texttt{n}, \texttt{i} remain as data.
+  \note{%
+    \textbf{[6:00 — 7:30]}\\
+    Concrete example of \emph{erase}. \texttt{vnth} looks up the \texttt{i}-th
+    element of a length-\texttt{n} vector, with \texttt{i} provably in range ---
+    a \texttt{Fin n}. It's just a definition built from the recursor; nothing
+    exotic.\\[1ex]
+    \emph{(click)} Here's the extraction. Look at the types in the shaded box:\\
+    \emph{(click)} \texttt{Vec A n} became \texttt{Vec A}; \texttt{Fin n} became
+    \texttt{Fin}. The dependent index \texttt{n} dropped out of the \emph{types}.
+    But the \emph{code} is intact --- same recursion --- and \texttt{n} and
+    \texttt{i} are still there as ordinary arguments. What we lost is exactly the
+    \emph{invariant} ``\texttt{i} is in bounds,'' not the data. That's erasure.\\
+    Type applications are the \texttt{[A]} in brackets --- note the polymorphism
+    is preserved.
+  }
 \end{frame}
 
-\begin{frame}[fragile]{Equality indices vanish; proof terms remain}
-\begin{lstlisting}
-Extract fun (A : Set) (x y : A) (h : Eq A x y) =>
-  eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
-\end{lstlisting}
-  \pause
-\begin{lstlisting}[style=replout]
-fun (A : *) (x y : A) (h : Eq A) => eq_rect [A] x [Eq A] (refl [A] x) y h
-\end{lstlisting}
-  \pause
-  \begin{itemize}
-    \item \src{\texttt{Eq A x y}} $\rightsquigarrow$ \tgt{\texttt{Eq A}}:
-      endpoints erased from the \emph{type}.
-    \item Transport (\texttt{eq\_rect}) is the static ancestor of a cast.
-    \item \alert{Not} proof erasure --- proof terms are ordinary residual terms
-      (future work).
-  \end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]{Where the dynamic type earns its keep}
-  A Tarski universe: codes \src{\texttt{U}}, decoder
-  \src{\texttt{El : U -> Set}}.
+\begin{frame}[fragile]{Dynamize: where the dynamic type earns its keep}
+  A Tarski universe: codes \src{\texttt{U}}, decoder \src{\texttt{El : U -> Set}}
+  --- a function from \emph{data} to \emph{types}.
 \begin{lstlisting}
 Extract fun (c : U) => El c.
 \end{lstlisting}
   \pause
 \begin{lstlisting}[style=replout]
-fun (c : U) => cast<Dyn => U -> Dyn>^2+(blame(2+)) c
+fun (c : U) =>
+  cast<Dyn => U -> Dyn>^2+ (blame(2+)) c
 \end{lstlisting}
   \pause
   \begin{itemize}
-    \item \src{\texttt{El}} maps \alert{data to types} --- no F$\omega$ image
-      exists.
-    \item The extraction emits reserved
-      \textcolor{blameRed}{internal blame} (label 2), cast through $\dyn$.
-    \pause
-    \item This is the translation's \emph{explicit, marked} fallback --- and a
-      theorem says an extracted term reduced in isolation never reaches an
-      \alert{external} label.
+    \item \src{\texttt{El}} has \alert{no F$\omega$ image} --- it maps values to
+      types.
+    \item Extraction emits reserved \textcolor{blameRed}{internal blame} (label
+      $2$), cast through $\dyn$ --- an \emph{honest} ``I can't translate this.''
+    \item<4-> A theorem: an extracted term run in isolation \alert{never} reaches
+      an \emph{external} label. (More on labels shortly.)
   \end{itemize}
+  \note{%
+    \textbf{[7:30 — 9:00]}\\
+    Now \emph{dynamize} --- the interesting case. A Tarski universe: \texttt{U}
+    is a type of \emph{codes}, and \texttt{El} decodes a code into an actual
+    type. So \texttt{El} sends \emph{data} to \emph{types}. F$\omega$ has nothing
+    like that.\\[1ex]
+    \emph{(click)} The extraction of \texttt{fun c => El c} is this.\\
+    \emph{(click)} Since \texttt{El} has no F$\omega$ counterpart, we don't fudge
+    it --- we plant a \emph{blame}, cast through Dyn. It's a marked, honest
+    failure: ``this used a value as a type; I can't express it.'' The label
+    \texttt{2+} names \emph{which} kind of failure --- I'll unpack labels in two
+    slides.\\
+    \emph{(click)} And crucially, we \emph{prove} that a term we extract, run on
+    its own, only ever trips these \emph{internal} markers --- never an external,
+    user-level blame. So the fallback is contained.
+  }
 \end{frame}
 
-\begin{frame}[fragile]{The example you'd expect to need
-    \texorpdfstring{$\dyn$}{?} --- and doesn't}
-  CIC's quintessential computed return type:
+\begin{frame}[fragile,shrink]{The example you'd expect to need
+    \texorpdfstring{$\dyn$}{Dyn} --- and doesn't}
+  CIC's poster child for a \emph{computed} return type:
 \begin{lstlisting}
 Fixpoint eval {t} (e : expr t)
   : match t with TNat => nat | TBool => bool end := ...
 \end{lstlisting}
   \pause
-  Church-encode the codes \alert{one level up}, at kind
-  $\kstar \karr \kstar \karr \kstar$: \ \texttt{TNat} $= \lambda a\,b.\,a$,
-  and \texttt{match} becomes type-level \emph{application}
-  $t\;\mathrm{CNat}\;\mathrm{CBool}$.
-  \pause
+  Church-encode the codes \alert{one kind up} ($\kstar\karr\kstar\karr\kstar$):
+  \texttt{match} becomes type-level \emph{application} $t\,\mathrm{CNat}\,\mathrm{CBool}$.
 \begin{lstlisting}[style=replout]
-fun (t : (* => (* => *))) (x : t (forall (x0 : *), (x0 -> x0) -> x0 -> x0) (forall (x0 : *), x0 -> x0 -> x0)) => x
+fun (t : (* => (* => *)))
+    (x : t (forall (x0 : *), (x0 -> x0) -> x0 -> x0)
+           (forall (x0 : *), x0 -> x0 -> x0)) =>
+  x
 \end{lstlisting}
   \begin{itemize}
-    \item<4-> \texttt{tagless.v}: the full interpreter extracts with
-      \alert{no $\dyn$, no casts, no blame} --- the higher-kinded target
-      expresses the computed type natively.
-    \item<5-> Term-level codes + decoder axiom (\texttt{stlc.v}): eval
-      collapses to a \emph{rigid} abstract type \tgt{\texttt{El}} --- also
-      no $\dyn$.
-    \item<6-> Forcing $\dyn$ as a computed return type needs
-      \alert{large elimination in the source}: the CIC extension.
+    \item<3-> \texttt{tagless.v}: the interpreter extracts with \alert{no $\dyn$,
+      no casts, no blame} --- the higher-kinded target expresses it natively.
+    \item<4-> Forcing $\dyn$ as a computed return type needs \alert{large
+      elimination} in the source --- the CIC extension.
   \end{itemize}
+  \note{%
+    \textbf{[9:00 — 10:30] --- optional; skip if behind schedule.}\\
+    A ``gotcha'' slide. The program everyone expects to \emph{force} a dynamic
+    type is the tagless interpreter: its \emph{return type} is computed by a
+    \texttt{match} on a run-time tag --- \texttt{nat} or \texttt{bool}.\\[1ex]
+    \emph{(click)} But if you Church-encode the codes one kind \emph{up}, the
+    \texttt{match} becomes ordinary type-level \emph{application}, and F$\omega$
+    eats it for free.\\
+    \emph{(click)} The whole interpreter extracts with \emph{no} Dyn, \emph{no}
+    casts, \emph{no} blame --- it lands in the static fragment.\\
+    \emph{(click)} You only truly force Dyn as a computed \emph{return} type when
+    the source has \emph{large elimination} --- which bare CoC lacks. So the
+    boundary is sharper than folklore suggests. If I'm short on time I'll just
+    say this sentence and move on.
+  }
 \end{frame}
 
 %% ==========================================================================
-\section{The Target: System F\texorpdfstring{$\omega$}{omega} + Blame}
+\section{The target: F\texorpdfstring{$\omega$}{omega} + blame}
 %% ==========================================================================
 
 \begin{frame}{Target syntax}
   \begin{align*}
-    K &::= \kstar \mid K \karr K
-      &&\text{(kinds)}\\
+    K &::= \kstar \mid K \karr K &&\text{(kinds)}\\
     \onslide<2->
     A, B &::= \alpha \mid A \to B \mid \forall \alpha{:}K.\,A
-      \mid \Lambda \alpha{:}K.\,A \mid A\ B \mid \dyn
-      &&\text{(types)}\\
+      \mid \Lambda \alpha{:}K.\,A \mid A\ B \mid \dyn &&\text{(types)}\\
     \onslide<3->
     e &::= x \mid \lambda x{:}A.\,e \mid e\ e
       \mid \Lambda \alpha{:}K.\,e \mid e\,[A]\\
     &\quad \mid \castt{e}{A}{B}{p} \mid \gnd{e}{G} \mid \isgnd{e}{G}
-      \mid \blame{p} \mid \nub{\alpha}{K}{A}{e}
-      &&\text{(terms)}
+      \mid \blame{p} \mid \nub{\alpha}{K}{A}{e} &&\text{(terms)}
   \end{align*}
 
   \begin{itemize}
-    \item<4-> $\dyn$ is a proper type of kind $\kstar$ (no kind-indexed
-      $\dyn_K$).
-    \item<5-> Ground types $G ::= \dyn \to \dyn \mid N$ where
-      $N ::= \alpha \mid N\,A$ is \alert{neutral}\\
-      --- the F$\omega$ generalization of Blame-for-All's type-variable tag.
-    \item<6-> Labels: id + polarity. Ids $0,1,2$ reserved
-      (\textcolor{blameRed}{internal}); $\ge 3$ external.
+    \item<4-> $\dyn$ is a proper type of kind $\kstar$ (no kind-indexed family).
+    \item<5-> Ground types $G ::= \dyn \to \dyn \mid N$, \ $N ::= \alpha \mid N\,A$
+      \alert{neutral} --- the F$\omega$ generalization of Blame-for-All's
+      variable tag.
   \end{itemize}
+  \note{%
+    \textbf{[10:30 — 12:00]}\\
+    The target in one slide. \emph{(click through the grammar.)}\\
+    Kinds are the usual F$\omega$ kinds. Types are F$\omega$ --- variables,
+    arrows, $\forall$, type-level $\Lambda$, application --- plus \emph{Dyn}.
+    Terms are F$\omega$ terms plus four gradual-typing gadgets: a \emph{cast}
+    from A to B with a label; a \emph{ground injection} and \emph{ground test}
+    that mediate Dyn; a \emph{blame}; and a $\nu$ binder that seals a type ---
+    I'll come back to that.\\[1ex]
+    \emph{(click)} Two design points worth flagging: Dyn lives only at kind
+    star --- there's no \(\mathrm{Dyn}_K\) for every kind.\\
+    \emph{(click)} And ``ground types'' --- the shapes Dyn can hold --- now
+    include \emph{neutral} types, a variable applied to arguments. That's the
+    lift from System~F to F$\omega$: once type \emph{applications} can sit at the
+    Dyn boundary, the tags have to cover them. Don't dwell; it motivates the
+    next two slides.
+  }
 \end{frame}
 
-\begin{frame}{Executable compatibility}
-  Unlike Blame for All's \emph{consistency}, our $\mathsf{compat}(A,B)$ is an
-  \alert{executable} judgment:
-
-  \medskip
+\begin{frame}[shrink]{Reading a blame label}
+  A cast that can't reconcile its two types does \alert{not} get stuck and does
+  \alert{not} return a wrong value --- it fires $\blame{p}$. The label $p$ says:
   \begin{center}
   \begin{tabular}{ll}
+    \textbf{id} & \emph{which} cast boundary broke \\
+    \textbf{polarity} & \emph{whose} fault: \ $+$ the value in the cast, \
+      $-$ the context around it \\
+  \end{tabular}
+  \end{center}
+
+  \onslide<2->{%
+  \smallskip
+  Most ids are real boundaries; three are \alert{reserved} for the translation's
+  own plumbing:
+  \begin{center}
+  \begin{tabular}{cl}
     \toprule
-    constructor & cast-reduction rule \\
+    id & fires when \ldots \\
     \midrule
-    \tgt{$\mathsf{compat\_refl}$}        & \textcolor{accentOrange}{ID} \\
-    \tgt{$\mathsf{compat\_arrow}$}       & \textcolor{accentOrange}{WRAP} \\
-    \tgt{$\mathsf{compat\_all}$}         & \textcolor{accentOrange}{ALL/ALL} \\
-    \tgt{$\mathsf{compat\_generalize}$}  & \textcolor{accentOrange}{GENERALIZE} \\
-    \tgt{$\mathsf{compat\_instantiate}$} & \textcolor{accentOrange}{INSTANTIATE} (at $\kstar$ only) \\
-    \tgt{$\mathsf{compat\_to\_dyn}$}     & \textcolor{accentOrange}{GROUND} \\
-    \tgt{$\mathsf{compat\_from\_dyn}$}   & \textcolor{accentOrange}{COLLAPSE / CONFLICT} \\
+    \textcolor{blameRed}{0} & a sealed type ($\nu$) would escape its scope through $\dyn$ \\
+    \textcolor{blameRed}{1} & the ground test $\mathsf{is\_gnd}$ peeks at a sealed value \\
+    \textcolor{blameRed}{2} & the extraction hits a construct with \alert{no F$\omega$ image} \ (${=}\,\lint$) \\
+    \tgt{$\ge 3$} & \tgt{external} --- a genuine boundary a client set up \\
+    \bottomrule
+  \end{tabular}
+  \end{center}}
+
+  \onslide<3->{%
+  \begin{alertblock}{The safety theorem, in one line}
+    An extracted term run in isolation only blames \textcolor{blameRed}{0},
+    \textcolor{blameRed}{1}, or \textcolor{blameRed}{2} --- its own plumbing ---
+    \alert{never} an external label ($\ge 3$).
+  \end{alertblock}}
+  \note{%
+    \textbf{[12:00 — 14:00] --- audience asks about this; take your time.}\\
+    Blame labels demystified. When a cast can't make its two types agree, it
+    doesn't get stuck and doesn't lie --- it fires \texttt{blame p}. The label is
+    a \emph{name tag} on the failure, and it answers two questions.\\
+    The \emph{id} says which cast boundary broke. The \emph{polarity}, a plus or
+    minus, says whose fault: plus blames the value flowing through the cast,
+    minus blames the surrounding context. (That's the Wadler--Findler
+    convention; a function cast flips the sign on its argument.)\\[1ex]
+    \emph{(click)} Now the numbers. Most ids name real, programmer-level
+    boundaries. But three small ids are reserved for our own machinery:\\
+    0 --- a sealed type variable trying to escape its scope through Dyn;\\
+    1 --- the ground test peeking at a sealed value;\\
+    2 --- the big one from the El slide: the extraction hit something with no
+    F$\omega$ image.\\
+    Anything 3 or above is \emph{external} --- a boundary a client set up.\\
+    \emph{(click)} And that split is the whole point: we prove an extracted term,
+    run in isolation, can only ever blame 0, 1, or 2 --- its own plumbing ---
+    never an external label. The extraction never frames an outside party.
+  }
+\end{frame}
+
+\begin{frame}[shrink]{Executable compatibility: no stuck casts}
+  Unlike Blame-for-All's \emph{consistency}, our $\mathsf{compat}(A,B)$ is
+  \alert{executable} --- every constructor \emph{is} a cast-reduction rule:
+  \begin{center}\small
+  \begin{tabular}{ll}
+    \toprule
+    constructor & reduction rule \\
+    \midrule
+    \tgt{$\mathsf{compat\_refl}$} & \textcolor{accentOrange}{ID} \\
+    \tgt{$\mathsf{compat\_arrow}$} & \textcolor{accentOrange}{WRAP} (contra/covariant) \\
+    \tgt{$\mathsf{compat\_all}$} / \tgt{generalize} / \tgt{instantiate} & \textcolor{accentOrange}{$\forall$-steps} (instantiate at $\kstar$) \\
+    \tgt{$\mathsf{compat\_to\_dyn}$} / \tgt{from\_dyn} & \textcolor{accentOrange}{GROUND / COLLAPSE / CONFLICT} \\
     \bottomrule
   \end{tabular}
   \end{center}
 
-  \medskip
   \begin{itemize}
-    \item<2-> Every well-typed cast has an operational step:
-      \alert{no ``stuck cast'' case}. Progress falls out of
-      \mech{compat\_dec}.
-    \item<3-> Decidability is also what makes the extraction's
-      $\mathsf{coerce}$ a total function.
+    \item<2-> Cast to $\dyn$ injects at a ground tag; cast from $\dyn$ collapses
+      on a match, \textcolor{blameRed}{blames} on a mismatch.
+    \item<3-> So every well-typed cast \emph{steps}: \alert{no ``stuck cast''}.
+      \mech{progress} falls out of \mech{compat\_dec}; it also makes the
+      extraction's $\mathsf{coerce}$ \emph{total}.
     \item<4-> Caveat: $\mathsf{compat}$ is syntactic, not closed under
       definitional equality.
   \end{itemize}
+  \note{%
+    \textbf{[14:00 — 15:30]}\\
+    How casts actually run. In System~F, Blame-for-All's ``consistency'' relation
+    can be read both as a spec and as a strategy. Once you add type-level
+    functions, that stops being obvious --- so we make it \emph{executable}:
+    every constructor of our \texttt{compat} relation corresponds to a concrete
+    reduction rule. Identity casts, function WRAP, the $\forall$ steps, and the
+    Dyn injection/projection rules.\\
+    \emph{(click)} The Dyn mechanics: casting \emph{to} Dyn injects the value at
+    a ground tag; casting \emph{from} Dyn checks the tag --- collapses if it
+    matches, \emph{blames} if it doesn't. That blame-on-mismatch is where runtime
+    failures come from.\\
+    \emph{(click)} The payoff: there's no catch-all ``stuck cast'' case. Every
+    well-typed cast has a step, so \emph{progress} is basically the decision
+    procedure for \texttt{compat}; and the same decidability makes the
+    extraction's coercion a \emph{total} function.\\
+    \emph{(click)} Honest caveat: \texttt{compat} is syntactic --- it doesn't see
+    through definitional equality. That matters in a minute.
+  }
 \end{frame}
 
-\begin{frame}{Characteristic redexes (selection)}
-  \begin{mathpar}
-    \onslide<1->{
-    (\Lambda\alpha{:}K.v)[A] \reduces \nub{\alpha}{K}{A}{v}}
-
-    \onslide<2->{
-    \castt{v}{A}{\dyn}{p} \reduces \gnd{\castt{v}{A}{G}{p}}{G}
-    \;\;(\mathsf{ground\_tag}(A,G))}
-
-    \onslide<3->{
-    \castt{\gnd{v}{G}}{\dyn}{A}{p} \reduces \castt{v}{G}{A}{p}
-    \;\;(\mathsf{compat}(G,A))}
-
-    \onslide<3->{
-    \castt{\gnd{v}{G}}{\dyn}{A}{p} \reduces \blame{p}
-    \;\;(\neg\mathsf{compat}(G,A))}
-
-    \onslide<4->{
-    \nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces
-      \gnd{\nub{\alpha}{K}{A}{v}}{G[A/\alpha]}
-    \;\;(\alpha\notin G)}
-
-    \onslide<4->{
-    \nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces \blame{0}
-    \;\;(\alpha\in G)}
-  \end{mathpar}
-
-  \onslide<5->{
-  \medskip
-  Type application \emph{seals} ($\nu$); injection picks the unique ground
-  tag; projection collapses or blames; $\nu$-elimination detects an escaping
-  seal --- \alert{scoped $\nu$, no global store}: stricter than Blame for
-  All.}
-\end{frame}
-
-\begin{frame}{Target metatheory (all mechanized, admit-free)}
+\begin{frame}{Target metatheory --- all mechanized, admit-free}
   \begin{itemize}
-    \item<1-> \textbf{Determinism} (\mech{step\_deterministic}) ---
-      proving it flushed out a real overlap, fixed by guarding
-      GENERALIZE with $A \neq \dyn$.
-    \item<2-> \textbf{Type-level confluence + Church--Rosser} for genuine
+    \item<1-> \textbf{Determinism} (\mech{step\_deterministic}) --- proving it
+      flushed out a real rule overlap (fixed by guarding GENERALIZE with
+      $A \neq \dyn$).
+    \item<2-> \textbf{Type-level confluence \& Church--Rosser} for genuine
       F$\omega$ type computation (Takahashi method).
-    \item<3-> \textbf{Structural metatheory}: weakening, substitution,
-      inversion through conversion, canonical forms.
-    \item<4-> \textbf{Progress} (\mech{progress}) --- the cast case is
-      exactly the case analysis on executable $\mathsf{compat}$.
-    \item<5-> \textbf{Preservation} (\mech{preservation},
-      \mech{preservation\_star}), kind regularity of results and \emph{all}
-      annotations.
-    \item<6-> \textbf{Blame theorem} (\mech{blame\_theorem}): if
-      $\mathrm{lbl\_id}(p) \ge 3$ and $\mathsf{safe}(p,e)$ then
-      $\neg\,(e \reducesstar \blame{p})$.
-    \item<7-> \alert{Not} strongly normalizing: a closed, well-typed
-      self-application cycle (\mech{well\_typed\_non\_normalizing}).
+    \item<3-> \textbf{Progress \& Preservation} (\mech{progress},
+      \mech{preservation}) for the full reduction relation, with kind regularity
+      of results and \emph{all} annotations.
+    \item<4-> \alert{Not} strongly normalizing: a closed, well-typed reduction
+      cycle (\mech{well\_typed\_non\_normalizing}). Type safety $\ne$ termination.
   \end{itemize}
+  \note{%
+    \textbf{[15:30 — 16:30]}\\
+    The target is a real, self-standing calculus, and we mechanized its
+    metatheory --- all admit-free. Determinism --- and proving it actually caught
+    a genuine bug: two rules overlapped, fixed by a side condition. Type-level
+    confluence and Church--Rosser, because we have honest F$\omega$ type
+    computation. Progress and preservation for the \emph{whole} reduction
+    relation.\\[1ex]
+    \emph{(click to the last one)} And one deliberate non-result: it's \emph{not}
+    strongly normalizing --- there's a closed, well-typed loop. That's fine:
+    type \emph{safety} doesn't require termination. (Source CoC \emph{is}
+    normalizing --- we use that separately.) Keep this slide brisk.
+  }
 \end{frame}
 
 %% ==========================================================================
-\section{The Extraction}
+\section{The extraction \& its metatheory}
 %% ==========================================================================
 
-\begin{frame}{Three translations, one invariant}
+\begin{frame}{The extraction: three maps, one invariant}
   \begin{description}
-    \item<1->[Kinds] $\extk(s) = \kstar$; classifier domains become kind
-      arrows, term domains are dropped:\\
-      \src{$\SetS \to \Nat \to \SetS$} \;$\rightsquigarrow$\;
-      \tgt{$\kstar \karr \kstar$}
-      --- exactly what a vector-like family needs.
-    \item<2->[Types] $\extt(\Gamma, T) = \extt_L(\Gamma, \nf(T))$:
-      \alert{normalize first} (justified by strong normalization), then
-      translate.\\
-      Sorts, term variables, term-headed applications in type position
+    \item<1->[Kinds] classifier domains become kind arrows, term domains drop:\\
+      \src{$\SetS \to \Nat \to \SetS$} $\;\rightsquigarrow\;$
+      \tgt{$\kstar \karr \kstar$} --- exactly what a \texttt{Vec}-like family needs.
+    \item<2->[Types] $\extt(\Gamma, T) = \extt_L(\Gamma, \nf(T))$: \alert{normalize
+      first}, then translate. Sorts / term variables / term-headed applications
       $\rightsquigarrow \dyn$.
     \item<3->[Terms] $\ext$ recurses on the \alert{typing derivation}.
   \end{description}
 
-  \onslide<4->{
+  \onslide<4->{%
   \medskip
-  \begin{block}{The invariant}
-    Every classification uses the reduction-stable, semantic $\islarge$
-    predicate ($\hastype{\Gamma}{T}{\KindS}$), so the whole translation
-    \alert{respects definitional equality}.
+  \begin{block}{The invariant that makes it well defined}
+    Every ``type-level vs.\ term-level'' choice uses the reduction-stable,
+    \emph{semantic} test $\islarge$ ($\hastype{\Gamma}{T}{\KindS}$) --- so the
+    translation \alert{respects definitional equality}.
   \end{block}}
+  \note{%
+    \textbf{[16:30 — 18:00]}\\
+    The translation is three maps working together. On kinds: a source binder
+    whose domain is type-level becomes a kind arrow; a term-level domain is
+    dropped --- that's how \texttt{Set -> Nat -> Set} becomes just star-to-star,
+    the kind of a vector family.\\
+    On types: the key move is \emph{normalize first}, then translate; sorts,
+    term variables, and term-headed applications are what turn into Dyn.\\
+    On terms: the extraction recurses on the \emph{typing derivation}, not the
+    raw term --- it needs the typing information to classify binders. (Aside if
+    asked: this forced \texttt{has\_type} to live in \texttt{Type}, not
+    \texttt{Prop} --- and dragged the whole reduction/conversion layer into
+    \texttt{Type} with it, since Rocq forbids eliminating \texttt{Prop} into
+    \texttt{Type}.)\\[1ex]
+    \emph{(click)} And the invariant that makes the whole thing well defined:
+    every time we ask ``is this type-level or term-level?'' we use a
+    \emph{semantic}, reduction-stable test --- ``does it have sort Kind?'' ---
+    which is preserved by reduction. That's why the translation respects
+    definitional equality instead of being brittle syntax.
+  }
 \end{frame}
 
-\begin{frame}{The coercion, and the term translation's hard case}
-  \[
-  \coerce{s}{A}{B} =
-    \begin{cases}
-      s & A = B \\
-      \castt{s}{A}{B}{\lint} & A \neq B,\ \mathsf{compat}(A,B) \\
-      \blame{\lint} & \text{otherwise}
-    \end{cases}
-  \]
+\begin{frame}{The hard case: it commutes only \emph{up to} conversion}
+  For a large application (a type application, $\Lambda$-elimination), extraction
+  emits a \alert{bare} $e\,[A]$ --- \emph{no} runtime cast. Why is that sound?
 
-  \pause
   \medskip
-  The interesting case: an application $u\,v$ whose function domain is
-  \emph{large} is a type application ($\Lambda$-elimination), and extracts to
-  a \alert{bare} $e\,[A]$.
-
-  \pause
-  \medskip
-  Why bare? Its natural type and the expected result type
+  Its natural type and the expected type,
   \[
     \extt(V{:}\Gamma, U_r)[\extt(\Gamma,v)/0]
     \qquad\text{vs.}\qquad
-    \extt(\Gamma,\, U_r[v])
+    \extt(\Gamma,\, U_r[v]),
   \]
-  are equal only \alert{up to F$\omega$ definitional equality} --- so the
-  target's conversion rule absorbs the mismatch. No runtime cast needed.
-\end{frame}
-
-\begin{frame}{Extraction does not commute with substitution syntactically}
-  A naive commutation lemma phrased with $=$ is \alert{false}, for two
-  independent reasons:
-
-  \begin{enumerate}
-    \item<2-> \textbf{Target $\beta$.} Plugging a large argument can put a
-      type operator in head position: the left side contains a redex
-      $(\Lambda\alpha{:}K.A)\,B$ whose contractum is the right side.
-    \item<3-> \textbf{Annotation drift under $\nf$.} Source substitution
-      rewrites binder annotations up to conversion; $\extt = \extt_L \circ \nf$
-      collapses them.
-  \end{enumerate}
-
-  \onslide<4->{
-  \medskip
-  The correct statement (\mech{extract\_typ\_tsubst\_coc\_equiv}) replaces
-  $=$ with $\mathsf{ty\_equiv}$.
-
-  \medskip
-  The same phenomenon defeats the naive \emph{kind} index: kind regularity
-  must thread the target kind through the CoC kinding derivation
-  (\mech{extract\_typ\_L\_wf\_kind}).}
-\end{frame}
-
-%% ==========================================================================
-\section{Metatheory}
-%% ==========================================================================
-
-\begin{frame}{The headline theorems}
-  All mechanized in Rocq; audited assumptions: only \texttt{eq\_rect\_eq}.
-
-  \medskip
-  \begin{enumerate}
-    \item<2-> \textbf{Well-typed extraction} (\mech{extract\_well\_typed}):
-      \[
-        \hastype{\extc(\Gamma)}{\ext(\Gamma \vdash t : T)}{\extt(\Gamma, T)}
-      \]
-    \item<3-> \textbf{Simulation} (\mech{extract\_reduces}): if
-      $t \reduces v$ then
-      $\ext(\Gamma \vdash t : T) \;\sepsim^{*}\; \ext(\Gamma \vdash v : T)$
-    \item<4-> \textbf{Derivation independence}
-      (\mech{extract\_deriv\_indep}): any two derivations of the same
-      judgment extract to $\sepsim^{*}$-related terms.
-    \item<5-> \textbf{External-label non-generation}
-      (\mech{extraction\_blame\_free}): an extracted term, reduced in
-      isolation, never reaches $\blame{p}$ with $\mathrm{lbl\_id}(p) \ge 3$.
-    \item<6-> \textbf{Optimism / $\dyn$-freedom}
-      (\mech{extract\_typ\_dyn\_free\_iff}):
-      \[
-        \mathsf{typ\_dyn\_free}(\extt(\Gamma, T))
-        \iff
-        \mathsf{fo}(\Gamma, \nf(T))
-      \]
-      --- an \emph{exact} syntactic characterization.
-  \end{enumerate}
-\end{frame}
-
-\begin{frame}{What the simulation relation is --- and is not}
-  $s \sepsim t$ (Rocq: \texttt{sim}) relates terms differing by:
-  replacing a type argument with $\dyn$; inserting/stripping casts; unfolding
-  $\beta$/type-$\beta$ redexes; and
-  \[
-    \blame{q} \sepsim t \quad\text{for \emph{any} } t
-    \qquad (\mathsf{sim\_blame})
-  \]
+  \pause
+  are \alert{not syntactically equal} --- they differ by a target $\beta$-redex
+  and by $\nf$ annotation drift. A naive commutation lemma with $=$ is
+  \emph{false}.
 
   \pause
-  \begin{alertblock}{Deliberately syntactic}
-    $\sepsim$ is \alert{not} a behavioral preorder:
-    $\mathsf{sim\_left\_tabs}$ relates $\Lambda K.s$ to $s$, yet the context
-    $[\cdot]\,[\dyn]$ distinguishes them.
-  \end{alertblock}
+  \medskip
+  They \emph{are} equal up to F$\omega$ definitional equality
+  (\mech{ty\_equiv}). The target's conversion rule absorbs the gap ---
+  which is exactly \emph{why} the target needs \texttt{typing\_conv}.
+  \note{%
+    \textbf{[18:00 — 19:30] --- the technical highlight; land it clearly.}\\
+    My favorite subtlety. When the extraction hits a \emph{type} application, it
+    just emits a bare type application in the target --- no cast, no coercion.
+    You'd want to justify that with a lemma: ``extraction commutes with
+    substitution.''\\[1ex]
+    \emph{(click)} But phrased with plain \emph{equality}, that lemma is
+    \emph{false}. The two sides differ two ways: plugging a large argument
+    creates a target $\beta$-redex on one side, and normalizing annotations
+    drifts them on the other.\\
+    \emph{(click)} The fix: they're equal \emph{up to F$\omega$ definitional
+    equality}. So the extraction leans on the target's \emph{conversion} rule to
+    absorb the mismatch --- and that's the real reason the target has to carry a
+    conversion rule at all. This is the kind of thing that only shows up when you
+    actually mechanize it.
+  }
+\end{frame}
 
-  \pause
-  The relation records extraction bookkeeping --- e.g.\ that the target has
-  entered an internal-residue case --- rather than asserting behavioral
-  preservation.
-
-  A contextual-approximation bridge (typed relation + CIU/logical relations)
-  is open.
+\begin{frame}{The headline theorems (Rocq; only \texttt{eq\_rect\_eq})}
+  \begin{enumerate}
+    \item<1-> \textbf{Well-typed extraction} (\mech{extract\_well\_typed}):
+      $\hastype{\extc(\Gamma)}{\ext(\Gamma \vdash t{:}T)}{\extt(\Gamma, T)}$.
+    \item<2-> \textbf{Simulation} (\mech{extract\_reduces}): $t \reduces v$
+      $\Rightarrow$ $\ext(t) \sepsim^{*} \ext(v)$.
+    \item<3-> \textbf{Derivation independence} (\mech{extract\_deriv\_indep}):
+      the extraction doesn't depend on \emph{which} derivation.
+    \item<4-> \textbf{External-label non-generation}
+      (\mech{extraction\_blame\_free}): in isolation, never $\blame{p}$ with
+      $\mathrm{id}(p) \ge 3$.
+    \item<5-> \textbf{Optimism / $\dyn$-freedom}
+      (\mech{extract\_typ\_dyn\_free\_iff}): an \emph{exact} syntactic
+      characterization of which source types extract without $\dyn$.
+  \end{enumerate}
+  \note{%
+    \textbf{[19:30 — 21:00]}\\
+    The payoff theorems --- all in Rocq, and the audited set rests on a single
+    standard axiom, \texttt{eq\_rect\_eq}.\\
+    One: extraction is \emph{well-typed} --- a well-typed source term extracts to
+    a well-typed target term at the extracted type.\\
+    Two: \emph{simulation} --- source reduction is tracked by the extraction.\\
+    Three: it doesn't depend on which typing derivation you picked.\\
+    Four: the safety result from the labels slide --- no external blame in
+    isolation.\\
+    Five: ``optimism'' made precise --- an \emph{exact} characterization of which
+    source types come out Dyn-free. Read two or three of these out loud, don't
+    grind through all five.
+  }
 \end{frame}
 
 %% ==========================================================================
-\section{Mechanization \& REPL}
+\section{Wrapping up}
 %% ==========================================================================
 
-\begin{frame}{Mechanization}
+\begin{frame}{Being honest about what this is not}
   \begin{itemize}
-    \item<1-> Rocq 9.0 + dune; \alert{no proof holes, no project-local
-      axioms}; audited core uses only \texttt{eq\_rect\_eq}.
-    \item<2-> $\approx$ 27{,}500 lines of Rocq:\\[0.5ex]
-      \begin{tabular}{ll}
-        \src{CoC layer} (adapted Coq-in-Coq) & $\approx$ 10{,}900 \\
-        \tgt{BlameFOmega target}             & $\approx$ 8{,}300 \\
-        Extraction layer                     & $\approx$ 8{,}300 \\
-      \end{tabular}
-    \item<3-> The consequential decision: $\ext$ recurses on derivations
-      $\Rightarrow$ \texttt{has\_type} and the whole reduction/conversion
-      layer moved from \texttt{Prop} to \alert{\texttt{Type}}\\
-      (Rocq forbids eliminating \texttt{Prop} into \texttt{Type}).
-    \item<4-> $\ext$ calls $\nf$ and \texttt{is\_large\_dec}: a total
-      \emph{metatheoretic} function, not an efficient compiler pass.
+    \item<1-> \textbf{Simulation is \emph{syntactic}}, not contextual
+      approximation: $\sepsim$ has rules (like $\blame{q}\sepsim t$) that are
+      false as behavioral principles. A typed logical-relations bridge is open.
+    \item<2-> \textbf{Internal blame is reachable by design} --- a value-as-type
+      run at runtime blames $\lint$. That's the marked fallback, not a bug.
+    \item<3-> \textbf{Not proof-erasing}, \textbf{$\dyn$ only at kind $\kstar$},
+      \textbf{inductives axiomatized} (bare PTS). All are future extensions.
   \end{itemize}
+
+  \onslide<4->{%
+  \medskip
+  None of these weakens the theorems proved --- they scope the claims.}
+  \note{%
+    \textbf{[21:00 — 22:00] --- credibility slide; be candid.}\\
+    Let me be upfront about the boundaries.\\
+    The most important caveat: our \emph{simulation} relation is syntactic
+    bookkeeping, not a behavioral, contextual approximation --- it deliberately
+    contains rules that would be false as observational principles. Building the
+    typed logical-relations bridge is open work, and I'd rather say that plainly.\\
+    \emph{(click)} Internal blame is \emph{reachable} --- if you actually run a
+    value-as-type, you get an internal blame. That's the honest fallback, by
+    design.\\
+    \emph{(click)} And it's not proof-erasing, Dyn is only at kind star, and
+    inductives are axiomatized since the source is a bare PTS --- all natural
+    next steps.\\
+    \emph{(click)} None of this weakens the theorems; it scopes them.
+  }
 \end{frame}
 
-\begin{frame}[fragile]{A REPL with verified name recovery}
-  Extracted to OCaml; Rocq-like commands: \texttt{Axiom},
-  \texttt{Definition}, \texttt{Check}/\texttt{Infer}, \texttt{Extract}.
-
+\begin{frame}[fragile,shrink]{A REPL you can actually poke at}
+  Type checker \emph{and} extraction, extracted to OCaml:
 \begin{lstlisting}
 Definition vmap (A B : Set) (f : A -> B) (n : Nat) (xs : Vec A n)
   : Vec B n := ...
-
 Extract vmap.
 \end{lstlisting}
 \begin{lstlisting}[style=replout]
-fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) => vrec [A] [Vec B] (vnil [B]) (fun (x0 : Nat) (x1 : A) (x2 : Vec B) => vcons [B] x0 (f x1) x2) n xs
+fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
+  vrec [A] [Vec B] (vnil [B])
+    (fun (x0 : Nat) (x1 : A) (x2 : Vec B) =>
+       vcons [B] x0 (f x1) x2)
+    n xs
 \end{lstlisting}
-
-  \pause
   \begin{itemize}
-    \item \texttt{Definition} = shell-level let-expansion; the verified
-      checker sees only the expanded term (transparency = $\beta$).
-    \item De~Bruijn $\to$ named conversion is \alert{verified}: equivalence,
-      alpha-equivalence, uniqueness; name recovery is capture-free by
-      construction (\mech{pick\_name} carries a freshness proof).
-    \item Fourteen golden example batches: vectors, \texttt{printf},
-      matrices, units, AVL, session types, STLC interpreter, Tarski universe,
-      functors/monads, Newman's lemma, \ldots
-    \item Only final string layout is unverified OCaml.
+    \item<2-> De~Bruijn~$\to$~named printing is \alert{verified}: equivalence,
+      alpha-equivalence, uniqueness; names capture-free by construction
+      (\mech{pick\_name}).
+    \item<3-> Eighteen golden example batches (\texttt{dune test}); only string
+      layout is unverified OCaml.
   \end{itemize}
+  \note{%
+    \textbf{[22:00 — 23:00] --- optional; drop first if over time.}\\
+    Quick, because it's fun: we extract the type checker \emph{and} the
+    translation to OCaml and wrap them in a REPL, so you can type a definition
+    and see its extraction. Here's \texttt{vmap}.\\
+    \emph{(click)} Even the pretty-printing is verified --- turning de~Bruijn
+    indices back into readable names is proved equivalence-preserving and
+    capture-free, which is usually the sketchy unverified part.\\
+    \emph{(click)} There are eighteen worked examples checked by \texttt{dune
+    test}; the only unverified bit is final string layout. Live demo available if
+    there's interest in Q\&A.
+  }
 \end{frame}
 
-%% ==========================================================================
-\section{Honest Limitations}
-%% ==========================================================================
-
-\begin{frame}{What this work does not claim}
+\begin{frame}[shrink]{\texttt{Inductive} by Böhm--Berarducci --- and its ceiling}
+  \texttt{Inductive T params : arity := \ldots} desugars to the \alert{indexed}
+  impredicative encoding, as computing \texttt{Definition}s:
+  \[
+    \tgt{\texttt{Vec A n}} \;=\; \forall (X{:}\Nat{\to}\kstar).\;
+      X\,\mathrm{NZ} \to (\forall m.\,A \to X\,m \to X\,(\mathrm{NS}\,m)) \to X\,n
+  \]
   \begin{itemize}
-    \item<1-> \textbf{Not a production extractor}, and \textbf{not
-      proof-erasing}: proof terms are ordinary small terms.
-    \item<2-> \textbf{Internal blame is reachable by design}: a value-as-type
-      exercised at run time reduces to $\blame{\lint}$ --- the marked
-      fallback.
-    \item<3-> \textbf{Scoped $\nu$ is stricter than Blame for All}: a sealed
-      value escaping through $\dyn$ blames label 0; no store, no scope
-      extrusion.
-    \item<4-> \textbf{Simulation is syntactic}, not contextual approximation.
-    \item<5-> \textbf{Compatibility is syntactic}: blame is not stable under
-      definitional equality; clients (and the extraction) normalize
-      annotations first.
-    \item<6-> \textbf{$\dyn$ lives at kind $\kstar$ only}: higher-kinded
-      quantifiers do not cross the dynamic boundary.
-    \item<7-> \textbf{Inductive families are axiomatized}: the bare PTS has no
-      inductives; extending to CIC would stress the value-as-type boundary.
+    \item<2-> Motive is \alert{index-parameterized} ($X : I{\to}\kstar$), so
+      \tgt{Vec}, \tgt{Fin}, Leibniz \tgt{Eq} ($\mathit{Eq\_rec}$ \emph{is}
+      transport), \tgt{Fmt}, $\le$ all become terms that \textbf{compute}
+      (Böhm--Berarducci '85; Pfenning--Paulin '90).
+    \item<3-> \alert{Ceiling 1}: the recursor depends on \emph{indices}, not the
+      \emph{value} --- dependent \emph{induction} is not derivable (Geuvers '01).
+      No large elimination (\texttt{vreplicate}), no dependent projections.
+    \item<4-> \alert{Ceiling 2}: one-step \emph{inversion} (\texttt{Fin} case,
+      HList head) is not a fold --- kept axiomatic.
+    \item<5-> Scott/Parigot give O(1) inversion but need \emph{recursive types}
+      (not SN here); Mendler widens functors, same ceiling; \textcolor{okGreen}{self
+      types} (Fu--Stump '14) recover induction --- beyond CoC.
   \end{itemize}
-
-  \onslide<8->{
-  \medskip
-  Each is a possible extension --- not a limitation of the results proved.}
+  \note{%
+    \textbf{[23:00 — 24:30] --- the encoding story; land the tension.}\\
+    A bonus the REPL gives us: an \texttt{Inductive} command that's pure sugar
+    for the impredicative Böhm--Berarducci encoding --- and it handles
+    \emph{indexed} families, because the motive is parameterized by the index.
+    So Vec, Fin, Leibniz equality (whose recursor is literally transport), the
+    format family, the $\le$ predicate --- all become plain lambda-terms that
+    \emph{compute} under \texttt{Compute}. Böhm--Berarducci in '85;
+    Pfenning--Paulin encoded these in CoC in '90.\\[1ex]
+    \emph{(click)} Now the honest ceiling, and it's intrinsic, not a bug. The
+    generated recursor's motive depends on the \emph{indices} but not the
+    \emph{value} --- it's a fold, not dependent induction, and Geuvers proved in
+    2001 that induction simply isn't derivable from these encodings. So large
+    elimination and dependent projections are out.\\
+    \emph{(click)} Second, one-step inversion isn't a fold either, so those stay
+    axiomatic.\\
+    \emph{(click)} And the alternatives: Scott and Parigot give you O(1)
+    inversion, but their types are recursive, so they don't even typecheck in a
+    normalizing system without mu-types; Mendler handles more functors but hits
+    the same wall; and if you really want dependent elimination with computation,
+    that's self types --- Fu and Stump --- which is a genuine extension beyond
+    CoC. This is the typeability-versus-computability tension in one slide.
+  }
 \end{frame}
-
-%% ==========================================================================
-\section{Conclusion}
-%% ==========================================================================
 
 \begin{frame}{Takeaways}
   \begin{enumerate}
-    \item<1-> Extraction from a dependently typed language \alert{need not
-      throw away all types}: a single verified translation preserves the
-      parametric-polymorphic skeleton and erases many dependent indices from
-      target types.
-    \item<2-> The genuine residue of dependency --- \alert{values used as
-      types} --- is marked explicitly with $\dyn$ and reserved
+    \item<1-> Extraction from a dependently typed language \alert{need not throw
+      the types away}: one verified translation keeps the parametric skeleton and
+      erases many indices from target types.
+    \item<2-> The genuine residue --- \textcolor{dynOrange}{values used as types}
+      --- is marked \emph{explicitly} with $\dyn$ and reserved
       \textcolor{blameRed}{internal blame}.
-    \item<3-> The whole pipeline is \textcolor{okGreen}{\textbf{mechanized
-      and admit-free}}: a machine-checked F$\omega$-style polymorphic blame
-      calculus, target progress / preservation / determinism / confluence,
-      and the extraction metatheorems.
-    \item<4-> Paulin-Mohring's CoC-to-F$\omega$ vision, revisited with a
-      dynamic/blame target.
+    \item<3-> The whole pipeline is \textcolor{okGreen}{\textbf{mechanized,
+      admit-free}}: an F$\omega$-style polymorphic blame calculus with
+      progress / preservation / determinism / confluence, plus the extraction
+      metatheorems.
   \end{enumerate}
 
-  \onslide<5->{
+  \onslide<4->{%
   \medskip
-  \begin{center}
-    \alert{Next:} typed logical relation + contextual observation theorem;
-    transparent algorithmic extraction; proof erasure; inductive families.
+  \begin{center}\small
+    \alert{Next:} typed logical relation + contextual theorem; transparent
+    algorithmic extraction; proof erasure; inductive families.
   \end{center}}
+  \note{%
+    \textbf{[23:00 — 24:00]}\\
+    Three things to remember.\\
+    One: extraction into a \emph{typed} target is viable --- a single verified
+    translation keeps the polymorphic skeleton and drops dependent indices from
+    types.\\
+    Two: the genuine residue of dependency --- values used as types --- is marked
+    \emph{explicitly}, with Dyn and reserved internal blame, never silently.\\
+    Three: it's all machine-checked and admit-free --- the target calculus and
+    the extraction metatheory.\\
+    \emph{(click)} And where it's going: a real contextual/logical-relations
+    story, an algorithmic extractor, proof erasure, and inductive families.
+    Hand off to the thank-you slide.
+  }
 \end{frame}
 
 \begin{frame}[standout]
@@ -672,6 +842,17 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) => vrec [A] [Vec B] (vnil [B])
   {\small
   \texttt{dune exec tests/top.exe} --- try the REPL\\
   Rocq development: admit-free, audited down to \texttt{eq\_rect\_eq}}
+  \note{%
+    \textbf{[24:00+] --- Q\&A.}\\
+    Thanks! Happy to take questions --- and I can run the REPL live if anyone
+    wants to see an extraction.\\[1ex]
+    Likely questions to be ready for: (a) why not just proof-erase? --- future
+    work, orthogonal; (b) is the simulation observational? --- no, it's
+    syntactic, that's the open bridge; (c) how does Dyn-at-kind-star limit you?
+    --- higher-kinded quantifiers don't cross the boundary; (d) relation to
+    CertiCoq / verified extraction to OCaml --- they do problem \#2 to an untyped
+    target, we do problem \#1 to a typed one.
+  }
 \end{frame}
 
 \end{document}

@@ -23,6 +23,7 @@ From Extraction Require Import simulation_facts.
 
 
 
+(** Coercing to the same type is the identity: no cast is emitted. *)
 Lemma coerce_id : forall s A, coerce s A A = s.
 Proof.
   intros s A. unfold coerce.

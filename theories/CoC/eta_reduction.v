@@ -204,10 +204,10 @@ Lemma inversion_eta_parallel_reduces_lambda :
  eta_parallel_reduces_once (lam T U) x ->
  (forall T' U' : term, x = lam T' U' -> eta_parallel_reduces_once U U' -> P) -> P.
 Proof.
-  do 5 intro.
-  inversion_clear H; intros.
-  apply H with (sort_term prop) M'; auto with ecoc.
-  apply H with T' M'; auto with ecoc.
+  intros P T U x Hpar.
+  inversion_clear Hpar; intros Hcont.
+  apply Hcont with (sort_term prop) M'; auto with ecoc.
+  apply Hcont with T' M'; auto with ecoc.
 Qed.
 
 (** One-step erasure reduction embeds into parallel erasure reduction. *)
@@ -567,18 +567,18 @@ Qed.
 Lemma eta_convertible_sort_product :
  forall (s : sort) (t u : term), ~ eta_convertible (sort_term s) (prod t u).
 Proof.
-  red in |- *; intros.
+  red in |- *; intros s t u Hconv.
   elim eta_church_rosser with (sort_term s) (prod t u);
    auto with ecoc coc core arith sets.
-  do 2 intro.
+  intros x Hsx.
   elim eta_reduces_eta_normal with (sort_term s) x; auto with ecoc coc core arith sets.
-  intro.
+  intro Hpx.
   apply eta_reduces_product_product with t u (sort_term s); auto with ecoc coc core arith sets;
-   intros.
-  discriminate H2.
+   intros a b Heq Hta Hub.
+  discriminate Heq.
 
-  red in |- *; red in |- *; intros.
-  inversion_clear H1.
+  red in |- *; red in |- *; intros y Hy.
+  inversion_clear Hy.
 Qed.
 
 (** Erasure conversion is compatible with lam under same type annotation. *)
@@ -727,11 +727,13 @@ Qed.
 Lemma eta_reduces_once_sort_occurs :
  forall (t : term) (s : sort), eta_reduces_once t (sort_term s) -> sort_occurs_in s t.
 Proof.
-  intros.
-  inversion H.
-  elim sort_occurs_in_subst with M N 0 s; intros; auto with coc core arith sets.
-  unfold subst in H2; rewrite H2.
-  auto with coc.
+  intros t s Hred.
+  inversion Hred.
+  match goal with
+  | Heq : subst _ _ = sort_term s |- _ =>
+      elim sort_occurs_in_subst with M N 0 s; intros; auto with coc core arith sets;
+      unfold subst in Heq; rewrite Heq; auto with coc
+  end.
 Qed.
 
 (** Sort membership predicate extended with all term constructors. *)
@@ -751,23 +753,24 @@ Lemma sort_occurs_in_eta_lift :
  forall (t : term) (n k : nat) (s : sort),
  sort_occurs_in_eta s (lift_rec n t k) -> sort_occurs_in_eta s t.
 Proof.
-  simple induction t; simpl in |- *; intros; auto with ecoc coc core arith sets.
-  generalize H; elim (le_gt_dec k n); intros;
+  induction t as [so|n0|t0 IH0 t1 IH1|t0 IH0 t1 IH1|t0 IH0 t1 IH1];
+    simpl in |- *; intros n k s Hocc; auto with ecoc coc core arith sets.
+  generalize Hocc; elim (le_gt_dec k n0); intros a Hocc';
    auto with ecoc coc core arith sets.
-  inversion_clear H0.
+  inversion_clear Hocc'.
 
-  inversion_clear H1.
-  apply mem_eta_abs_r; apply H0 with n (S k); auto with ecoc coc core arith sets.
+  inversion_clear Hocc.
+  apply mem_eta_abs_r; apply IH1 with n (S k); auto with ecoc coc core arith sets.
 
-  inversion_clear H1.
-  apply mem_eta_app_l; apply H with n k; auto with ecoc coc core arith sets.
+  inversion_clear Hocc.
+  apply mem_eta_app_l; apply IH0 with n k; auto with ecoc coc core arith sets.
 
-  apply mem_eta_app_r; apply H0 with n k; auto with ecoc coc core arith sets.
+  apply mem_eta_app_r; apply IH1 with n k; auto with ecoc coc core arith sets.
 
-  inversion_clear H1.
-  apply mem_eta_prod_l; apply H with n k; auto with ecoc coc core arith sets.
+  inversion_clear Hocc.
+  apply mem_eta_prod_l; apply IH0 with n k; auto with ecoc coc core arith sets.
 
-  apply mem_eta_prod_r; apply H0 with n (S k); auto with ecoc coc core arith sets.
+  apply mem_eta_prod_r; apply IH1 with n (S k); auto with ecoc coc core arith sets.
 Qed.
 
 (** Extended sort membership is stable under substitution. *)

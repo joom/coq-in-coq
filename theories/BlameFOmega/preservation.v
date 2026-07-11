@@ -268,6 +268,7 @@ Proof.
           reflexivity.
 Qed.
 
+(** [defeq] commutes with substituting a [has_def]-sealed variable's own implementation [A] for itself. *)
 Lemma defeq_def_tsubst : forall G1 g Kv A X Y J,
   defeq (G1 ++ has_def Kv A :: g) X Y J ->
   wf_typ g A Kv ->
@@ -328,6 +329,7 @@ Proof.
     apply neutral_tyapp. apply IHneutral. exact HF.
 Qed.
 
+(** [ground]ness is preserved by substitution when the substituted variable does not occur, mirroring [neutral_tsubst_shift]. *)
 Lemma ground_tsubst_shift : forall G s,
   ground G -> tvar_occurs 0 G = false -> ground (tsubst s 0 G).
 Proof.
@@ -354,6 +356,7 @@ Proof.
   - exfalso; eapply Hnd; reflexivity.
 Qed.
 
+(** INSTANTIATE's guard picks out [compat_instantiate] among [compat]'s constructors. *)
 Lemma compat_instantiate_inv : forall A B,
   (forall K' B', B <> all K' B') ->
   compat (all KStar A) B -> compat (tsubst dyn 0 A) B.
@@ -391,9 +394,11 @@ Proof.
   - reflexivity.
 Qed.
 
+(** Specialization of [tsubst_tvar0_tlift_gen] at offset 0. *)
 Corollary tsubst_tvar0_tlift1 : forall A, tsubst (tvar 0) 0 (tlift 1 1 A) = A.
 Proof. intros A. exact (tsubst_tvar0_tlift_gen A 0). Qed.
 
+(** ALL/ALL's guard picks out [compat_all] among [compat]'s constructors. *)
 Lemma compat_all_inv : forall K A B,
   A <> B -> compat (all K A) (all K B) -> compat A B.
 Proof.

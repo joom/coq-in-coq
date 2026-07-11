@@ -1,7 +1,7 @@
 (executable
  (name top)
  (public_name coc)
- (ocamlopt_flags (:standard -w -39))
+ (ocamlopt_flags (:standard -w -39-69))
  (libraries rocq-runtime.kernel unix)
  (modules core top parser lexer))
 
@@ -123,6 +123,41 @@
  (alias runtest)
  (action (diff expected/tagless.out tagless.out.gen)))
 
+(rule
+ (with-stdin-from ../examples/lists.v
+  (with-stdout-to lists.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/lists.out lists.out.gen)))
+
+(rule
+ (with-stdin-from ../examples/scoped.v
+  (with-stdout-to scoped.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/scoped.out scoped.out.gen)))
+
+(rule
+ (with-stdin-from ../examples/hlist.v
+  (with-stdout-to hlist.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/hlist.out hlist.out.gen)))
+
+(rule
+ (with-stdin-from ../examples/ordered.v
+  (with-stdout-to ordered.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/ordered.out ordered.out.gen)))
+
+(rule
+ (with-stdin-from ../examples/inductive.v
+  (with-stdout-to inductive.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/inductive.out inductive.out.gen)))
+
 ; Name recovery keeps source term-binder hints out of type annotations.
 (rule
  (with-stdin-from naming.v
@@ -155,7 +190,7 @@
  (alias runtest)
  (deps
   %{project_root}/check-assumptions.sh
-  %{project_root}/theories/Extraction/Assumptions.v
+  %{project_root}/theories/Extraction/assumptions.v
   (alias %{project_root}/theories/CoC/all)
   (alias %{project_root}/theories/BlameFOmega/all)
   (alias %{project_root}/theories/Extraction/all))

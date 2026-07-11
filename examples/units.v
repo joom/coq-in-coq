@@ -9,8 +9,8 @@
    DEMANDS equal dimensions -- so "3 metres + 5 seconds" is a type error,
    while "distance / time : Qty (length / time)" type-checks as a speed.
 
-   The numeric carrier is a placeholder ([Nat], with [add]/[mul] defined by
-   recursion; [qinv] is the identity on the carrier since Nat has no
+   The numeric carrier is a placeholder ([nat], with [add]/[mul] defined by
+   recursion; [qinv] is the identity on the carrier since nat has no
    inverses) -- the point of the example is the dimension discipline in the
    INDICES, which the carrier never sees.
 
@@ -23,39 +23,30 @@
 
 (* Dimension expressions: an inductive syntax with three constructors. *)
 
-Axiom Dim : Set.
-Axiom one : Dim.
-Axiom dmul : Dim -> Dim -> Dim.
-Axiom dinv : Dim -> Dim.
+Inductive Dim : Set :=
+  | one : Dim
+  | dmul : Dim -> Dim -> Dim
+  | dinv : Dim -> Dim.
 
 
 (* The numeric carrier. *)
 
-Axiom Nat : Set.
-Axiom NZ : Nat.
-Axiom NS : Nat -> Nat.
+Inductive nat : Set := | O : nat | S : nat -> nat.
 
-Axiom Nat_rec : forall (P : Nat -> Set),
-  P NZ ->
-  (forall (m : Nat), P m -> P (NS m)) ->
-  forall (n : Nat), P n.
+Definition add (a b : nat) : nat :=
+  nat_rec nat b (fun (r : nat) => S r) a.
 
-Definition add (a b : Nat) : Nat :=
-  Nat_rec (fun (_ : Nat) => Nat) b (fun (_ : Nat) (r : Nat) => NS r) a.
-
-Definition mul (a b : Nat) : Nat :=
-  Nat_rec (fun (_ : Nat) => Nat) NZ (fun (_ : Nat) (r : Nat) => add b r) a.
+Definition mul (a b : nat) : nat :=
+  nat_rec nat O (fun (r : nat) => add b r) a.
 
 
-(* Quantities: an inductive family over dimensions, with constructor and
-   eliminator. *)
+(* Quantities: an inductive family over dimensions. *)
 
-Axiom Qty : Dim -> Set.
-Axiom qty : forall (d : Dim), Nat -> Qty d.
-Axiom qty_rec : forall (d : Dim) (C : Set), (Nat -> C) -> Qty d -> C.
+Inductive Qty : Dim -> Set :=
+  | qty : forall (d : Dim), nat -> Qty d.
 
-Definition unqty (d : Dim) (x : Qty d) : Nat :=
-  qty_rec d Nat (fun (a : Nat) => a) x.
+Definition unqty (d : Dim) (x : Qty d) : nat :=
+  Qty_rec (fun (_ : Dim) => nat) (fun (d0 : Dim) (a : nat) => a) d x.
 
 Definition qmul (d e : Dim) (x : Qty d) (y : Qty e) : Qty (dmul d e) :=
   qty (dmul d e) (mul (unqty d x) (unqty e y)).

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify the mechanization's axiom footprint.
 #
-# Builds theories/Extraction/Assumptions.v (which runs `Print Assumptions` on
+# Builds theories/Extraction/assumptions.v (which runs `Print Assumptions` on
 # every headline theorem) and fails if any axiom other than the expected ones
 # appears.  Expected axioms:
 #   - Eqdep.Eq_rect_eq.eq_rect_eq   (from dependent case analysis)
@@ -29,13 +29,13 @@ trap cleanup EXIT
 if [ "${BLAME_AUDIT_DIRECT:-0}" = 1 ]; then
   theory_root=theories
 else
-  dune build theories/Extraction/Assumptions.vo >"$log" 2>&1 \
+  dune build theories/Extraction/assumptions.vo >"$log" 2>&1 \
     || { cat "$log"; exit 1; }
   theory_root=_build/default/theories
 fi
 
 audit_tmp=$(mktemp -d)
-cp theories/Extraction/Assumptions.v "$audit_tmp/AssumptionsAudit.v"
+cp theories/Extraction/assumptions.v "$audit_tmp/AssumptionsAudit.v"
 rocq compile \
   -Q "$theory_root/CoC" CoC \
   -Q "$theory_root/BlameFOmega" BlameFOmega \

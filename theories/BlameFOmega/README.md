@@ -24,7 +24,7 @@ decisions a reader/reviewer should know; the paper's §3 is the fuller account.
 - **Failure of strong normalization**: `nonnormalization.v` constructs a
   closed, well-typed reduction cycle.
 
-`theories/Extraction/Assumptions.v` audits the headline theorem set, which
+`theories/Extraction/assumptions.v` audits the headline theorem set, which
 depends only on the standard-library `eq_rect_eq`.
 
 ## Design decisions (and their current scope)

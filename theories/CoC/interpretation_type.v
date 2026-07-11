@@ -114,9 +114,8 @@ From CoC Require Import terms.
   Lemma is_can_coerce :
    forall s s' C, is_can s C -> is_can s' (coerce_candidate s' (interp_knd s C)).
   Proof.
-    simpl in |- *; intros.
-    elim (skeleton_eq_dec s s'); intros; auto with coc.
-    case a; trivial.
+    simpl in |- *; intros s s' C Hcan.
+    elim (skeleton_eq_dec s s'); intros Heq; [ case Heq; trivial | auto with coc ].
   Qed.
 
   Hint Resolve is_can_coerce: coc.
@@ -127,7 +126,7 @@ From CoC Require Import terms.
    forall (P : forall s : skeleton, candidate s -> Prop) (s : skeleton) (c : candidate s),
    P s c -> P s (coerce_candidate s (interp_knd s c)).
   Proof.
-    intros.
+    intros P s c Hp.
     unfold coerce_candidate in |- *.
     elim (skeleton_eq_dec s s).
     intro Heq.
@@ -147,7 +146,7 @@ From CoC Require Import terms.
    eq_can s X Y -> eq_can si (coerce_candidate si (interp_knd s X)) (coerce_candidate si (interp_knd s Y)).
   Proof.
     unfold coerce_candidate in |- *.
-    intros.
+    intros s si X Y Heq_can.
     elim (skeleton_eq_dec s si); auto with coc core arith datatypes.
     intro Heq; case Heq; auto with coc core arith datatypes.
   Qed.
@@ -242,8 +241,11 @@ From CoC Require Import terms.
   Proof.
     unfold classes_of_interpretation in |- *.
     simple induction 1; simpl in |- *; intros; auto with coc core arith datatypes.
-    inversion_clear H0; simpl in |- *; intros; elim H2;
-     auto with coc core arith datatypes.
+    match goal with
+    | Hxy : interpretation_kind_eq _ _,
+      IH : map class_of_interpretation_kind _ = map class_of_interpretation_kind _ |- _ =>
+        inversion_clear Hxy; simpl in |- *; intros; elim IH
+    end; auto with coc core arith datatypes.
   Qed.
 
 

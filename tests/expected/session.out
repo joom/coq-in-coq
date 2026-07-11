@@ -1,18 +1,19 @@
-St admitted.
-Ready admitted.
-Sent admitted.
-Done admitted.
-Msg admitted.
-greeting admitted.
-Chan admitted.
-mkchan admitted.
-chan_rec admitted.
+St is defined.
+Ready is defined.
+Sent is defined.
+Done is defined.
+St_rec is defined.
+Msg is defined.
+greeting is defined.
+Msg_rec is defined.
+Chan is defined.
+mkchan is defined.
+Chan_rec is defined.
 open is defined.
 send is defined.
 recv is defined.
 close is defined.
-Inferred type: Msg -> Msg
-Extracted: (fun (x0 : Chan) => (fun (x1 : Msg -> Chan -> Chan) => (fun (x2 : Chan -> Chan) => (fun (x3 : Chan -> Msg) (x4 : Msg) => x3 (x2 (x1 x4 x0))) (fun (x3 : Chan) => chan_rec Done [Msg] (fun (x4 : Msg) => x4) x3)) (fun (x2 : Chan) => mkchan Done (chan_rec Sent [Msg] (fun (x3 : Msg) => x3) x2))) (fun (x1 : Msg) (x2 : Chan) => mkchan Sent x1)) (mkchan Ready greeting)
-Extracted: (fun (x0 : Msg -> Chan -> Chan) => (fun (x1 : Chan -> Chan) => (fun (x2 : Chan -> Msg) (x3 : Msg) (x4 : Chan) => x2 (x1 (x0 x3 x4))) (fun (x2 : Chan) => chan_rec Done [Msg] (fun (x3 : Msg) => x3) x2)) (fun (x1 : Chan) => mkchan Done (chan_rec Sent [Msg] (fun (x2 : Msg) => x2) x1))) (fun (x0 : Msg) (x1 : Chan) => mkchan Sent x0)
-Extracted: (fun (x0 : Msg -> Chan -> Chan) (x1 : Msg) (x2 : Chan) => x0 x1 x2) (fun (x0 : Msg) (x1 : Chan) => mkchan Sent x0)
-Extracted: (fun (x0 : Chan -> Chan) => (fun (x1 : Chan -> Msg) (x2 : Chan) => x1 (x0 x2)) (fun (x1 : Chan) => chan_rec Done [Msg] (fun (x2 : Msg) => x2) x1)) (fun (x0 : Chan) => mkchan Done (chan_rec Sent [Msg] (fun (x1 : Msg) => x1) x0))
+Inferred type: (forall (x0 : Set), x0 -> x0) -> forall (x0 : Set), x0 -> x0
+Extracted: fun (req : forall (x0 : *), x0 -> x0) => (fun (x0 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x0 : *) (x1 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) (x2 : forall (x1 : *), x1 -> x1 -> x1 -> x1) (x3 : forall (x1 : *), ((forall (x2 : *), x2 -> x2 -> x2 -> x2) -> (forall (x2 : *), x2 -> x2) -> x1) -> x1) => x3 [x0] x1) [forall (x0 : *), x0 -> x0] (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) => x2) (fun (x0 : *) (x1 x2 x3 : x0) => x3) x0) ((fun (x0 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) (x0 : *) (x3 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x3 x1 x2) (fun (x0 : *) (x1 x2 x3 : x0) => x3) ((fun (x0 : *) (x1 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) (x2 : forall (x1 : *), x1 -> x1 -> x1 -> x1) (x3 : forall (x1 : *), ((forall (x2 : *), x2 -> x2 -> x2 -> x2) -> (forall (x2 : *), x2 -> x2) -> x1) -> x1) => x3 [x0] x1) [forall (x0 : *), x0 -> x0] (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) => x2) (fun (x0 : *) (x1 x2 x3 : x0) => x2) x0)) ((fun (x0 : forall (x0 : *), x0 -> x0) (x1 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x2 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x3 : forall (x0 : *), x0 -> x0) (x0 : *) (x4 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x4 x2 x3) (fun (x0 : *) (x2 x3 x4 : x0) => x3) x0) req ((fun (x0 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x1 : forall (x0 : *), x0 -> x0) (x0 : *) (x2 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x2 x0 x1) (fun (x0 : *) (x0 x1 x2 : x0) => x0) (fun (x0 : *) (x0 : x0) => x0))))
+Extracted: fun (req : forall (x0 : *), x0 -> x0) (c : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x0 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x0 : *) (x1 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) (x2 : forall (x1 : *), x1 -> x1 -> x1 -> x1) (x3 : forall (x1 : *), ((forall (x2 : *), x2 -> x2 -> x2 -> x2) -> (forall (x2 : *), x2 -> x2) -> x1) -> x1) => x3 [x0] x1) [forall (x0 : *), x0 -> x0] (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) => x2) (fun (x0 : *) (x1 x2 x3 : x0) => x3) x0) ((fun (x0 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) (x0 : *) (x3 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x3 x1 x2) (fun (x0 : *) (x1 x2 x3 : x0) => x3) ((fun (x0 : *) (x1 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) (x2 : forall (x1 : *), x1 -> x1 -> x1 -> x1) (x3 : forall (x1 : *), ((forall (x2 : *), x2 -> x2 -> x2 -> x2) -> (forall (x2 : *), x2 -> x2) -> x1) -> x1) => x3 [x0] x1) [forall (x0 : *), x0 -> x0] (fun (x1 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x2 : forall (x0 : *), x0 -> x0) => x2) (fun (x0 : *) (x1 x2 x3 : x0) => x2) x0)) ((fun (x0 : forall (x0 : *), x0 -> x0) (x1 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x2 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x3 : forall (x0 : *), x0 -> x0) (x0 : *) (x4 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x4 x2 x3) (fun (x0 : *) (x2 x3 x4 : x0) => x3) x0) req c))
+Extracted: fun (req : forall (x0 : *), x0 -> x0) (c : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x0 : forall (x0 : *), x0 -> x0) (x1 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) -> x0) => (fun (x2 : forall (x0 : *), x0 -> x0 -> x0 -> x0) (x3 : forall (x0 : *), x0 -> x0) (x0 : *) (x4 : (forall (x1 : *), x1 -> x1 -> x1 -> x1) -> (forall (x1 : *), x1 -> x1) -> x0) => x4 x2 x3) (fun (x0 : *) (x2 x3 x4 : x0) => x3) x0) req c

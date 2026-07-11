@@ -1,17 +1,17 @@
-Nat admitted.
-NZ admitted.
-NS admitted.
-Nat_rec admitted.
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
 add is defined.
 Elem admitted.
-Tree admitted.
-leaf admitted.
-node admitted.
-tree_rec admitted.
+Tree is defined.
+leaf is defined.
+node is defined.
+Tree_rec is defined.
 example_tree is defined.
-Inferred type: Elem -> Tree (NS (NS NZ))
-Extracted: fun (x : Elem) => node (NS NZ) x (node NZ x leaf leaf) (node NZ x leaf leaf)
+Inferred type: Elem -> forall (x0 : (forall (x0 : Set), x0 -> (x0 -> x0) -> x0) -> Set), x0 (fun (x1 : Set) (x2 : x1) (x3 : x1 -> x1) => x2) -> (forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), Elem -> x0 x2 -> x0 x2 -> x0 (fun (x6 : Set) (x7 : x6) (x8 : x6 -> x6) => x8 (x2 x6 x7 x8))) -> x0 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 (x5 x4))
+Extracted: fun (x : Elem) => (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : Elem) (x2 x3 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) (x0 : *) (x4 : x0) (x5 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x5 x0 x1 (x2 [x0] x4 x5) (x3 [x0] x4 x5)) ((fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x1 : x0) (x2 : x0 -> x0) => x2 (x0 [x0] x1 x2)) (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0)) x ((fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : Elem) (x2 x3 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) (x0 : *) (x4 : x0) (x5 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x5 x0 x1 (x2 [x0] x4 x5) (x3 [x0] x4 x5)) (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0) x (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x0) (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x0)) ((fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : Elem) (x2 x3 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) (x0 : *) (x4 : x0) (x5 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x5 x0 x1 (x2 [x0] x4 x5) (x3 [x0] x4 x5)) (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0) x (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x0) (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x0))
 mirror is defined.
-Extracted: fun (h : Nat) (t : Tree) => tree_rec [Tree] leaf (fun (x0 : Nat) (x1 : Elem) (x2 x3 : Tree) => node x0 x1 x3 x2) h t
+Extracted: fun (h : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (t : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) => (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) (x2 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) (x3 : forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> Elem -> x1 -> x1 -> x1) -> x1) => x3 [x0] x0 x1) [forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0] (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x0) (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : Elem) (x2 x3 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) => (fun (x4 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x5 : Elem) (x6 x7 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) (x0 : *) (x8 : x0) (x9 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) => x9 x4 x5 (x6 [x0] x8 x9) (x7 [x0] x8 x9)) x0 x1 x3 x2) h t
 count is defined.
-Extracted: (fun (x0 : Nat -> Nat -> Nat) (x1 : Nat) (x2 : Tree) => tree_rec [Nat] NZ (fun (x3 : Nat) (x4 : Elem) (x5 x6 : Nat) => NS (x0 x5 x6)) x1 x2) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: fun (h : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (t : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) -> x0) => (fun (x0 : *) (x0 : x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> Elem -> x0 -> x0 -> x0) (x2 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) (x3 : forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> Elem -> x1 -> x1 -> x1) -> x1) => x3 [x0] x0 x1) [forall (x0 : *), x0 -> (x0 -> x0) -> x0] (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0) (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : Elem) (x2 x3 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x4 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x5 : x0) (x6 : x0 -> x0) => x6 (x4 [x0] x5 x6)) ((fun (x4 x5 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x0 : *) (x6 : x0) (x7 : x0 -> x0) (x8 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) => x8 [x0] x6 x7) [forall (x0 : *), x0 -> (x0 -> x0) -> x0] x5 (fun (x6 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x7 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x8 : x0) (x9 : x0 -> x0) => x9 (x7 [x0] x8 x9)) x6) x4) x2 x3)) h t

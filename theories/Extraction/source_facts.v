@@ -73,6 +73,7 @@ Qed.
     machinery: on the normal form the syntactic [classifier] is exactly right
     ([classifier_iff_is_large_nf]). *)
 
+(** The normal form of a strongly-normalizing term, computed via [compute_normal_form]. *)
 Definition nf (t: terms.term) (sn: strongly_normalizing t) : terms.term :=
   let (u, _, _) := compute_normal_form t sn in u.
 
@@ -143,6 +144,7 @@ Proof.
   - apply nf_normal.
 Qed.
 
+(** Multi-step reduction is preserved by substitution on the right. *)
 Lemma reduces_subst_right : forall t t' a k,
   reduces t t' -> reduces (subst_rec a t k) (subst_rec a t' k).
 Proof.
@@ -337,6 +339,7 @@ Definition has_type_t_well_formed_t := has_type_well_formed.
     reduction-stable [is_large_dec]; binding types/kinds go through the
     reduction-stable [extract_typ]/[extract_kind]. *)
 
+(** Dropping the head binder of a well-formed context leaves it well-formed. *)
 Lemma wf_tail : forall T e, well_formed (T :: e) -> well_formed e.
 Proof.
   intros T e H. inversion_clear H.

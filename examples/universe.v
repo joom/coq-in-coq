@@ -15,10 +15,10 @@
    not claim that this fallback is semantically maximal. *)
 
 
-Axiom U : Set.
-Axiom nat_c  : U.
-Axiom bool_c : U.
-Axiom arr_c  : U -> U -> U.
+Inductive U : Set :=
+  | nat_c  : U
+  | bool_c : U
+  | arr_c  : U -> U -> U.
 
 (* decode a code to a type: a value-indexed family of types.  [El] would be
    defined by large elimination over [U] (computing a type from data), which
@@ -37,11 +37,13 @@ Extract fun (a b : U) => arr_c (arr_c a b) a.
 (* a dynamically-typed value: a code together with a value it decodes to.
    This is [Dynamic = Sigma (c : U). El c] -- a self-describing datum. *)
 
-(* The inductive kit of the package type: constructor [box] pairs a code
-   with a value it decodes to; projection [tag] recovers the code. *)
-Axiom Dynamic : Set.
-Axiom box : forall (c : U), El c -> Dynamic.
-Axiom tag : Dynamic -> U.
+(* The package type: constructor [box] pairs a code with a value it decodes
+   to; projection [tag] recovers the code, derived from the recursor. *)
+Inductive Dynamic : Set :=
+  | box : forall (c : U), El c -> Dynamic.
+
+Definition tag (d : Dynamic) : U :=
+  Dynamic_rec U (fun (c : U) (_ : El c) => c) d.
 
 (* packing a value with its type tag.  El c is a term-indexed type, so the
    index c is erased and box becomes an ordinary two-argument constructor. *)

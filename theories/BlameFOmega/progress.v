@@ -18,6 +18,7 @@ From BlameFOmega Require Import syntax infrastructure semantics
 Definition ty_conv_to (g : context) (A C : typ) : Prop :=
   A = C \/ (defeq g A C KStar /\ wf_typ g C KStar).
 
+(** [typing_conv] packaged via [ty_conv_to]: retype [e] at [C] given it types at [A]. *)
 Lemma apply_ty_conv_to : forall g e A C,
   typing g e A -> ty_conv_to g A C -> typing g e C.
 Proof.
@@ -26,9 +27,11 @@ Proof.
   - eapply typing_conv; eauto.
 Qed.
 
+(** [ty_conv_to] is reflexive. *)
 Lemma ty_conv_to_refl : forall g A, ty_conv_to g A A.
 Proof. left. reflexivity. Qed.
 
+(** [ty_conv_to] composes with an extra [defeq] step, i.e. is transitive. *)
 Lemma ty_conv_to_conv : forall g A B C,
   ty_conv_to g A B -> defeq g B C KStar -> wf_typ g C KStar -> ty_conv_to g A C.
 Proof.
@@ -38,6 +41,7 @@ Qed.
 
 (** ** Inversion lemmas with convertibility *)
 
+(** Inversion for [abs], through [typing_conv]. *)
 Lemma typing_abs_inv2 : forall g t e C,
   typing g (abs t e) C ->
   exists B, ty_conv_to g (arrow t B) C /\ typing (has_type t :: g) e B
@@ -50,6 +54,7 @@ Proof.
     exists B0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
+(** Inversion for [tabs], through [typing_conv]. *)
 Lemma typing_tabs_inv2 : forall g K e C,
   typing g (tabs K e) C ->
   exists B, ty_conv_to g (all K B) C /\ typing (has_kind K :: g) e B.
@@ -61,6 +66,7 @@ Proof.
     exists B0. split; [eapply ty_conv_to_conv; eauto | assumption].
 Qed.
 
+(** Inversion for [app], through [typing_conv]. *)
 Lemma typing_app_inv2 : forall g e1 e2 C,
   typing g (app e1 e2) C ->
   exists A B, ty_conv_to g B C /\ typing g e1 (arrow A B) /\ typing g e2 A.
@@ -72,6 +78,7 @@ Proof.
     exists A0, B0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
+(** Inversion for [tapp], through [typing_conv]. *)
 Lemma typing_tapp_inv2 : forall g e s C,
   typing g (tapp e s) C ->
   exists K t, ty_conv_to g (tsubst s 0 t) C /\ typing g e (all K t)
@@ -84,6 +91,7 @@ Proof.
     exists K0, t0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
+(** Inversion for [cast], through [typing_conv]. *)
 Lemma typing_cast_inv2 : forall g e A B p C,
   typing g (cast e A B p) C ->
   ty_conv_to g B C /\ typing g e A /\ compat A B
@@ -98,6 +106,7 @@ Proof.
       [eapply ty_conv_to_conv; eauto | assumption | assumption | assumption | assumption].
 Qed.
 
+(** Inversion for [gnd], through [typing_conv]. *)
 Lemma typing_gnd_inv2 : forall g e G C,
   typing g (gnd e G) C ->
   ty_conv_to g dyn C /\ typing g e G /\ ground G /\ wf_typ g G KStar.
@@ -111,6 +120,7 @@ Proof.
       [eapply ty_conv_to_conv; eauto | assumption | assumption | assumption].
 Qed.
 
+(** Inversion for [nu], through [typing_conv]. *)
 Lemma typing_nu_inv2 : forall g K A e C,
   typing g (nu K A e) C ->
   exists B, ty_conv_to g (tsubst A 0 B) C /\
@@ -124,6 +134,7 @@ Proof.
     exists B0. split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
+(** Inversion for [is_gnd], through [typing_conv]. *)
 Lemma typing_is_gnd_inv2 : forall g e G C,
   typing g (is_gnd e G) C ->
   ty_conv_to g (arrow dyn (arrow dyn dyn)) C /\
@@ -272,6 +283,7 @@ Proof.
     + exfalso; apply Hnd; reflexivity.
 Qed.
 
+(** Deciding [compat A dyn], unwrapping the fuel from [compat_dyn_r_dec_aux]. *)
 Lemma compat_dyn_r_dec: forall A, {compat A dyn} + {~ compat A dyn}.
 Proof. intro A. apply (compat_dyn_r_dec_aux (ty_size A)); lia. Qed.
 
@@ -369,9 +381,11 @@ Qed.
 Definition no_term_bindings (g : context) : Prop :=
   forall b, In b g -> exists K, b = has_kind K \/ exists A, b = has_def K A.
 
+(** The empty context has no term bindings. *)
 Lemma no_term_nil : no_term_bindings nil.
 Proof. intros b H. inversion H. Qed.
 
+(** Prepending a [has_kind] binding preserves [no_term_bindings]. *)
 Lemma no_term_kind : forall K g,
   no_term_bindings g -> no_term_bindings (has_kind K :: g).
 Proof.
@@ -380,6 +394,7 @@ Proof.
   - apply Hg. exact Hin.
 Qed.
 
+(** Prepending a [has_def] binding preserves [no_term_bindings]. *)
 Lemma no_term_def : forall K A g,
   no_term_bindings g -> no_term_bindings (has_def K A :: g).
 Proof.
@@ -388,6 +403,7 @@ Proof.
   - apply Hg. exact Hin.
 Qed.
 
+(** Generalized progress: in a context with no term bindings, a well-typed term is a value, steps, or is blame. *)
 Lemma progress_gen : forall g e A,
   typing g e A -> no_term_bindings g ->
   value e \/ (exists e', step e e') \/ (exists p, e = blame p).
@@ -515,6 +531,7 @@ Proof.
     auto.
 Qed.
 
+(** Progress for closed terms: specializes [progress_gen] to the empty context. *)
 Theorem progress : forall e A,
   typing nil e A ->
   value e \/ (exists e', step e e') \/ (exists p, e = blame p).

@@ -1,53 +1,35 @@
-(* Height-indexed balanced trees in the Calculus of Constructions.
+(* Height-indexed balanced trees via the Inductive command.
 
-   [Tree h] is a binary search tree whose type records its height [h].  The
-   [node] constructor only accepts two subtrees of the SAME height, so the
-   balancing invariant is enforced by the type: an unbalanced tree is
-   ill-typed and cannot be built.  (This is the AVL/Braun-style "make illegal
-   states unrepresentable" idea in its purest form.)
+   [Tree h] is a binary tree whose type records its height [h].  [node] only
+   accepts two subtrees of the SAME height, so the balancing invariant is
+   enforced by the type: an unbalanced tree is ill-typed.
 
-   Extraction erases the height: [Tree h] becomes the plain type [Tree], and
-   constructors/operations have unindexed target signatures.  Axioms declare
-   only the inductive kit ([Nat] and [Tree] with their eliminators); [add]
-   and the tree operations are ordinary [Definition]s.  [count] shows the
-   dual direction -- recovering the erased index as an honest run-time [Nat]
-   via the eliminator. *)
+   [nat] and [Tree] are declared with [Inductive] (indexed Boehm-Berarducci),
+   so their recursors are generated and the data computes.  [Elem] is an
+   abstract element type, so it stays an [Axiom].  Extraction erases the
+   height: [Tree h] becomes the plain type [Tree]. *)
 
 
-Axiom Nat : Set.
-Axiom NZ : Nat.
-Axiom NS : Nat -> Nat.
+Inductive nat : Set := | O : nat | S : nat -> nat.
 
-Axiom Nat_rec : forall (P : Nat -> Set),
-  P NZ ->
-  (forall (m : Nat), P m -> P (NS m)) ->
-  forall (n : Nat), P n.
-
-Definition add (a b : Nat) : Nat :=
-  Nat_rec (fun (_ : Nat) => Nat) b (fun (_ : Nat) (r : Nat) => NS r) a.
+Definition add (a b : nat) : nat :=
+  nat_rec nat b (fun (r : nat) => S r) a.
 
 Axiom Elem : Set.
 
 (* Perfectly balanced trees indexed by height. *)
-Axiom Tree : Nat -> Set.
-Axiom leaf : Tree NZ.
-Axiom node : forall (h : Nat), Elem -> Tree h -> Tree h -> Tree (NS h).
-
-(* Dependent eliminator (fold) over height-indexed trees. *)
-Axiom tree_rec :
-  forall (P : Nat -> Set),
-  P NZ ->
-  (forall (h : Nat), Elem -> P h -> P h -> P (NS h)) ->
-  forall (h : Nat), Tree h -> P h.
+Inductive Tree : nat -> Set :=
+  | leaf : Tree O
+  | node : forall (h : nat), Elem -> Tree h -> Tree h -> Tree (S h).
 
 
 (* Build a balanced tree of height 2 from a single element.  Only type-checks
    because both subtrees at each level have matching heights. *)
 
-Definition example_tree (x : Elem) : Tree (NS (NS NZ)) :=
-  node (NS NZ) x
-    (node NZ x leaf leaf)
-    (node NZ x leaf leaf).
+Definition example_tree (x : Elem) : Tree (S (S O)) :=
+  node (S O) x
+    (node O x leaf leaf)
+    (node O x leaf leaf).
 
 Check example_tree.
 
@@ -56,22 +38,22 @@ Extract example_tree.
 
 (* mirror: swap left and right subtrees, preserving the height index. *)
 
-Definition mirror (h : Nat) (t : Tree h) : Tree h :=
-  tree_rec (fun (k : Nat) => Tree k)
+Definition mirror (h : nat) (t : Tree h) : Tree h :=
+  Tree_rec (fun (k : nat) => Tree k)
     leaf
-    (fun (k : Nat) (x : Elem) (l r : Tree k) => node k x r l)
+    (fun (k : nat) (x : Elem) (l r : Tree k) => node k x r l)
     h t.
 
 Extract mirror.
 
 
-(* count the nodes: fold into a plain Nat, ignoring the height motive.
-   The result type does not mention h, so it extracts cleanly to Tree -> Nat. *)
+(* count the nodes: fold into a plain nat, ignoring the height motive.
+   The result type does not mention h, so it extracts cleanly to Tree -> nat. *)
 
-Definition count (h : Nat) (t : Tree h) : Nat :=
-  tree_rec (fun (_ : Nat) => Nat)
-    NZ
-    (fun (k : Nat) (x : Elem) (cl cr : Nat) => NS (add cl cr))
+Definition count (h : nat) (t : Tree h) : nat :=
+  Tree_rec (fun (_ : nat) => nat)
+    O
+    (fun (k : nat) (x : Elem) (cl cr : nat) => S (add cl cr))
     h t.
 
 Extract count.

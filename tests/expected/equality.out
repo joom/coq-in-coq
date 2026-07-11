@@ -1,8 +1,12 @@
-Eq admitted.
-refl admitted.
-eq_rect admitted.
-Inferred type: forall (A : Set) (x y : A), Eq A x y -> Eq A y x
-Extracted: fun (A : *) (x y : A) (h : Eq A) => eq_rect [A] x [Eq A] (refl [A] x) y h
-Extracted: fun (A : *) (x y z : A) (hxy hyz : Eq A) => eq_rect [A] y [Eq A] hxy z hyz
-Extracted: fun (A B : *) (f : A -> B) (x y : A) (h : Eq A) => eq_rect [A] x [Eq B] (refl [B] (f x)) y h
-Extracted: fun (A P : *) (x y : A) (h : Eq A) (p : P) => eq_rect [A] x [P] p y h
+eq is defined.
+eq_refl is defined.
+eq_rec is defined.
+transport is defined.
+Inferred type: forall (A : Set) (P : A -> Prop) (x y : A), (fun (x0 : Set) (x1 x2 : x0) => forall (x3 : x0 -> Prop), x3 x1 -> x3 x2) A x y -> P x -> P y
+Extracted: fun (A P : *) (x y : A) (h : forall (x0 : *), x0 -> x0) (p : P) => (fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) (x2 : x0) (x3 : forall (x2 : *), x2 -> x2) => x3 [x1] x1) [A] x [P] p y h
+eq_sym is defined.
+Extracted: fun (A : *) (x y : A) (h : forall (x0 : *), x0 -> x0) => (fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) (x2 : x0) (x3 : forall (x2 : *), x2 -> x2) => x3 [x1] x1) [A] x [forall (x0 : *), x0 -> x0] ((fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) => x1) [A] x) y h
+eq_trans is defined.
+Extracted: fun (A : *) (x y z : A) (hxy hyz : forall (x0 : *), x0 -> x0) => (fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) (x2 : x0) (x3 : forall (x2 : *), x2 -> x2) => x3 [x1] x1) [A] y [forall (x0 : *), x0 -> x0] hxy z hyz
+f_equal is defined.
+Extracted: fun (A B : *) (f : A -> B) (x y : A) (h : forall (x0 : *), x0 -> x0) => (fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) (x2 : x0) (x3 : forall (x2 : *), x2 -> x2) => x3 [x1] x1) [A] x [forall (x0 : *), x0 -> x0] ((fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) => x1) [B] (f x)) y h

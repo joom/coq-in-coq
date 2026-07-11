@@ -31,10 +31,10 @@ Definition is_lambda (t : term) :=
 Lemma normal_normal_abs :
  forall T M : term, normal T -> normal M -> normal (lam T M).
 Proof.
-  intros; unfold normal, not in |- *; intros.
-  inversion_clear H1.
-  elim H with M'; auto with coc.
-  elim H0 with M'; auto with coc.
+  intros T M HT HM; unfold normal, not in |- *; intros N Hred.
+  inversion_clear Hred.
+  elim HT with M'; auto with coc.
+  elim HM with M'; auto with coc.
 Qed.
 
 (** Normal head and argument with non-lam head yield a normal app. *)
@@ -55,10 +55,10 @@ Qed.
 Lemma normal_normal_prod :
  forall T U : term, normal T -> normal U -> normal (prod T U).
 Proof.
-  intros; unfold normal, not in |- *; intros.
-  inversion_clear H1.
-  elim H with N1; auto with coc.
-  elim H0 with N2; auto with coc.
+  intros T U HT HU; unfold normal, not in |- *; intros N Hred.
+  inversion_clear Hred.
+  elim HT with N1; auto with coc.
+  elim HU with N2; auto with coc.
 Qed.
 
 Hint Resolve normal_normal_abs normal_normal_app normal_normal_prod: ecoc.

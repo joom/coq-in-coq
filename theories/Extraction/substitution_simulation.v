@@ -23,6 +23,7 @@ From Extraction Require Import simulation_facts.
 From Extraction Require Import derivation_independence.
 
 
+(** Target term-substitution pushes through a [coerce] (type annotations are unaffected). *)
 Lemma subst_coerce : forall p k s A B,
   infrastructure.subst p k (coerce s A B) =
   coerce (infrastructure.subst p k s) A B.
@@ -535,13 +536,7 @@ Proof.
 Qed.
 
 
-(** [extract_typ_L] is invariant under weakening (inserting a fresh binder and
-    correspondingly lifting the argument), up to a single type-level [tlift] at
-    the point where the inserted binder introduces a new target type
-    quantifier.  This is the extraction-weakening fact needed to relate
-    [extract_lookup_type] (context lookup) to [extract_typ] on an
-    [item_lift]-derived type, and to weaken a whole extracted term by one
-    binder. *)
+(** [type_index] is monotone in its index argument. *)
 Lemma type_index_mono : forall e p n, p <= n -> type_index e p <= type_index e n.
 Proof.
   induction e as [| T e' IH]; intros p n Hpn; [simpl; lia |].
@@ -552,9 +547,11 @@ Proof.
     + apply IH. lia.
 Qed.
 
+(** [type_index] at index 0 is 0 in any context. *)
 Lemma type_index_zero : forall e, type_index e 0 = 0.
 Proof. intros [| ? ?]; reflexivity. Qed.
 
+(** [type_index] steps past index [n] by one exactly when that binder is a type binding. *)
 Lemma type_index_succ : forall e n,
   type_index e (S n) = if type_binding e n then S (type_index e n) else type_index e n.
 Proof.
@@ -570,6 +567,7 @@ Proof.
       destruct (is_large_dec e' T); destruct (type_binding e' n'); reflexivity.
 Qed.
 
+(** A type binding at [n] strictly below [p] gives a strictly smaller [type_index]. *)
 Lemma type_index_gt_of_type_binding : forall e n p,
   n < p -> type_binding e n = true -> type_index e p > type_index e n.
 Proof.
@@ -974,6 +972,7 @@ Proof.
                (@sub_succ v0 V0 e f n X1 Hse) HX2 wfe' wff' Hskip HnX2 Hte2 snX2).
 Qed.
 
+(** [type_expr] classification is preserved by a small (non-large) substitution. *)
 Lemma type_expr_subst : forall X,
   forall g v0 V0 (Hv0: has_type g v0 V0) (wfg: well_formed g) (Hsm: is_large g V0 -> False),
   forall n e f B, substitute_in_environment v0 V0 n e f ->
@@ -1126,6 +1125,7 @@ Proof.
                (@sub_succ v0 V0 e f n X1 Hse) HX2 wfe' wff' Hskip HnX2 Hcw2 snX2).
 Qed.
 
+(** [extract_typ_L] commutes with a small (non-large) source substitution. *)
 Lemma extract_typ_L_small_subst : forall W,
   forall g v0 V0 (Hv0: has_type g v0 V0) (wfg: well_formed g) (Hsm: is_large g V0 -> False),
   forall n e f B, substitute_in_environment v0 V0 n e f ->
@@ -1351,6 +1351,7 @@ Qed.
 
 (** ** Congruence closure of [ty_equiv] under the target type constructors. *)
 
+(** [ty_equiv] congruence on the domain of an arrow. *)
 Lemma ty_equiv_arrow_l_cong : forall A A' B, infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv (syntax.arrow A B) (syntax.arrow A' B).
 Proof.
@@ -1361,6 +1362,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence on the codomain of an arrow. *)
 Lemma ty_equiv_arrow_r_cong : forall A B B', infrastructure.ty_equiv B B' ->
   infrastructure.ty_equiv (syntax.arrow A B) (syntax.arrow A B').
 Proof.
@@ -1371,6 +1373,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence on both sides of an arrow at once. *)
 Lemma ty_equiv_arrow_cong : forall A A' B B', infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv B B' ->
   infrastructure.ty_equiv (syntax.arrow A B) (syntax.arrow A' B').
@@ -1380,6 +1383,7 @@ Proof.
   apply ty_equiv_arrow_r_cong. exact HB.
 Qed.
 
+(** [ty_equiv] congruence under a universal quantifier. *)
 Lemma ty_equiv_all_cong : forall K A A', infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv (syntax.all K A) (syntax.all K A').
 Proof.
@@ -1390,6 +1394,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence under a type abstraction. *)
 Lemma ty_equiv_tyabs_cong : forall K A A', infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv (syntax.tyabs K A) (syntax.tyabs K A').
 Proof.
@@ -1400,6 +1405,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence on the function side of a type application. *)
 Lemma ty_equiv_tyapp_l_cong : forall F F' A, infrastructure.ty_equiv F F' ->
   infrastructure.ty_equiv (syntax.tyapp F A) (syntax.tyapp F' A).
 Proof.
@@ -1410,6 +1416,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence on the argument side of a type application. *)
 Lemma ty_equiv_tyapp_r_cong : forall F A A', infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv (syntax.tyapp F A) (syntax.tyapp F A').
 Proof.
@@ -1420,6 +1427,7 @@ Proof.
   - eapply rst_trans; eassumption.
 Qed.
 
+(** [ty_equiv] congruence on both sides of a type application at once. *)
 Lemma ty_equiv_tyapp_cong : forall F F' A A', infrastructure.ty_equiv F F' ->
   infrastructure.ty_equiv A A' ->
   infrastructure.ty_equiv (syntax.tyapp F A) (syntax.tyapp F' A').
@@ -1462,6 +1470,7 @@ Proof.
   apply reduces_subst_right. apply nf_reduces.
 Qed.
 
+(** The extraction of a type before/after a small substitution are always [compat]. *)
 Lemma extract_typ_coerce_compat_small :
   forall e V0 v0 (Hv0 : has_type e v0 V0) (Hsmall : is_large e V0 -> False)
   Ur s (HUr : has_type (V0 :: e) Ur (sort_term s)) snUr snSub,
@@ -1475,6 +1484,13 @@ Proof.
   apply infrastructure.compat_refl.
 Qed.
 
+(** [extract_typ_L] is invariant under weakening (inserting a fresh binder and
+    correspondingly lifting the argument), up to a single type-level [tlift] at
+    the point where the inserted binder introduces a new target type
+    quantifier.  This is the extraction-weakening fact needed to relate
+    [extract_lookup_type] (context lookup) to [extract_typ] on an
+    [item_lift]-derived type, and to weaken a whole extracted term by one
+    binder. *)
 Lemma extract_typ_L_weaken : forall X, forall A p ctx f B, insert_in_environment A p ctx f ->
   has_type ctx X B -> well_formed f -> normal X ->
   extract_typ_L f (lift_rec 1 X p) =

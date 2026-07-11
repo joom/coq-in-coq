@@ -634,8 +634,10 @@ Qed.
     [deq_def] edge can attach to are always literal [tvar]s, never
     arbitrary [tyapp]s). *)
 
+(** A determinate outermost type-constructor tag, or none for [tyapp]. *)
 Inductive head_tag : Set := HTag_dyn | HTag_arrow | HTag_all | HTag_tyabs | HTag_tvar (n : nat).
 
+(** The head tag of a type, or [None] when the head is an (unevaluated) [tyapp]. *)
 Definition head_tag_of (A : typ) : option head_tag :=
   match A with
   | dyn => Some HTag_dyn
@@ -646,6 +648,7 @@ Definition head_tag_of (A : typ) : option head_tag :=
   | tyapp _ _ => None
   end.
 
+(** [tyabs] and [tvar] are never [ty_equiv]. *)
 Lemma ty_equiv_tyabs_tvar : forall K A n, ~ ty_equiv (tyabs K A) (tvar n).
 Proof.
   intros K A n H. destruct (ty_equiv_church_rosser _ _ H) as [C [H1 H2]].

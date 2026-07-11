@@ -1,11 +1,16 @@
-Nat admitted.
-Vec admitted.
-Sig admitted.
-pair admitted.
-fst admitted.
-snd admitted.
-Inferred type: forall (A : Set) (B : A -> Set) (x : A), B x -> Sig A B
-Extracted: fun (A B : *) (x : A) (y : B) => pair [A] [B] x y
-Extracted: fun (A B : *) (p : Sig A B) => snd [A] [B] p
-Extracted: fun (A B : *) (p : Sig A B) => pair [A] [B] (fst [A] [B] p) (snd [A] [B] p)
-Extracted: fun (A : *) (n : Nat) (v : Vec A) => pair [Nat] [Vec A] n v
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
+t is defined.
+nil is defined.
+cons is defined.
+t_rec is defined.
+sigT is defined.
+existT is defined.
+sigT_rec is defined.
+Extracted: fun (A B : *) (x : A) (y : B) => (fun (x0 x1 : *) (x0 : x0) (x1 : x1) (x2 : *) (x2 : x0 -> x1 -> x2) => x2 x0 x1) [A] [B] x y
+projT1 is defined.
+Inferred type: forall (A : Set) (B : A -> Set), (fun (x0 : Set) (x1 : x0 -> Set) => forall (x2 : Set), (forall (x3 : x0), x1 x3 -> x2) -> x2) A B -> A
+Extracted: fun (A B : *) (p : forall (x0 : *), (A -> B -> x0) -> x0) => (fun (x0 x1 x2 : *) (x0 : x0 -> x1 -> x2) (x1 : forall (x3 : *), (x0 -> x1 -> x3) -> x3) => x1 [x2] x0) [A] [B] [A] (fun (x0 : A) (x1 : B) => x0) p
+Extracted: fun (A : *) (n : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (v : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x0) (x1 : x1) (x2 : *) (x2 : x0 -> x1 -> x2) => x2 x0 x1) [forall (x0 : *), x0 -> (x0 -> x0) -> x0] [forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0] n v

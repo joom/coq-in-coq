@@ -1,0 +1,21 @@
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
+le is defined.
+le_n is defined.
+le_S is defined.
+le_rec is defined.
+le_trans is defined.
+Inferred type: forall (a b c : forall (x0 : Set), x0 -> (x0 -> x0) -> x0), (fun (x0 : forall (x0 : Set), x0 -> (x0 -> x0) -> x0) (x1 : forall (x1 : Set), x1 -> (x1 -> x1) -> x1) => forall (x2 : (forall (x2 : Set), x2 -> (x2 -> x2) -> x2) -> Prop), x2 x0 -> (forall (x4 : forall (x4 : Set), x4 -> (x4 -> x4) -> x4), x2 x4 -> x2 ((fun (x6 : forall (x6 : Set), x6 -> (x6 -> x6) -> x6) (x7 : Set) (x8 : x7) (x9 : x7 -> x7) => x9 (x6 x7 x8 x9)) x4)) -> x2 x1) a b -> (fun (x0 : forall (x0 : Set), x0 -> (x0 -> x0) -> x0) (x1 : forall (x1 : Set), x1 -> (x1 -> x1) -> x1) => forall (x2 : (forall (x2 : Set), x2 -> (x2 -> x2) -> x2) -> Prop), x2 x0 -> (forall (x4 : forall (x4 : Set), x4 -> (x4 -> x4) -> x4), x2 x4 -> x2 ((fun (x6 : forall (x6 : Set), x6 -> (x6 -> x6) -> x6) (x7 : Set) (x8 : x7) (x9 : x7 -> x7) => x9 (x6 x7 x8 x9)) x4)) -> x2 x1) b c -> forall (x0 : (forall (x0 : Set), x0 -> (x0 -> x0) -> x0) -> Prop), x0 a -> (forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), x0 x2 -> x0 (fun (x4 : Set) (x5 : x4) (x6 : x4 -> x4) => x6 (x2 x4 x5 x6))) -> x0 c
+OList is defined.
+onil is defined.
+ocons is defined.
+OList_rec is defined.
+olen is defined.
+Inferred type: forall (b : forall (x0 : Set), x0 -> (x0 -> x0) -> x0), (fun (x0 : forall (x0 : Set), x0 -> (x0 -> x0) -> x0) => forall (x1 : (forall (x1 : Set), x1 -> (x1 -> x1) -> x1) -> Set), (forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), x1 x2) -> (forall (x3 : forall (x3 : Set), x3 -> (x3 -> x3) -> x3) (x4 : forall (x4 : Set), x4 -> (x4 -> x4) -> x4), (fun (x5 : forall (x5 : Set), x5 -> (x5 -> x5) -> x5) (x6 : forall (x6 : Set), x6 -> (x6 -> x6) -> x6) => forall (x7 : (forall (x7 : Set), x7 -> (x7 -> x7) -> x7) -> Prop), x7 x5 -> (forall (x9 : forall (x9 : Set), x9 -> (x9 -> x9) -> x9), x7 x9 -> x7 ((fun (x11 : forall (x11 : Set), x11 -> (x11 -> x11) -> x11) (x12 : Set) (x13 : x12) (x14 : x12 -> x12) => x14 (x11 x12 x13 x14)) x9)) -> x7 x6) x3 x4 -> x1 x4 -> x1 x3) -> x1 x0) b -> forall (x0 : Set), x0 -> (x0 -> x0) -> x0
+Extracted: fun (b : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (xs : forall (x0 : *), ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> x0) -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> (forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x1 -> x1) -> x1) -> x0 -> x0) -> x0) => (fun (x0 : *) (x0 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> x0) (x1 : (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> (forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> (forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x1 -> x1) -> x1) -> x0 -> x0) (x2 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) (x3 : forall (x1 : *), ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x1) -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> (forall (x2 : *), x2 -> ((forall (x3 : *), x3 -> (x3 -> x3) -> x3) -> x2 -> x2) -> x2) -> x1 -> x1) -> x1) => x3 [x0] x0 x1) [forall (x0 : *), x0 -> (x0 -> x0) -> x0] (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x1 : x0) (x2 : x0 -> x0) => x1) (fun (x0 x1 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x2 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> x0 -> x0) -> x0) (x3 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x4 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x5 : x0) (x6 : x0 -> x0) => x6 (x4 [x0] x5 x6)) x3) b xs
+oneTwo is defined.
+Correct.
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 x1)
+Extracted: fun (b : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => gnd(fun (x1 : Dyn) => x1 : Dyn -> Dyn)) b

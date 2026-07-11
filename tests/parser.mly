@@ -31,22 +31,31 @@ let fold_prod binders ty =
 %token COLON COMMA DOT ARROW DARROW ASSIGN
 %token FUN FORALL
 %token LET IN UNDERSCORE
-%token QUIT AXIOM INFER CHECK DELETE LIST HELP EXTRACT DEFINITION
+%token QUIT AXIOM INFER CHECK PRINT AXIOMS HELP EXTRACT DEFINITION
+%token COMPUTE INDUCTIVE PIPE
 %token EOF
 
 %start file toplevel
 %type <[`Coc of Core.ast | `Extract of Core.expr
-       | `Def of Pstring.t * Core.expr option * Core.expr] list> file
+       | `Def of Pstring.t * Core.expr option * Core.expr
+       | `Compute of Core.expr
+       | `Inductive of Pstring.t * (Pstring.t * Core.expr) list
+                       * Core.expr * (Pstring.t * Core.expr) list] list> file
 %type <[`Coc of Core.ast | `Extract of Core.expr
-       | `Def of Pstring.t * Core.expr option * Core.expr] option> toplevel
+       | `Def of Pstring.t * Core.expr option * Core.expr
+       | `Compute of Core.expr
+       | `Inductive of Pstring.t * (Pstring.t * Core.expr) list
+                       * Core.expr * (Pstring.t * Core.expr) list] option> toplevel
 
 %%
 
+(* Batch mode: parse every command in the input up to EOF. *)
 file:
   | EOF                         { [] }
   | command DOT file            { $1 :: $3 }
   ;
 
+(* Interactive mode: parse a single command, or [None] at EOF. *)
 toplevel:
   | EOF                         { None }
   | command DOT                 { Some $1 }
@@ -62,11 +71,33 @@ command:
     { `Def (ps $2, Some (fold_prod $3 $5), fold_abs $3 $7) }
   | DEFINITION IDENT def_binders ASSIGN expr
     { `Def (ps $2, None, fold_abs $3 $5) }
-  | DELETE                      { `Coc Core.Ast_delete }
-  | LIST                        { `Coc Core.Ast_list }
+  | PRINT AXIOMS                { `Coc Core.Ast_list }
   | HELP                        { `Coc Core.Ast_help }
   | QUIT                        { `Coc Core.Ast_quit }
   | EXTRACT expr                { `Extract $2 }
+  | COMPUTE expr                { `Compute $2 }
+  | INDUCTIVE IDENT def_binders COLON expr ASSIGN constructors
+    { `Inductive (ps $2, $3, $5, $7) }
+  ;
+
+/* Constructor list, with an optional leading bar:
+   [| C1 : T1 | C2 : T2 | ...]. */
+constructors:
+  | opt_bar constructor_list    { $2 }
+  ;
+
+opt_bar:
+  | /* empty */                 { () }
+  | PIPE                        { () }
+  ;
+
+constructor_list:
+  | constructor                      { [$1] }
+  | constructor PIPE constructor_list { $1 :: $3 }
+  ;
+
+constructor:
+  | IDENT COLON expr            { (ps $1, $3) }
   ;
 
 /* Zero or more Definition binder groups: (x y : A) (z : B) ... */

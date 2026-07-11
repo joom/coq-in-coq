@@ -14,14 +14,15 @@
 
 (* --- Functors ---------------------------------------------------------- *)
 
-Axiom Functor : (Set -> Set) -> Set.
+(* A typeclass is a single-constructor record, i.e. a one-clause inductive; its
+   field projection [fmap] is derived from the generated recursor. *)
+Inductive Functor (F : Set -> Set) : Set :=
+  | mkFunctor : (forall (A B : Set), (A -> B) -> F A -> F B) -> Functor F.
 
-Axiom fmap :
-  forall (F : Set -> Set),
-  Functor F ->
-  forall (A : Set),
-  forall (B : Set),
-  (A -> B) -> F A -> F B.
+Definition fmap (F : Set -> Set) (FF : Functor F)
+  (A B : Set) (f : A -> B) (x : F A) : F B :=
+  Functor_rec F (forall (A B : Set), (A -> B) -> F A -> F B)
+    (fun (m : forall (A B : Set), (A -> B) -> F A -> F B) => m) FF A B f x.
 
 (* Compose two maps: fmap g . fmap f *)
 
@@ -39,43 +40,46 @@ Extract
 
 (* --- Tagless-final DSL ------------------------------------------------- *)
 
-Axiom Nat : Set.
+Axiom nat : Set.
 
-Axiom Sym : (Set -> Set) -> Set.
+Inductive Sym (R : Set -> Set) : Set :=
+  | mkSym : (nat -> R nat) -> (R nat -> R nat -> R nat) -> Sym R.
 
-Axiom lit :
-  forall (R : Set -> Set),
-  Sym R -> Nat -> R Nat.
+Definition lit (R : Set -> Set) (s : Sym R) (n : nat) : R nat :=
+  Sym_rec R (nat -> R nat)
+    (fun (l : nat -> R nat) (a : R nat -> R nat -> R nat) => l) s n.
 
-Axiom add :
-  forall (R : Set -> Set),
-  Sym R -> R Nat -> R Nat -> R Nat.
+Definition add (R : Set -> Set) (s : Sym R) (x y : R nat) : R nat :=
+  Sym_rec R (R nat -> R nat -> R nat)
+    (fun (l : nat -> R nat) (a : R nat -> R nat -> R nat) => a) s x y.
 
 (* Double a literal: add n n *)
 
 Extract
   fun (R : Set -> Set) =>
   fun (S : Sym R) =>
-  fun (n : Nat) =>
+  fun (n : nat) =>
     add R S (lit R S n) (lit R S n).
 
 
 (* --- Monad bind -------------------------------------------------------- *)
 
-Axiom Monad : (Set -> Set) -> Set.
+Inductive Monad (M : Set -> Set) : Set :=
+  | mkMonad :
+      (forall (A : Set), A -> M A) ->
+      (forall (A B : Set), M A -> (A -> M B) -> M B) ->
+      Monad M.
 
-Axiom ret :
-  forall (M : Set -> Set),
-  Monad M ->
-  forall (A : Set),
-  A -> M A.
+Definition ret (M : Set -> Set) (MM : Monad M) (A : Set) (x : A) : M A :=
+  Monad_rec M (forall (A : Set), A -> M A)
+    (fun (r : forall (A : Set), A -> M A)
+         (b : forall (A B : Set), M A -> (A -> M B) -> M B) => r) MM A x.
 
-Axiom bind :
-  forall (M : Set -> Set),
-  Monad M ->
-  forall (A : Set),
-  forall (B : Set),
-  M A -> (A -> M B) -> M B.
+Definition bind (M : Set -> Set) (MM : Monad M) (A B : Set)
+  (ma : M A) (f : A -> M B) : M B :=
+  Monad_rec M (forall (A B : Set), M A -> (A -> M B) -> M B)
+    (fun (r : forall (A : Set), A -> M A)
+         (b : forall (A B : Set), M A -> (A -> M B) -> M B) => b) MM A B ma f.
 
 (* Kleisli composition: bind (bind ma f) g *)
 

@@ -32,6 +32,7 @@ Proof. intros T sn1 sn2. unfold extract_kind. rewrite (nf_pi T sn1 sn2). reflexi
 (** Reduction-stable de Bruijn compression (is_large-based namespace indices
     using [is_large_dec] instead of [classifier]; total, no well-formedness needed
     since [is_large_dec] is total). *)
+(** Compress a source de Bruijn index into the target type namespace, skipping term-level binders. *)
 Fixpoint type_index (e: environment) (n: nat) : nat :=
   match e, n with
   | nil, _ => 0
@@ -187,6 +188,7 @@ Fixpoint extract (e: typing.environment) (t T: terms.term)
 
 (** ** Witness-independence of type/context extraction *)
 
+(** [extract_typ] is independent of the SN witness. *)
 Lemma extract_typ_pi : forall e T sn1 sn2, extract_typ e T sn1 = extract_typ e T sn2.
 Proof. intros e T sn1 sn2. unfold extract_typ. rewrite (nf_pi T sn1 sn2). reflexivity. Qed.
 

@@ -1,25 +1,21 @@
-Nat admitted.
-NZ admitted.
-NS admitted.
-Nat_rec admitted.
-Vec admitted.
-vnil admitted.
-vcons admitted.
-vrec admitted.
-vmap is defined.
-Inferred type: forall (A B : Set), (A -> B) -> forall (n : Nat), Vec A n -> Vec B n
-Extracted: fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) => vrec [A] [Vec B] (vnil [B]) (fun (x0 : Nat) (x1 : A) (x2 : Vec B) => vcons [B] x0 (f x1) x2) n xs
-vfoldr is defined.
-Inferred type: forall (A B : Set), (A -> B -> B) -> B -> forall (n : Nat), Vec A n -> B
-Extracted: fun (A B : *) (f : A -> B -> B) (z : B) (n : Nat) (xs : Vec A) => vrec [A] [B] z (fun (x0 : Nat) (x1 : A) (x2 : B) => f x1 x2) n xs
-vreplicate is defined.
-Correct.
-Extracted: fun (A : *) (x : A) (n : Nat) => Nat_rec [Vec A] (vnil [A]) (fun (x0 : Nat) (x1 : Vec A) => vcons [A] x0 x x1) n
-vlength is defined.
-Inferred type: forall (A : Set) (n : Nat), Vec A n -> Nat
-Extracted: fun (A : *) (n : Nat) (xs : Vec A) => vrec [A] [Nat] NZ (fun (x0 : Nat) (x1 : A) (x2 : Nat) => NS x2) n xs
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
+t is defined.
+nil is defined.
+cons is defined.
+t_rec is defined.
+map is defined.
+Inferred type: forall (A B : Set), (A -> B) -> forall (n : forall (x0 : Set), x0 -> (x0 -> x0) -> x0), (fun (x0 : Set) (x1 : forall (x1 : Set), x1 -> (x1 -> x1) -> x1) => forall (x2 : (forall (x2 : Set), x2 -> (x2 -> x2) -> x2) -> Set), x2 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x4) -> (forall (x4 : forall (x4 : Set), x4 -> (x4 -> x4) -> x4), x0 -> x2 x4 -> x2 ((fun (x7 : forall (x7 : Set), x7 -> (x7 -> x7) -> x7) (x8 : Set) (x9 : x8) (x10 : x8 -> x8) => x10 (x7 x8 x9 x10)) x4)) -> x2 x1) A n -> forall (x0 : (forall (x0 : Set), x0 -> (x0 -> x0) -> x0) -> Set), x0 (fun (x1 : Set) (x2 : x1) (x3 : x1 -> x1) => x2) -> (forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), B -> x0 x2 -> x0 (fun (x5 : Set) (x6 : x5) (x7 : x5 -> x5) => x7 (x2 x5 x6 x7))) -> x0 n
+Extracted: fun (A B : *) (f : A -> B) (n : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (xs : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x2 -> x2) -> x2) (x3 : forall (x2 : *), x2 -> ((forall (x3 : *), x3 -> (x3 -> x3) -> x3) -> x0 -> x2 -> x2) -> x2) => x3 [x1] x0 x1) [A] [forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> B -> x0 -> x0) -> x0] ((fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) => x0) [B]) (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : A) (x2 : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> B -> x0 -> x0) -> x0) => (fun (x0 : *) (x3 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) (x4 : x0) (x5 : forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) -> x1) (x1 : *) (x6 : x1) (x7 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) => x7 x3 x4 (x5 [x1] x6 x7)) [B] x0 (f x1) x2) n xs
+fold_right is defined.
+Extracted: fun (A B : *) (f : A -> B -> B) (z : B) (n : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (xs : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x2 -> x2) -> x2) (x3 : forall (x2 : *), x2 -> ((forall (x3 : *), x3 -> (x3 -> x3) -> x3) -> x0 -> x2 -> x2) -> x2) => x3 [x1] x0 x1) [A] [B] z (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : A) (x2 : B) => f x1 x2) n xs
+length is defined.
+Extracted: fun (A : *) (n : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (xs : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x2 -> x2) -> x2) (x3 : forall (x2 : *), x2 -> ((forall (x3 : *), x3 -> (x3 -> x3) -> x3) -> x0 -> x2 -> x2) -> x2) => x3 [x1] x0 x1) [A] [forall (x0 : *), x0 -> (x0 -> x0) -> x0] (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0) (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : A) (x2 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) => (fun (x3 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x0 : *) (x4 : x0) (x5 : x0 -> x0) => x5 (x3 [x0] x4 x5)) x2) n xs
 vsingleton is defined.
 Correct.
-Extracted: fun (A : *) (x : A) => vcons [A] NZ x (vnil [A])
+Extracted: fun (A : *) (x : A) => (fun (x0 : *) (x0 : forall (x1 : *), x1 -> (x1 -> x1) -> x1) (x1 : x0) (x2 : forall (x1 : *), x1 -> ((forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) -> x1) (x1 : *) (x3 : x1) (x4 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) => x4 x0 x1 (x2 [x1] x3 x4)) [A] (fun (x0 : *) (x0 : x0) (x1 : x0 -> x0) => x0) x ((fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) => x0) [A])
 vmapfold is defined.
-Extracted: fun (A B C : *) (f : A -> B) (g : B -> C -> C) (z : C) (n : Nat) (xs : Vec A) => vrec [A] [C] z (fun (x0 : Nat) (x1 : A) (x2 : C) => g (f x1) x2) n xs
+Extracted: fun (A B C : *) (f : A -> B) (g : B -> C -> C) (z : C) (n : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (xs : forall (x0 : *), x0 -> ((forall (x1 : *), x1 -> (x1 -> x1) -> x1) -> A -> x0 -> x0) -> x0) => (fun (x0 x1 : *) (x0 : x1) (x1 : (forall (x2 : *), x2 -> (x2 -> x2) -> x2) -> x0 -> x1 -> x1) (x2 : forall (x2 : *), x2 -> (x2 -> x2) -> x2) (x3 : forall (x2 : *), x2 -> ((forall (x3 : *), x3 -> (x3 -> x3) -> x3) -> x0 -> x2 -> x2) -> x2) => x3 [x1] x0 x1) [A] [C] z (fun (x0 : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (x1 : A) (x2 : C) => g (f x1) x2) n xs
+Computed: fun (x0 : (forall (x0 : Set), x0 -> (x0 -> x0) -> x0) -> Set) (x1 : x0 (fun (x1 : Set) (x2 : x1) (x3 : x1 -> x1) => x2)) (x2 : forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), (forall (x3 : Set), x3 -> (x3 -> x3) -> x3) -> x0 x2 -> x0 (fun (x5 : Set) (x6 : x5) (x7 : x5 -> x5) => x7 (x2 x5 x6 x7))) => x2 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 x4) (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 (x5 x4)) (x2 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x4) (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 x4) x1)

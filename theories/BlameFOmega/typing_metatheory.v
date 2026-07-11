@@ -96,6 +96,7 @@ Proof.
     + destruct n as [|n']; [reflexivity|]. rewrite IH. reflexivity.
 Qed.
 
+(** [defeq] is preserved by inserting a fresh [has_type] binding at prefix [G1]. *)
 Lemma defeq_weaken_type : forall G1 g C A B K,
   defeq (G1 ++ g) A B K -> defeq (G1 ++ has_type C :: g) A B K.
 Proof.
@@ -113,6 +114,7 @@ Proof.
   - eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
 Qed.
 
+(** General term weakening at an arbitrary prefix: inserting a fresh [has_type C] binding lifts term variables accordingly. *)
 Lemma typing_weaken_term : forall G1 g e A C,
   typing (G1 ++ g) e A ->
   typing (G1 ++ has_type C :: g) (lift 1 (nterm G1) e) A.
@@ -274,6 +276,7 @@ Qed.
 Lemma tlift1_tvar : forall k n, tlift 1 k (tvar n) = tvar (sh k n).
 Proof. intros; simpl; unfold sh; destruct (le_gt_dec k n); [f_equal; lia | reflexivity]. Qed.
 
+(** [wf_typ] is preserved by inserting a fresh [has_kind] binding, lifting the type accordingly. *)
 Lemma wf_typ_weaken_kind : forall G1 g K A K0,
   wf_typ (G1 ++ g) A K0 ->
   wf_typ (tlift_ctx G1 ++ has_kind K :: g) (tlift 1 (ntype G1) A) K0.
@@ -288,6 +291,7 @@ Proof.
   - simpl. apply wf_dyn.
 Qed.
 
+(** [lookup_def] transport for inserting a fresh [has_kind] binding at prefix [G1]. *)
 Lemma lookup_def_weaken_kind : forall G1 g K n,
   lookup_def (tlift_ctx G1 ++ has_kind K :: g) (sh (ntype G1) n)
     = match lookup_def (G1 ++ g) n with
@@ -315,6 +319,7 @@ Proof.
           f_equal; f_equal; rewrite (permute_tlift_rec A 1 (ntype G1) 1 0) by lia; replace (1 + ntype G1) with (S (ntype G1)) by lia; reflexivity.
 Qed.
 
+(** Front-binding specialization of [lookup_def_weaken_kind]. *)
 Corollary lookup_def_weaken_kind0 : forall g K n,
   lookup_def (has_kind K :: g) (S n)
     = match lookup_def g n with
@@ -358,6 +363,7 @@ Inductive q_par (g : context) : typ -> typ -> Prop :=
 
 Hint Constructors q_par : blame.
 
+(** [q_par g] is reflexive. *)
 Lemma q_par_refl : forall g t, q_par g t t.
 Proof.
   intros g t. revert g. induction t; intros g; simpl.
@@ -408,18 +414,22 @@ Qed.
     at a time; only ever applied to [has_kind]-only prefixes in this
     development, so no [tlift_ctx] bookkeeping is needed on the prefix
     itself). *)
+(** Turns a list of kinds into a context of [has_kind] bindings, one per kind. *)
 Fixpoint kctx (ks : list kind) : context :=
   match ks with
   | nil => nil
   | K :: ks' => has_kind K :: kctx ks'
   end.
 
+(** [kctx ks] has exactly [length ks] type variables. *)
 Lemma ntype_kctx : forall ks, ntype (kctx ks) = length ks.
 Proof. induction ks; simpl; auto. Qed.
 
+(** [tlift_ctx] is the identity on a pure [has_kind] prefix, since [has_kind] carries no type to lift. *)
 Lemma tlift_ctx_kctx : forall ks, tlift_ctx (kctx ks) = kctx ks.
 Proof. induction ks; simpl; [reflexivity | f_equal; auto]. Qed.
 
+(** Weakening [q_par] by a whole prefix of fresh [has_kind] bindings at once. *)
 Lemma q_par_weaken_front : forall ks g B1 B2,
   q_par g B1 B2 -> q_par (kctx ks ++ g) (tlift (length ks) 0 B1) (tlift (length ks) 0 B2).
 Proof.
@@ -518,6 +528,7 @@ Corollary q_par_subst : forall g K B1 B2,
   q_par g (tsubst B1 0 A1) (tsubst B2 0 A2).
 Proof. intros g K B1 B2 HB A1 A2 H. exact (q_par_subst_gen nil g K B1 B2 HB A1 A2 H). Qed.
 
+(** [defeq] is preserved by inserting a fresh [has_kind] binding. *)
 Lemma defeq_weaken_kind : forall G1 g K A B K0,
   defeq (G1 ++ g) A B K0 ->
   defeq (tlift_ctx G1 ++ has_kind K :: g) (tlift 1 (ntype G1) A) (tlift 1 (ntype G1) B) K0.
@@ -537,10 +548,12 @@ Proof.
   - simpl. eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
 Qed.
 
+(** Front-binding specialization of [defeq_weaken_kind]. *)
 Corollary defeq_weaken_kind0 : forall g K A B K0,
   defeq g A B K0 -> defeq (has_kind K :: g) (tlift 1 0 A) (tlift 1 0 B) K0.
 Proof. intros g K A B K0 H. exact (defeq_weaken_kind nil g K A B K0 H). Qed.
 
+(** [typing] is preserved by inserting a fresh [has_kind] binding. *)
 Lemma typing_weaken_kind : forall G1 g e A K,
   typing (G1 ++ g) e A ->
   typing (tlift_ctx G1 ++ has_kind K :: g) (term_tlift 1 (ntype G1) e) (tlift 1 (ntype G1) A).
@@ -609,6 +622,7 @@ Proof.
         destruct (le_gt_dec (ntype G1) n') eqn:E; simpl; exact IH.
 Qed.
 
+(** [lookup_term] transport for inserting a fresh [has_def K C] binding: stored types are lifted, [has_def] shares the type-variable namespace with [has_kind]. *)
 Lemma lookup_term_weaken_def : forall G1 g K C n,
   lookup_term (tlift_ctx G1 ++ has_def K C :: g) n
     = option_map (tlift 1 (ntype G1)) (lookup_term (G1 ++ g) n).
@@ -623,6 +637,7 @@ Proof.
       f_equal. rewrite (permute_tlift_rec x 1 (ntype G1) 1 0) by lia. reflexivity.
 Qed.
 
+(** [wf_typ] is preserved by inserting a fresh [has_def K C] binding. *)
 Lemma wf_typ_weaken_def : forall G1 g K C A K0,
   wf_typ (G1 ++ g) A K0 ->
   wf_typ (tlift_ctx G1 ++ has_def K C :: g) (tlift 1 (ntype G1) A) K0.
@@ -687,6 +702,7 @@ Qed.
 
 (** ** [defeq] weakening *)
 
+(** [defeq] is preserved by inserting a fresh [has_def K C] binding at prefix [G1]. *)
 Lemma defeq_weaken_def : forall G1 g K C A B K0,
   defeq (G1 ++ g) A B K0 ->
   defeq (tlift_ctx G1 ++ has_def K C :: g) (tlift 1 (ntype G1) A) (tlift 1 (ntype G1) B) K0.
@@ -706,6 +722,7 @@ Proof.
   - simpl. eapply deq_tyapp; [apply IHdefeq1 | apply IHdefeq2]; reflexivity.
 Qed.
 
+(** Front-binding specialization of [defeq_weaken_def]. *)
 Corollary defeq_weaken_def0 : forall g K C A B K0,
   defeq g A B K0 -> defeq (has_def K C :: g) (tlift 1 0 A) (tlift 1 0 B) K0.
 Proof. intros g K C A B K0 H. exact (defeq_weaken_def nil g K C A B K0 H). Qed.
@@ -727,6 +744,7 @@ Inductive wf_ctx : context -> Prop :=
 
 Hint Constructors wf_ctx : blame.
 
+(** Every type read off a well-formed context via [lookup_term] is itself well-kinded at [*]. *)
 Lemma wf_ctx_lookup_term : forall g n t,
   wf_ctx g -> lookup_term g n = Some t -> wf_typ g t KStar.
 Proof.
@@ -794,9 +812,11 @@ Proof.
     split; econstructor; eauto.
 Qed.
 
+(** Left projection of [defeq_regular]. *)
 Lemma defeq_regular_l : forall g A B K, wf_ctx g -> defeq g A B K -> wf_typ g A K.
 Proof. intros g A B K Hwf H; apply (defeq_regular g A B K Hwf H). Qed.
 
+(** Right projection of [defeq_regular]. *)
 Lemma defeq_regular_r : forall g A B K, wf_ctx g -> defeq g A B K -> wf_typ g B K.
 Proof. intros g A B K Hwf H; apply (defeq_regular g A B K Hwf H). Qed.
 
@@ -812,6 +832,7 @@ Proof.
   - destruct b as [D | K' | K' D]; simpl; auto.
 Qed.
 
+(** [lookup_def] at a [has_def K A] binding's own index returns [K] paired with [A] lifted through everything above it. *)
 Lemma lookup_def_self : forall G1 g K A,
   lookup_def (G1 ++ has_def K A :: g) (ntype G1) = Some (K, tlift (S (ntype G1)) 0 A).
 Proof.
@@ -867,6 +888,7 @@ Proof.
   - (* dyn *) simpl. apply deq_refl. apply wf_dyn.
 Qed.
 
+(** The [G1 = nil] specialization of [defeq_reveal_subst_gen]. *)
 Corollary defeq_reveal_subst : forall g K A T J,
   wf_ctx g -> wf_typ g A K -> wf_typ (has_def K A :: g) T J ->
   defeq (has_def K A :: g) T (tlift 1 0 (tsubst A 0 T)) J.
@@ -874,6 +896,7 @@ Proof.
   intros g K A T J _ _ H. exact (defeq_reveal_subst_gen nil g K A T J H).
 Qed.
 
+(** [typing] is preserved by inserting a fresh [has_def K C] binding. *)
 Lemma typing_weaken_def : forall G1 g e A K C,
   typing (G1 ++ g) e A ->
   typing (tlift_ctx G1 ++ has_def K C :: g) (term_tlift 1 (ntype G1) e) (tlift 1 (ntype G1) A).
@@ -920,6 +943,7 @@ Corollary typing_weaken_def0 : forall g e A K C,
   typing g e A -> typing (has_def K C :: g) (term_tlift 1 0 e) (tlift 1 0 A).
 Proof. intros g e A K C H. exact (typing_weaken_def nil g e A K C H). Qed.
 
+(** Removing an unused [has_type C] binding from the context does not affect [wf_typ], since types never mention term variables. *)
 Lemma wf_typ_strengthen_type : forall G1 g C A K,
   wf_typ (G1 ++ has_type C :: g) A K -> wf_typ (G1 ++ g) A K.
 Proof.
@@ -1087,6 +1111,7 @@ Proof.
     + rewrite IH; [reflexivity | lia].
 Qed.
 
+(** Substitution preserves typing: replacing a term variable by a well-typed closed term commutes with typing derivations. *)
 Lemma typing_subst : forall G1 g e u T B,
   typing (G1 ++ has_type T :: g) e B ->
   typing g u T ->
@@ -1506,6 +1531,7 @@ Proof.
       | eapply wf_typ_tsubst; eauto ].
 Qed.
 
+(** Front-binding specialization of [typing_tsubst] for substituting a neutral type into a term. *)
 Corollary typing_tsubst0 : forall g e s K A,
   typing (has_kind K :: g) e A ->
   wf_typ g s K -> neutral s ->
@@ -1534,6 +1560,7 @@ Proof.
     + destruct n; [reflexivity | apply IH].
 Qed.
 
+(** Refining a [has_kind K] binding into [has_def K A] does not change any [lookup_term] result: term bindings live in a disjoint namespace. *)
 Lemma lookup_term_kind_to_def : forall G1 g K A n,
   lookup_term (G1 ++ has_kind K :: g) n = lookup_term (G1 ++ has_def K A :: g) n.
 Proof.
@@ -1564,6 +1591,7 @@ Proof.
       rewrite (IH g K A n' (K0, A0) E). exact H.
 Qed.
 
+(** Refining a [has_kind K] binding into [has_def K A] preserves [wf_typ], since [wf_typ] never inspects [has_def]'s payload. *)
 Lemma wf_typ_kind_to_def : forall G1 g K A T K0,
   wf_typ (G1 ++ has_kind K :: g) T K0 ->
   wf_typ (G1 ++ has_def K A :: g) T K0.
@@ -1579,6 +1607,7 @@ Proof.
   - apply wf_dyn.
 Qed.
 
+(** Converse of [wf_typ_kind_to_def]: coarsening a [has_def K A] binding to [has_kind K] also preserves [wf_typ]. *)
 Lemma wf_typ_def_to_kind : forall G1 g K A T K0,
   wf_typ (G1 ++ has_def K A :: g) T K0 ->
   wf_typ (G1 ++ has_kind K :: g) T K0.
@@ -1594,6 +1623,7 @@ Proof.
   - apply wf_dyn.
 Qed.
 
+(** Refining a [has_kind K] binding into [has_def K A] preserves [defeq]: no existing equation is falsified, though it may become derivable another way. *)
 Lemma defeq_kind_to_def : forall G1 g K A X Y J,
   defeq (G1 ++ has_kind K :: g) X Y J ->
   defeq (G1 ++ has_def K A :: g) X Y J.
@@ -1658,6 +1688,7 @@ Proof.
   - (* qpar_beta *) simpl. apply q_par_subst with (K := K); auto.
 Qed.
 
+(** The diamond property for [q_par]: divergent single steps reconverge, witnessed by the common Takahashi development [qdev]. *)
 Lemma q_par_diamond : forall g A B C, q_par g A B -> q_par g A C ->
   exists D, q_par g B D /\ q_par g C D.
 Proof.
@@ -1668,14 +1699,18 @@ Qed.
 Definition q_star (g : context) : typ -> typ -> Prop :=
   clos_refl_trans typ (q_par g).
 
+(** [q_star] is reflexive. *)
 Lemma q_star_refl : forall g A, q_star g A A.
 Proof. intros; apply rt_refl. Qed.
+(** Every [q_par] step is a [q_star]. *)
 Lemma q_star_step : forall g A B, q_par g A B -> q_star g A B.
 Proof. intros; apply rt_step; auto. Qed.
+(** [q_star] is transitive. *)
 Lemma q_star_trans : forall g A B C, q_star g A B -> q_star g B C -> q_star g A C.
 Proof. intros; eapply rt_trans; eauto. Qed.
 Hint Resolve q_star_refl q_star_step : blame.
 
+(** Strip lemma: a single [q_par] step commutes past a [q_star] sequence, reconverging via the diamond property. *)
 Lemma q_par_strip : forall g A C, q_star g A C ->
   forall B, q_par g A B -> exists D, q_star g B D /\ q_par g C D.
 Proof.
@@ -1687,6 +1722,7 @@ Proof.
     exists D; split; [ eapply q_star_trans; [ apply rt_step; exact HBE | exact HED ] | exact HCD ].
 Qed.
 
+(** [q_star] is confluent: divergent reduction sequences reconverge. *)
 Lemma q_star_confluent : forall g A B, q_star g A B ->
   forall C, q_star g A C -> exists D, q_star g B D /\ q_star g C D.
 Proof.
@@ -1702,12 +1738,16 @@ Qed.
 Definition q_conv (g : context) : typ -> typ -> Prop :=
   clos_refl_sym_trans typ (q_par g).
 
+(** Every [q_par] step is a [q_conv]. *)
 Lemma q_conv_step : forall g A B, q_par g A B -> q_conv g A B.
 Proof. intros; apply rst_step; auto. Qed.
+(** [q_conv] is reflexive. *)
 Lemma q_conv_refl : forall g A, q_conv g A A.
 Proof. intros; apply rst_refl. Qed.
+(** [q_conv] is symmetric. *)
 Lemma q_conv_sym : forall g A B, q_conv g A B -> q_conv g B A.
 Proof. intros; apply rst_sym; auto. Qed.
+(** [q_conv] is transitive. *)
 Lemma q_conv_trans : forall g A B C, q_conv g A B -> q_conv g B C -> q_conv g A C.
 Proof. intros; eapply rst_trans; eauto. Qed.
 
@@ -2070,6 +2110,7 @@ Proof.
     apply deq_sym. eapply q_star_defeq; eauto.
 Qed.
 
+(** Inversion for [defeq] on two [all] types: their kinds coincide and their bodies are [defeq] under the extended context. *)
 Lemma defeq_all_inv : forall g K A K' A',
   wf_ctx g -> defeq g (all K A) (all K' A') KStar ->
   K = K' /\ defeq (has_kind K :: g) A A' KStar.
@@ -2138,6 +2179,7 @@ Proof.
     right. destruct Hconv as [<- | Hdq]; [assumption | eapply deq_trans; eauto].
 Qed.
 
+(** Inversion for [typing] on [tabs K e]: through [typing_conv], its type is [defeq] to some [all K B] with [e] typed at [B]. *)
 Lemma typing_tabs_inv : forall g K e C,
   typing g (tabs K e) C ->
   exists B, (all K B = C \/ defeq g (all K B) C KStar)
@@ -2151,6 +2193,7 @@ Proof.
     right. destruct Hconv as [<- | Hdq]; [assumption | eapply deq_trans; eauto].
 Qed.
 
+(** Inversion for [typing] on [gnd e G]: through [typing_conv], its type is [defeq] to [dyn], with [e] typed at the ground type [G]. *)
 Lemma typing_gnd_inv : forall g e G C,
   typing g (gnd e G) C ->
   (dyn = C \/ defeq g dyn C KStar) /\ typing g e G /\ ground G.
@@ -2166,6 +2209,7 @@ Qed.
 
 (** ** Canonical forms *)
 
+(** Canonical forms for [arrow]: a value of arrow type is an [abs]. *)
 Lemma canonical_arrow : forall g v A B,
   value v -> typing g v (arrow A B) -> exists t e, v = abs t e.
 Proof.
@@ -2179,6 +2223,7 @@ Proof.
       [discriminate | exfalso; eapply defeq_dyn_arrow; eauto].
 Qed.
 
+(** Canonical forms for [all]: a value of universal type is a [tabs]. *)
 Lemma canonical_all : forall g v K B,
   value v -> typing g v (all K B) -> exists K' e, v = tabs K' e.
 Proof.

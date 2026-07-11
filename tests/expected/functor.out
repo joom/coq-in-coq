@@ -1,12 +1,18 @@
-Functor admitted.
-fmap admitted.
-Extracted: fun (F : (* => *)) (FF : Functor F) (A B C : *) (f : A -> B) (g : B -> C) (xs : F A) => fmap [F] FF [B] [C] g (fmap [F] FF [A] [B] f xs)
-Nat admitted.
-Sym admitted.
-lit admitted.
-add admitted.
-Extracted: fun (R : (* => *)) (S : Sym R) (n : Nat) => add [R] S (lit [R] S n) (lit [R] S n)
-Monad admitted.
-ret admitted.
-bind admitted.
-Extracted: fun (M : (* => *)) (MM : Monad M) (A B C : *) (ma : M A) (f : A -> M B) (g : B -> M C) => bind [M] MM [B] [C] (bind [M] MM [A] [B] ma f) g
+Functor is defined.
+mkFunctor is defined.
+Functor_rec is defined.
+fmap is defined.
+Extracted: fun (F : (* => *)) (FF : forall (x0 : *), ((forall (x1 x2 : *), (x1 -> x2) -> F x1 -> F x2) -> x0) -> x0) (A B C : *) (f : A -> B) (g : B -> C) (xs : F A) => (fun (x0 : (* => *)) (x0 : forall (x1 : *), ((forall (x2 x3 : *), (x2 -> x3) -> x0 x2 -> x0 x3) -> x1) -> x1) (x1 x2 : *) (x1 : x1 -> x2) (x2 : x0 x1) => (fun (x3 : (* => *)) (x4 : *) (x3 : (forall (x5 x6 : *), (x5 -> x6) -> x3 x5 -> x3 x6) -> x4) (x4 : forall (x5 : *), ((forall (x6 x7 : *), (x6 -> x7) -> x3 x6 -> x3 x7) -> x5) -> x5) => x4 [x4] x3) [x0] [forall (x3 x4 : *), (x3 -> x4) -> x0 x3 -> x0 x4] (fun (x3 : forall (x3 x4 : *), (x3 -> x4) -> x0 x3 -> x0 x4) => x3) x0 [x1] [x2] x1 x2) [F] FF [B] [C] g ((fun (x0 : (* => *)) (x0 : forall (x1 : *), ((forall (x2 x3 : *), (x2 -> x3) -> x0 x2 -> x0 x3) -> x1) -> x1) (x1 x2 : *) (x1 : x1 -> x2) (x2 : x0 x1) => (fun (x3 : (* => *)) (x4 : *) (x3 : (forall (x5 x6 : *), (x5 -> x6) -> x3 x5 -> x3 x6) -> x4) (x4 : forall (x5 : *), ((forall (x6 x7 : *), (x6 -> x7) -> x3 x6 -> x3 x7) -> x5) -> x5) => x4 [x4] x3) [x0] [forall (x3 x4 : *), (x3 -> x4) -> x0 x3 -> x0 x4] (fun (x3 : forall (x3 x4 : *), (x3 -> x4) -> x0 x3 -> x0 x4) => x3) x0 [x1] [x2] x1 x2) [F] FF [A] [B] f xs)
+nat admitted.
+Sym is defined.
+mkSym is defined.
+Sym_rec is defined.
+lit is defined.
+add is defined.
+Extracted: fun (R : (* => *)) (S : forall (x0 : *), ((nat -> R nat) -> (R nat -> R nat -> R nat) -> x0) -> x0) (n : nat) => (fun (x0 : (* => *)) (x0 : forall (x1 : *), ((nat -> x0 nat) -> (x0 nat -> x0 nat -> x0 nat) -> x1) -> x1) (x1 x2 : x0 nat) => (fun (x1 : (* => *)) (x2 : *) (x3 : (nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x2) (x4 : forall (x3 : *), ((nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x3) -> x3) => x4 [x2] x3) [x0] [x0 nat -> x0 nat -> x0 nat] (fun (x3 : nat -> x0 nat) (x4 : x0 nat -> x0 nat -> x0 nat) => x4) x0 x1 x2) [R] S ((fun (x0 : (* => *)) (x0 : forall (x1 : *), ((nat -> x0 nat) -> (x0 nat -> x0 nat -> x0 nat) -> x1) -> x1) (x1 : nat) => (fun (x1 : (* => *)) (x2 : *) (x2 : (nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x2) (x3 : forall (x3 : *), ((nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x3) -> x3) => x3 [x2] x2) [x0] [nat -> x0 nat] (fun (x2 : nat -> x0 nat) (x3 : x0 nat -> x0 nat -> x0 nat) => x2) x0 x1) [R] S n) ((fun (x0 : (* => *)) (x0 : forall (x1 : *), ((nat -> x0 nat) -> (x0 nat -> x0 nat -> x0 nat) -> x1) -> x1) (x1 : nat) => (fun (x1 : (* => *)) (x2 : *) (x2 : (nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x2) (x3 : forall (x3 : *), ((nat -> x1 nat) -> (x1 nat -> x1 nat -> x1 nat) -> x3) -> x3) => x3 [x2] x2) [x0] [nat -> x0 nat] (fun (x2 : nat -> x0 nat) (x3 : x0 nat -> x0 nat -> x0 nat) => x2) x0 x1) [R] S n)
+Monad is defined.
+mkMonad is defined.
+Monad_rec is defined.
+ret is defined.
+bind is defined.
+Extracted: fun (M : (* => *)) (MM : forall (x0 : *), ((forall (x1 : *), x1 -> M x1) -> (forall (x1 x2 : *), M x1 -> (x1 -> M x2) -> M x2) -> x0) -> x0) (A B C : *) (ma : M A) (f : A -> M B) (g : B -> M C) => (fun (x0 : (* => *)) (x0 : forall (x1 : *), ((forall (x2 : *), x2 -> x0 x2) -> (forall (x2 x3 : *), x0 x2 -> (x2 -> x0 x3) -> x0 x3) -> x1) -> x1) (x1 x2 : *) (x1 : x0 x1) (x2 : x1 -> x0 x2) => (fun (x3 : (* => *)) (x4 : *) (x3 : (forall (x5 : *), x5 -> x3 x5) -> (forall (x5 x6 : *), x3 x5 -> (x5 -> x3 x6) -> x3 x6) -> x4) (x4 : forall (x5 : *), ((forall (x6 : *), x6 -> x3 x6) -> (forall (x6 x7 : *), x3 x6 -> (x6 -> x3 x7) -> x3 x7) -> x5) -> x5) => x4 [x4] x3) [x0] [forall (x3 x4 : *), x0 x3 -> (x3 -> x0 x4) -> x0 x4] (fun (x3 : forall (x3 : *), x3 -> x0 x3) (x4 : forall (x3 x4 : *), x0 x3 -> (x3 -> x0 x4) -> x0 x4) => x4) x0 [x1] [x2] x1 x2) [M] MM [B] [C] ((fun (x0 : (* => *)) (x0 : forall (x1 : *), ((forall (x2 : *), x2 -> x0 x2) -> (forall (x2 x3 : *), x0 x2 -> (x2 -> x0 x3) -> x0 x3) -> x1) -> x1) (x1 x2 : *) (x1 : x0 x1) (x2 : x1 -> x0 x2) => (fun (x3 : (* => *)) (x4 : *) (x3 : (forall (x5 : *), x5 -> x3 x5) -> (forall (x5 x6 : *), x3 x5 -> (x5 -> x3 x6) -> x3 x6) -> x4) (x4 : forall (x5 : *), ((forall (x6 : *), x6 -> x3 x6) -> (forall (x6 x7 : *), x3 x6 -> (x6 -> x3 x7) -> x3 x7) -> x5) -> x5) => x4 [x4] x3) [x0] [forall (x3 x4 : *), x0 x3 -> (x3 -> x0 x4) -> x0 x4] (fun (x3 : forall (x3 : *), x3 -> x0 x3) (x4 : forall (x3 x4 : *), x0 x3 -> (x3 -> x0 x4) -> x0 x4) => x4) x0 [x1] [x2] x1 x2) [M] MM [A] [B] ma f) g

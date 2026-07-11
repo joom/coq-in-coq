@@ -24,6 +24,7 @@ From Extraction Require Import derivation_independence.
 From Extraction Require Import substitution_simulation.
 
 
+(** [dyn_token] is closed, so type-substitution leaves it fixed. *)
 Lemma term_tsubst_dyn_token : forall AA k, infrastructure.term_tsubst AA k dyn_token = dyn_token.
 Proof.
   intros. Transparent dyn_token. unfold dyn_token, dyn_fun. cbn [infrastructure.term_tsubst].
@@ -97,6 +98,8 @@ Proof.
 Qed.
 
 (** Above the substitution point (large removed binder), [term_index] is unchanged. *)
+(** [term_index] is unchanged for variables above a large substituted binder,
+    since removing a large binder does not shift the term namespace's indices. *)
 Lemma term_index_substitute_above_large :
   forall g v V (Hv: has_type g v V),
   is_large g V ->

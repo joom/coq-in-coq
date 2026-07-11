@@ -17,6 +17,7 @@ Import terms.
 Import CoC.typing.
 Import extraction.
 
+(** [dyn_token] is well-typed at [dyn] in any context. *)
 Lemma typing_dyn_token : forall g,
   typing.typing g dyn_token syntax.dyn.
 Proof.
@@ -479,6 +480,7 @@ Qed.
 
 (** ** Classification is invariant under swapping a context binder for a reduct *)
 
+(** [type_binding] steps past a cons on the context: shift the index down by one. *)
 Lemma type_binding_cons : forall a g n,
   type_binding (a :: g) (S n) = type_binding g n.
 Proof. intros a g n. unfold type_binding. reflexivity. Qed.

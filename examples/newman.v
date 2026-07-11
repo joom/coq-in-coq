@@ -15,18 +15,13 @@ Axiom R : A -> A -> Prop.
 (* Reflexive-transitive closure of R, as an inductive predicate:
    constructors, induction principle, and head-step inversion. *)
 
-Axiom Rstar : A -> A -> Prop.
+Inductive Rstar : A -> A -> Prop :=
+  | Rstar_refl : forall (x : A), Rstar x x
+  | Rstar_step : forall (x y z : A), R x y -> Rstar y z -> Rstar x z.
 
-Axiom Rstar_refl : forall (x : A), Rstar x x.
-
-Axiom Rstar_step : forall (x y z : A), R x y -> Rstar y z -> Rstar x z.
-
-Axiom Rstar_ind :
-  forall (P : A -> A -> Prop),
-  (forall (u : A), P u u) ->
-  (forall (u v w : A), R u v -> Rstar v w -> P v w -> P u w) ->
-  forall (x y : A), Rstar x y -> P x y.
-
+(* [Rstar_rec], the generated recursor, is the induction principle.  Head-step
+   inversion [Rstar_case] exposes the first step, which a fold cannot, so it is
+   kept axiomatic. *)
 Axiom Rstar_case :
   forall (x y : A) (P : A -> A -> Prop),
   P x x ->
@@ -37,11 +32,10 @@ Axiom Rstar_case :
 (* Coherence (joinability): two terms share a common reduct.
    An inductive predicate with one constructor and its eliminator. *)
 
-Axiom coherence : A -> A -> Prop.
+Inductive coherence : A -> A -> Prop :=
+  | coh_intro : forall (x y z : A), Rstar x z -> Rstar y z -> coherence x y.
 
-Axiom coh_intro :
-  forall (x y z : A), Rstar x z -> Rstar y z -> coherence x y.
-
+(* Elimination as inversion (recover the common reduct z), kept axiomatic. *)
 Axiom coh_elim :
   forall (x y : A), coherence x y ->
   forall (P : Prop), (forall (z : A), Rstar x z -> Rstar y z -> P) -> P.
@@ -62,9 +56,9 @@ Axiom Hyp2 :
 (* The proof *)
 
 Definition Rstar_trans (x y z : A) (h1 : Rstar x y) : Rstar y z -> Rstar x z :=
-  Rstar_ind (fun (a b : A) => Rstar b z -> Rstar a z)
+  Rstar_rec (fun (a b : A) => Rstar b z -> Rstar a z)
     (fun (u : A) (k : Rstar u z) => k)
-    (fun (u v w : A) (r : R u v) (s : Rstar v w)
+    (fun (u v w : A) (r : R u v)
          (rec : Rstar w z -> Rstar v z) (k : Rstar w z) =>
      Rstar_step u v z r (rec k))
     x y h1.

@@ -21,6 +21,7 @@ From Extraction Require Import type_extraction_facts.
 From Extraction Require Import typing_proof.
 
 
+(** [sim] may strip a [coerce] on the left. *)
 Lemma coerce_sim_l : forall s t A B,
   simulation.sim s t -> simulation.sim (coerce s A B) t.
 Proof.
@@ -187,6 +188,7 @@ Qed.
     [extract].  The proofs follow the same structure as their Prop
     counterparts. *)
 
+(** Source weakening by inserting a binder at any position (Type-level typing). *)
 Lemma weakening_weak_t :
   forall A e t T,
   has_type e t T ->

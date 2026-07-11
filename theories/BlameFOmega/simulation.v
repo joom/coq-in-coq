@@ -146,7 +146,7 @@ Theorem cast_instantiation_sim:
   sim (cast (tapp v C) (tsubst C 0 A) B p)
       (cast (tapp v dyn) (tsubst dyn 0 A) B p).
 Proof.
-  intros.
+  intros v A B C p.
   constructor.
   - apply sim_type_app; auto with blame.
   - apply typ_sim_tsubst_dyn.

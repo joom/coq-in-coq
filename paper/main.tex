@@ -14,13 +14,13 @@
 \setcopyright{none}
 
 %% --- notation macros -------------------------------------------------------
-\newcommand{\dyn}{\mathord{?}}
+\newcommand{\dyn}{\ensuremath{\mathsf{Dyn}}}
 \newcommand{\kstar}{\ensuremath{\star}}
 \newcommand{\karr}{\ensuremath{\Rightarrow}}
-\newcommand{\Prop}{\mathsf{Prop}}
-\newcommand{\Set}{\mathsf{Set}}
-\newcommand{\Kind}{\mathsf{Kind}}
-\newcommand{\Nat}{\mathsf{Nat}}
+\newcommand{\Prop}{\ensuremath{\mathsf{Prop}}}
+\newcommand{\Set}{\ensuremath{\mathsf{Set}}}
+\newcommand{\Kind}{\ensuremath{\mathsf{Kind}}}
+\newcommand{\Nat}{\ensuremath{\mathsf{Nat}}}
 \newcommand{\srt}{s}
 \newcommand{\cast}[4]{\langle #2 \Rightarrow #3 \rangle^{#4}\, #1}
 \newcommand{\gnd}[2]{\mathsf{gnd}(#1, #2)}
@@ -105,7 +105,7 @@ guarantee that an extracted term reduced in isolation never raises blame at an
 external label. The simulation relation is syntactic rather than contextual,
 and proof erasure is out of scope; we delimit both boundaries precisely. An
 extracted OCaml REPL with verified de~Bruijn-to-named printing makes the
-translation inspectable on fourteen dependently typed programming idioms.
+translation inspectable on eighteen dependently typed programming idioms.
 \end{abstract}
 
 \begin{CCSXML}
@@ -270,7 +270,7 @@ their F$\omega$ + blame extractions, with a \emph{verified} de~Bruijn-to-named
 renderer whose name recovery is capture-free by construction and whose checked
 OCaml wrapper validates namespace and scope preconditions.
 
-\item We present fourteen showcased command batches (\S\ref{sec:overview},
+\item We present eighteen showcased command batches (\S\ref{sec:overview},
 \S\ref{sec:examples}) that make visible what the extraction keeps, erases, and
 dynamizes. Axioms provide only the inductive kit---type formers, constructors,
 and elimination/induction principles---and the deliberate value-as-type
@@ -305,13 +305,13 @@ elimination principles---the honest way to model inductive families in a bare
 pure type system. Every other function is an ordinary \texttt{Definition}
 built from the eliminators (the REPL expands definitions at use sites,
 \S\ref{sec:repl}), and its extraction is governed by our verified
-translation. Each output comment below is transcribed
-verbatim from the corresponding REPL golden file (\S\ref{sec:repl}). The
+translation. Each output comment below is taken
+from the corresponding REPL golden file (\S\ref{sec:repl}), with line breaks
+added for readability. The
 printer renders extracted terms in Rocq-like concrete syntax: term and type
 abstractions both print as \texttt{fun} with consecutive binders grouped,
 quantifiers print as \texttt{forall}, type applications as $[\cdot]$, casts as
-\texttt{cast<A => B>\^{}$\ell$(e)}, and the dynamic type as \texttt{Dyn}
-(written $\dyn$ in the formal sections).
+\texttt{cast<A => B>\^{}$\ell$(e)}, and the dynamic type as $\dyn$.
 
 \paragraph{Term-indexed dependencies disappear from target types.}
 A bounds-checked lookup indexes a length-indexed vector by a provably in-range
@@ -328,7 +328,12 @@ Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n) : A :=
     n xs i.
 
 Extract vnth.
-(* ==>  fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) => vrec [A] [Fin -> A] (fun (x0 : Fin) => fin0 [A] x0) (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) => fin_case x0 [A] x1 x2 x3) n xs i *)
+(* ==> fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) =>
+         vrec [A] [Fin -> A]
+           (fun (x0 : Fin) => fin0 [A] x0)
+           (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) =>
+              fin_case x0 [A] x1 x2 x3)
+           n xs i *)
 \end{lstlisting}
 \texttt{vnth} is defined by vector recursion at the motive
 $P\,m = \texttt{Fin}\,m \to A$, refuting the index at the empty vector
@@ -350,7 +355,8 @@ eliminators such as \texttt{eq\_rect} remain as ordinary residual terms:
 \begin{lstlisting}
 Extract fun (A : Set) (x y : A) (h : Eq A x y) =>
   eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
-(* ==>  fun (A : *) (x y : A) (h : Eq A) => eq_rect [A] x [Eq A] (refl [A] x) y h *)
+(* ==> fun (A : *) (x y : A) (h : Eq A) =>
+         eq_rect [A] x [Eq A] (refl [A] x) y h *)
 \end{lstlisting}
 In a dependently typed language, \emph{transport} (\texttt{eq\_rect}) is how one
 crosses between two provably equal types; it is the static ancestor of a cast.
@@ -382,14 +388,17 @@ Extract fun (c : U) => El c.
 (* ==>  fun (c : U) => cast<Dyn => U -> Dyn>^2+(blame(2+)) c *)
 \end{lstlisting}
 This is the boundary. \texttt{El} has no F$\omega$ image, so the extraction
-emits an extraction-failure blame (label~$2$), cast through the dynamic type~$\dyn$, and
-applies it to the code. This is the translation's explicit fallback for ``a
-value in type position,'' and our external-label theorem
+emits a coercion-failure blame, cast through the dynamic type~$\dyn$, and
+applies it to the code. The superscript $2{+}$ is the blame label: identifier
+$2$ is the reserved internal ``no F$\omega$ image'' marker (defined
+in~\S\ref{sec:target}), and $+$ is its polarity. This is the translation's
+explicit fallback for ``a value in type position,'' and our external-label
+theorem
 (\S\ref{sec:metatheory}) proves that this isolated extracted term cannot reduce
 to an external label. It is not a theorem about arbitrary linking contexts.
 
 \medskip
-The lesson of these examples, and of the fourteen showcased batches in
+The lesson of these examples, and of the eighteen showcased batches in
 \S\ref{sec:examples}, is that an explicit dynamic/blame target lets a single
 total mathematical translation preserve the polymorphic skeleton, remove many dependent indices from target
 types, and mark the residue of dependency syntactically with $\dyn$ and a
@@ -517,11 +526,42 @@ rather than extruded; a ground tag that mentions the sealed variable cannot
 outlive its binder and instead blames the reserved label~$0$
 (Figure~\ref{fig:target-redexes}). Sealed values therefore cannot escape
 their $\nu$-scope inside $\dyn$; \S\ref{sec:limitations} discusses this
-trade-off. A blame label $p$ pairs an identifier with a
-polarity. Identifier~$0$ is reserved for $\nu$-tampering, identifier~$1$ for
-$\mathsf{is\_gnd}$-tampering, and identifier~$2$---written $\lint$
-below---for extraction/coercion failure. Identifiers $\ge 3$ are external.
-Keeping the three internal classes distinct preserves their diagnostic origin.
+trade-off. \paragraph{Blame labels: which cast failed, and whose fault it is.}
+A blame label answers the question: \emph{if a cast fails, who is to blame?}
+A cast $\cast{e}{A}{B}{p}$ that cannot reconcile $A$ with $B$ does not get
+stuck and does not silently return a wrong value---it reduces to $\blame p$.
+The label $p$ is the cast's name tag, so a failure points at exactly
+\emph{which} boundary broke. A label is a pair. Its \emph{identifier} names
+the boundary; its \emph{polarity}---a single bit, written as a sign---records
+\emph{which side} of that boundary is at fault: positive~($+$) blames the
+value flowing through the cast, negative~($-$) blames the context that
+consumed it. Following Wadler and Findler, a function cast pushes a cast onto
+its argument with the polarity \emph{flipped} (the $\bar p$ in
+Figure~\ref{fig:target-redexes}), because responsibility for the argument
+belongs to the other party. Thus $\lint$ with positive polarity prints as
+$\lint{+}$, or simply $2{+}$ using its identifier.
+
+Identifiers split into two classes. Three small identifiers are
+\emph{reserved} for the translation's own plumbing---failures only the
+internal machinery can trigger, never a contract the source programmer wrote:
+\begin{center}
+\begin{tabular}{cl}
+\toprule
+id & raised when \ldots \\
+\midrule
+$0$ & a $\nu$-sealed type variable would escape its scope through $\dyn$ \quad($\nu$-tampering) \\
+$1$ & the ground test $\isgnd{\cdot}{G}$ inspects a sealed value \quad($\mathsf{is\_gnd}$-tampering) \\
+$2$ & the extraction meets a source construct with no F$\omega$ image \quad(coercion failure; written $\lint$) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every identifier $\ge 3$ is \emph{external}: it names a genuine boundary that
+a client of the calculus could introduce. Keeping the three internal classes
+distinct---rather than collapsing them into one ``internal error''---preserves
+their diagnostic origin, and it is exactly what gives the safety theorem
+(\S\ref{sec:metatheory}) its bite: an extracted term reduced in isolation can
+only ever raise an \emph{internal} label ($0$, $1$, or $2$), a mark the
+translation itself planted, and \emph{never} an external one.
 
 \paragraph{Executable compatibility.}
 Unlike Blame for All's System-F \emph{consistency} relation, our $\mathsf{compat}(A,B)$
@@ -572,9 +612,11 @@ by reduction. From this we obtain the central guarantee.
 If $\mathrm{lbl\_id}(p) \ge 3$ and $\mathsf{safe}(p, e)$, then
 $\neg\,(e \reducesstar \blame p)$.
 \end{theorem}
-This is the invariant theorem formalized by the artifact. It is inspired by
-the safety development in \emph{Blame for All}, but it is not presented as one
-of that paper's numbered contextual corollaries.
+In words: an extracted program may still fail, but only by pointing at its own
+internal plumbing---labels $0$, $1$, or $2$---never at an external boundary
+(any label $\ge 3$). This is the invariant theorem formalized by the artifact.
+It is inspired by the safety development in \emph{Blame for All}, but it is not
+presented as one of that paper's numbered contextual corollaries.
 
 Figure~\ref{fig:target-typing} gives the target typing rules used by the
 mechanization.  In the last rule, $\mathsf{defeq}_{\Delta}$ includes
@@ -1207,20 +1249,62 @@ To make the extraction inspectable we extract the type checker and the
 translation to OCaml (via Rocq's extraction) and wrap them in a REPL that reads
 CoC surface syntax and prints inferred types and F$\omega$ + blame extractions
 in Rocq-like concrete syntax (\texttt{fun} and \texttt{forall} with grouped
-binders, \texttt{cast<A => B>\^{}$\ell$(e)} for casts, \texttt{Dyn} for
-$\dyn$). The paper's output comments are transcribed verbatim from the
-checked-in golden files, which \texttt{dune test} replays. The main commands
-are \texttt{Axiom}, \texttt{Definition}, \texttt{Check}, \texttt{Infer}, and
-\texttt{Extract}, plus context management (\texttt{Delete}, \texttt{List});
-\texttt{Check e.} without a type ascription behaves like \texttt{Infer}.
-\texttt{Definition} is handled in the unverified shell by let-expansion:
-later commands have their expressions wrapped in
-$(\lambda x{:}T.\,\cdot)\;e$ for each definition they (transitively) use, so
-the verified checker only ever sees the expanded term and definitional
-transparency is ordinary $\beta$-conversion. Because the bare PTS has no
-delta rule, a definition is \emph{opaque} at its use sites---which is exactly
-why the example files axiomatize eliminators and define everything else
-through them. \S\ref{sec:examples} lists complete input files.
+binders, \texttt{cast<A => B>\^{}$\ell$(e)} for casts, and $\dyn$ for the
+dynamic type). The paper's output comments are transcribed from the
+checked-in golden files (which \texttt{dune test} replays), with line breaks
+and indentation added for readability. The main commands
+are \texttt{Axiom}, \texttt{Definition}, \texttt{Inductive}, \texttt{Check},
+\texttt{Infer}, \texttt{Compute}, and \texttt{Extract}, plus \texttt{Print
+Axioms} to list the current context; \texttt{Check e.} without a type ascription
+behaves like \texttt{Infer}.
+\texttt{Definition} is handled in the unverified shell by \emph{delta-unfolding}:
+before a command reaches the verified checker, each reference to a definition is
+replaced by its body (a capture-avoiding substitution), so the checker only ever
+sees a definition-free term and definitional transparency reduces to $\beta$.
+\S\ref{sec:examples} lists complete input files.
+
+\paragraph{Inductive types by Boehm--Berarducci encoding.}
+The shell also offers an \texttt{Inductive} command that is pure sugar for the
+impredicative Boehm--Berarducci encoding~\cite{bohm1985automatic}
+(equivalently, Pfenning and Paulin-Mohring's encoding of inductively defined
+types in the Calculus of Constructions~\cite{pfenning1990inductively}). It
+generates ordinary \texttt{Definition}s---the type former, the constructors, and
+a recursor $T\_\mathit{rec}$---so, being definitions rather than axioms, the
+data \emph{computes}: a companion \texttt{Compute} command reduces a term to
+normal form with the verified normalizer (e.g.\ \texttt{Compute}-ing $2+1$ over
+an \texttt{Inductive Nat} returns the Church numeral for $3$). The encoding is
+\emph{indexed}: for an arity $I_1 \to \cdots \to I_k \to s$ the generated motive
+$X : I_1 \to \cdots \to I_k \to s$ is parameterized by the indices, each
+constructor may target $T\,\overline{p}\,\overline{t}$ at arbitrary index
+values, and a recursive argument $T\,\overline{p}\,\overline{u}$ is folded to
+$X\,\overline{u}$. This suffices to define \texttt{Vec}, \texttt{Fin}, Leibniz
+equality (whose $Eq\_\mathit{rec}$ is exactly transport), the \texttt{Set}-indexed
+format family \texttt{Fmt}, session channels, and inductive predicates such as
+$\le$ and reflexive--transitive closure---all as computing $\lambda$-terms.
+
+\paragraph{A typeability/computability tension.}
+Two boundaries here are intrinsic to \emph{any} impredicative encoding, not to
+our implementation. First, the generated recursor's motive depends on the
+\emph{indices} but not on the constructed \emph{value}: it is a catamorphic
+recursor, not the dependent induction principle, and induction is provably
+\emph{not derivable} for impredicative encodings in second-order dependent type
+theory~\cite{geuvers2001induction}. So large elimination (a motive over a
+non-indexed value, as in \texttt{vreplicate}) and dependent projections (a
+$\Sigma$-type's second projection) stay out of reach. Second, one-step
+\emph{inversion}---case analysis exposing an immediate subterm, as in
+\texttt{Fin}'s successor case or a heterogeneous-list head---is not a fold and is
+likewise not derivable, so such principles are kept axiomatic. Scott and
+Parigot encodings do give constant-time inversion and predecessors, but their
+types are \emph{recursive} and hence not typeable in a strongly-normalizing pure
+type system that lacks $\mu$-types~\cite{parigot1992recursive}; Mendler-style
+encodings~\cite{mendler1991inductive} tame recursion by quantifying over the
+recursion carrier and accommodate wider (mixed-variance) functors, but share the
+same dependency ceiling. Recovering \emph{dependent} elimination for
+lambda-encoded data with computation requires self
+types~\cite{fu2014self}, an extension beyond CoC. Accordingly, the example files
+adapted to \texttt{Inductive} exercise exactly the fragment the encoding
+supports; the handful of operations needing value-dependent elimination or
+inversion retain a clearly-marked axiom.
 
 \paragraph{Verified de~Bruijn-to-named printing.}
 Metatheory uses de~Bruijn indices, but readable output needs names. Naively
@@ -1250,23 +1334,28 @@ unverified OCaml shell.
 \section{Worked Examples}\label{sec:examples}
 %% ==========================================================================
 
-Table~\ref{tab:examples} summarizes the fourteen showcase files shipped with
+Table~\ref{tab:examples} summarizes the eighteen showcase files shipped with
 the development (three additional files test naming and error paths). Each is
-a self-contained command batch processed by the REPL. Axioms introduce only
-the inductive kit---type formers, constructors, and elimination/induction
-principles---plus the value-as-type boundaries (\texttt{El}, \texttt{eval})
-that would require large elimination, which the bare PTS lacks; every other
-operation, from \texttt{vnth} through matrix multiplication and
-\texttt{sprintf} to the proof steps of Newman's lemma, is an ordinary
-\texttt{Definition} built from the eliminators.
+a self-contained command batch processed by the REPL. Wherever the datatype is
+expressible by the indexed Boehm--Berarducci encoding, the file declares it with
+the \texttt{Inductive} command (\S\ref{sec:repl}), so its type former,
+constructors, and recursor are computing definitions---this covers the
+non-indexed types, the length-indexed \texttt{Vec}, Leibniz equality, session
+channels, sorted lists over an inductive $\le$, and more. The remaining
+inductive kit is axiomatized exactly where the encoding cannot reach: the
+value-as-type boundaries (\texttt{El}, \texttt{eval}) that need large
+elimination, and one-step inversion principles (\texttt{Fin}'s
+\texttt{fin\_case}, heterogeneous-list heads) that are not folds. Every other
+operation, from \texttt{vnth} through matrix multiplication and \texttt{sprintf}
+to the proof steps of Newman's lemma, is an ordinary \texttt{Definition}.
 
 \begin{table}
 \small
-\caption{The fourteen showcased examples. ``Erased'' names the dependency the extraction
+\caption{The eighteen showcased examples. ``Erased'' names the dependency the extraction
 removes; ``$\dyn$/blame'' marks examples that also exhibit the value-as-type
 boundary.}
 \label{tab:examples}
-\Description{A table of fourteen example files and the dependent programming idiom each demonstrates.}
+\Description{A table of eighteen example files and the dependent programming idiom each demonstrates.}
 \begin{tabular}{@{}llc@{}}
 \toprule
 File & What it demonstrates & $\dyn$/blame \\
@@ -1285,6 +1374,10 @@ File & What it demonstrates & $\dyn$/blame \\
 \texttt{universe.v} & Tarski universe; a hand-built dynamic type & \checkmark \\
 \texttt{functor.v}  & higher-kinded: functors, tagless-final, monads & \\
 \texttt{tagless.v}  & computed return types via type-level codes; $\dyn$-free & \\
+\texttt{lists.v}    & polymorphic list library; fully static baseline & \\
+\texttt{scoped.v}   & intrinsically well-scoped terms; capture-avoiding renaming & \checkmark \\
+\texttt{hlist.v}    & heterogeneous lists indexed by a type-level list of types & \checkmark \\
+\texttt{ordered.v}  & provably-sorted lists over the \texttt{Le} inductive predicate & \checkmark \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1600,7 +1693,7 @@ algorithmic executable path, a proof-erasing optimization pass, and an
 extension to inductive families and their large eliminations.
 
 \section*{Data-Availability Statement}
-The complete Rocq development, the extracted REPL, and the fourteen example
+The complete Rocq development, the extracted REPL, and the eighteen example
 batches (with their checked-in golden output files) accompany this paper as an
 artifact. The development builds with Rocq~9.0 and Dune; \texttt{dune test}
 replays every golden output, and the assumption audit of \S\ref{sec:mech}

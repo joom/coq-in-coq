@@ -14,6 +14,16 @@
    demonstrates index removal and name recovery, not evaluator execution. *)
 
 
+(* This file is the one case kept entirely axiomatic.  [Ty], [Ctx], [Var], and
+   [Tm] are genuine inductive families, but [Var]/[Tm] are indexed by [Ctx]
+   (itself inductive) and are mutually referential; under the indexed
+   Boehm-Berarducci encoding the type-formers are unfolded by substitution, and
+   the deeply-nested context/type terms this example builds ([snoc (snoc ...)],
+   [arr (arr ...)]) make the extractor's normalizer blow up (even a single
+   identity term takes many seconds).  So here the encoding is impractical, not
+   impossible, and we keep the whole signature axiomatic -- an honest limit of
+   lambda-encoding deeply-nested indexed families through a normalizing target. *)
+
 (* object-language types *)
 Axiom Ty : Set.
 Axiom base : Ty.
@@ -24,12 +34,11 @@ Axiom Ctx : Set.
 Axiom emp : Ctx.
 Axiom snoc : Ctx -> Ty -> Ctx.
 
-(* well-typed de Bruijn variables: a proof that [t] is in [G] *)
+(* well-typed de Bruijn variables and intrinsically-typed terms *)
 Axiom Var : Ctx -> Ty -> Set.
 Axiom vz : forall (G : Ctx) (t : Ty), Var (snoc G t) t.
 Axiom vs : forall (G : Ctx) (t u : Ty), Var G t -> Var (snoc G u) t.
 
-(* intrinsically-typed terms *)
 Axiom Tm : Ctx -> Ty -> Set.
 Axiom tvar : forall (G : Ctx) (t : Ty), Var G t -> Tm G t.
 Axiom tlam : forall (G : Ctx) (t u : Ty), Tm (snoc G t) u -> Tm G (arr t u).

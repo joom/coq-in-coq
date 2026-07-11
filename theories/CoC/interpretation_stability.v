@@ -235,8 +235,10 @@ Lemma interpret_var_sound_lift :
  interpret_var_sound t ip i ->
  type_class (classify_term t (classes_of_interpretation ip)) (class_of_interpretation_kind i).
 Proof.
-  intros.
-  elim H; simpl in |- *; intros; rewrite H0; auto with coc core arith datatypes.
+  intros t ip i Hsound.
+  elim Hsound; simpl in |- *; intros;
+   match goal with H : _ = _ |- _ => rewrite H end;
+   auto with coc core arith datatypes.
 Qed.
 
 Hint Resolve interp_var_knd interp_var_typ interpret_var_sound_lift: coc.
@@ -753,9 +755,9 @@ Lemma interpretation_cons_equal :
  forall C : candidate (covariant_skeleton (classify_term N (classify_environment e))),
  classes_of_interpretation (interpretation_cons N ip _ C) = classify_environment (N :: e).
 Proof.
-  intros.
+  intros ip e Heq N s1 Ht C.
   unfold interpretation_cons, extend_interpretation_kind in |- *.
-  rewrite H.
+  rewrite Heq.
   simpl in |- *.
   generalize C.
   pattern (classify_term N (classify_environment e)) in |- *.
@@ -763,10 +765,10 @@ Proof.
   simpl in |- *; intros.
   elim skeleton_sound with e N (sort_term s1); simpl in |- *; intros;
    auto with coc core arith datatypes.
-  unfold classes_of_interpretation in |- *; simpl in |- *; elim H;
+  unfold classes_of_interpretation in |- *; simpl in |- *; elim Heq;
    auto with coc core arith datatypes.
 
-  unfold classes_of_interpretation in |- *; simpl in |- *; elim H;
+  unfold classes_of_interpretation in |- *; simpl in |- *; elim Heq;
    auto with coc core arith datatypes.
 Qed.
 

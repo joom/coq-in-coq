@@ -70,41 +70,55 @@ Qed.
 
 (** ** The closed, well-typed looping term *)
 
+(** The ground type [dyn -> dyn] that the looping function is cast to/from. *)
 Definition omega_type : typ := arrow dyn dyn.
 
+(** The external, positive label attached to the looping casts. *)
 Definition loop_label : label := mk_label first_external_label_id true.
 
+(** Body of the looping function: casts its own dynamic argument to
+    [omega_type] and applies it to itself. *)
 Definition omega_body : term :=
   app (cast (var 0) dyn omega_type loop_label) (var 0).
 
+(** The self-applying function, [λx:dyn. (x : dyn => omega_type) x]. *)
 Definition omega_fun : term := abs dyn omega_body.
 
+(** [omega_fun] injected into [dyn], ready to be passed to itself. *)
 Definition omega_arg : term := gnd omega_fun omega_type.
 
+(** The closed looping term [omega_fun omega_arg], typed at [dyn]. *)
 Definition omega : term := app omega_fun omega_arg.
 
+(** [omega] after one beta step. *)
 Definition omega_after_beta : term :=
   app (cast omega_arg dyn omega_type loop_label) omega_arg.
 
+(** [omega_after_beta] after the COLLAPSE cast step. *)
 Definition omega_after_collapse : term :=
   app (cast omega_fun omega_type omega_type loop_label) omega_arg.
 
+(** [omega_type] is a well-formed kind-[*] type in the empty context. *)
 Lemma omega_type_wf : wf_typ [] omega_type KStar.
 Proof.
   unfold omega_type. apply wf_arrow; apply wf_dyn.
 Qed.
 
+(** [omega_type] is a ground type. *)
 Lemma omega_type_ground : ground omega_type.
 Proof. unfold omega_type. apply ground_arrow. Qed.
 
+(** [omega_fun] is a value. *)
 Lemma omega_fun_value : value omega_fun.
 Proof. unfold omega_fun. apply value_abs. Qed.
 
+(** [omega_arg] is a value. *)
 Lemma omega_arg_value : value omega_arg.
 Proof.
   unfold omega_arg. apply value_gnd. apply omega_fun_value.
 Qed.
 
+(** [omega_body] is well-typed at [dyn] given a dynamic argument in context. *)
 Lemma omega_body_typed :
   typing (has_type dyn :: nil) omega_body dyn.
 Proof.
@@ -120,6 +134,7 @@ Proof.
   - apply typing_var. reflexivity.
 Qed.
 
+(** [omega_fun] is well-typed at [omega_type] in the empty context. *)
 Lemma omega_fun_typed : typing [] omega_fun omega_type.
 Proof.
   unfold omega_fun, omega_type.
@@ -128,6 +143,7 @@ Proof.
   - exact omega_body_typed.
 Qed.
 
+(** [omega_arg] is well-typed at [dyn] in the empty context. *)
 Lemma omega_arg_typed : typing [] omega_arg dyn.
 Proof.
   unfold omega_arg.
@@ -138,6 +154,7 @@ Proof.
     + apply omega_type_wf.
 Qed.
 
+(** The closed looping term [omega] is well-typed at [dyn]. *)
 Theorem omega_typed : typing [] omega dyn.
 Proof.
   unfold omega. eapply typing_app.
@@ -153,6 +170,7 @@ Proof.
   simpl. reflexivity.
 Qed.
 
+(** [omega] beta-reduces to [omega_after_beta]. *)
 Lemma omega_step_beta : step omega omega_after_beta.
 Proof.
   unfold omega, omega_fun.
@@ -160,6 +178,7 @@ Proof.
   apply step_beta. apply omega_arg_value.
 Qed.
 
+(** [omega_after_beta] steps to [omega_after_collapse] via the COLLAPSE cast rule. *)
 Lemma omega_step_collapse : step omega_after_beta omega_after_collapse.
 Proof.
   unfold omega_after_beta, omega_after_collapse, omega_arg.
@@ -171,6 +190,7 @@ Proof.
   - apply compat_refl.
 Qed.
 
+(** [omega_after_collapse] steps to [omega] via the ID cast rule, closing the loop. *)
 Lemma omega_step_id : step omega_after_collapse omega.
 Proof.
   unfold omega_after_collapse, omega.
@@ -189,6 +209,7 @@ Proof.
     + apply t_step. exact omega_step_id.
 Qed.
 
+(** [omega] is not strongly normalizing: it reduces back to itself. *)
 Theorem omega_not_strongly_normalizing :
   ~ strongly_normalizing omega.
 Proof.

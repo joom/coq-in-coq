@@ -129,6 +129,7 @@ Fixpoint ty_size (A: typ) : nat :=
   | dyn => 1
   end.
 
+(** Every type has size at least 1. *)
 Lemma ty_size_pos: forall A, 1 <= ty_size A.
 Proof. induction A; simpl; lia. Qed.
 
@@ -342,6 +343,7 @@ Proof.
       * exfalso; apply HAB; reflexivity.
 Qed.
 
+(** Compatibility is decidable, by well-founded recursion on total type size. *)
 Lemma compat_dec: forall A B, {compat A B} + {~ compat A B}.
 Proof. intros A B. apply (compat_dec_fuel (ty_size A + ty_size B)); lia. Qed.
 
@@ -871,6 +873,7 @@ Proof. intros A k. change k with (0 + k). apply tswap_tlift_1_aux. Qed.
     the target's type language a genuine F-omega with type-level computation,
     rather than mere F-omega syntax. *)
 
+(** One-step type-level reduction: beta for [tyapp (tyabs K A) B], plus structural congruence closure. *)
 Inductive ty_step : typ -> typ -> Prop :=
   | tystep_beta : forall K A B,
       ty_step (tyapp (tyabs K A) B) (tsubst B 0 A)
@@ -892,15 +895,19 @@ Hint Constructors ty_step: blame.
 (** Definitional equality on types: the equivalence closure of [ty_step]. *)
 Definition ty_equiv : typ -> typ -> Prop := clos_refl_sym_trans _ ty_step.
 
+(** [ty_equiv] is reflexive. *)
 Lemma ty_equiv_refl : forall A, ty_equiv A A.
 Proof. intro A; apply rst_refl. Qed.
 
+(** [ty_equiv] is symmetric. *)
 Lemma ty_equiv_sym : forall A B, ty_equiv A B -> ty_equiv B A.
 Proof. intros A B H; apply rst_sym; exact H. Qed.
 
+(** [ty_equiv] is transitive. *)
 Lemma ty_equiv_trans : forall A B C, ty_equiv A B -> ty_equiv B C -> ty_equiv A C.
 Proof. intros A B C H1 H2; eapply rst_trans; eauto. Qed.
 
+(** Every [ty_step] step is a [ty_equiv]. *)
 Lemma ty_step_equiv : forall A B, ty_step A B -> ty_equiv A B.
 Proof. intros A B H; apply rst_step; exact H. Qed.
 

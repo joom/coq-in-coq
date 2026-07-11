@@ -1,15 +1,17 @@
-U admitted.
-nat_c admitted.
-bool_c admitted.
-arr_c admitted.
+U is defined.
+nat_c is defined.
+bool_c is defined.
+arr_c is defined.
+U_rec is defined.
 El admitted.
-Inferred type: U -> U -> U
-Extracted: fun (a b : U) => arr_c (arr_c a b) a
-Dynamic admitted.
-box admitted.
-tag admitted.
-Extracted: fun (c : U) (x : El) => box c x
-Extracted: fun (d : Dynamic) => tag d
-Inferred type: U -> Set
-Extracted: fun (c : U) => cast<Dyn => U -> Dyn>^2+(blame(2+)) c
+Inferred type: (forall (x0 : Set), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) -> (forall (x0 : Set), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) -> forall (x0 : Set), x0 -> x0 -> (x0 -> x0 -> x0) -> x0
+Extracted: fun (a b : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) => (fun (x0 x1 : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) (x0 : *) (x2 x3 : x0) (x4 : x0 -> x0 -> x0) => x4 (x0 [x0] x2 x3 x4) (x1 [x0] x2 x3 x4)) ((fun (x0 x1 : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) (x0 : *) (x2 x3 : x0) (x4 : x0 -> x0 -> x0) => x4 (x0 [x0] x2 x3 x4) (x1 [x0] x2 x3 x4)) a b) a
+Dynamic is defined.
+box is defined.
+Dynamic_rec is defined.
+tag is defined.
+Extracted: fun (c : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) (x : El) => (fun (x0 : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) (x1 : El) (x0 : *) (x2 : (forall (x1 : *), x1 -> x1 -> (x1 -> x1 -> x1) -> x1) -> El -> x0) => x2 x0 x1) c x
+Extracted: fun (d : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> (x1 -> x1 -> x1) -> x1) -> El -> x0) -> x0) => (fun (x0 : forall (x0 : *), ((forall (x1 : *), x1 -> x1 -> (x1 -> x1 -> x1) -> x1) -> El -> x0) -> x0) => (fun (x0 : *) (x1 : (forall (x1 : *), x1 -> x1 -> (x1 -> x1 -> x1) -> x1) -> El -> x0) (x2 : forall (x1 : *), ((forall (x2 : *), x2 -> x2 -> (x2 -> x2 -> x2) -> x2) -> El -> x1) -> x1) => x2 [x0] x1) [forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0] (fun (x1 : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) (x2 : El) => x1) x0) d
+Inferred type: (forall (x0 : Set), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) -> Set
+Extracted: fun (c : forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) => cast<Dyn => (forall (x0 : *), x0 -> x0 -> (x0 -> x0 -> x0) -> x0) -> Dyn>^2+(blame(2+)) c
 Extracted: gnd(fun (_ : Dyn) => _ : Dyn -> Dyn)

@@ -1,57 +1,51 @@
-(* Propositional equality and transport in the Calculus of Constructions.
+(* Propositional (Leibniz) equality via the Inductive command.
 
-   [Eq A x y] is Leibniz equality; [refl] proves [x = x]; [eq_rect] is
-   transport: a proof that [x = y] lets us move a [P x] to a [P y].  In a
-   dependently-typed language transport is the *coercion* mechanism -- it is
-   how one crosses between two types that are provably equal.
+   [Inductive eq (A : Set) (x : A) : A -> Prop := eq_refl : eq A x x] desugars to
+   the indexed Boehm-Berarducci encoding
 
-   The current extractor does not implement Coq-style Prop erasure.  Instead,
-   the equality endpoints [x] and [y] are erased from the target type
-   [Eq A x y], so equality appears at the simpler target type [Eq A].
-   However, proof arguments such as [h] and proof constants such as [eq_rect]
-   remain as ordinary term-level components of the extracted program.  This
-   example therefore demonstrates index erasure from types, not proof erasure.
-   A future proof-erasing optimization could eliminate these residual proof
-   terms.
+     eq A x y  =  forall (P : A -> Prop), P x -> P y
 
-   The axioms are exactly the inductive kit of equality: the family [Eq],
-   its constructor [refl], and its induction principle [eq_rect]. *)
+   -- exactly Leibniz equality.  The generated recursor [eq_rec] IS transport
+   (eq_rect): its motive [P : A -> Prop] depends on the INDEX [y], which the
+   indexed encoding supports.  So, unlike the axiom version, transport here is a
+   real definition that COMPUTES.
+
+   (Full dependent elimination -- a motive over the proof itself -- is still not
+   derivable; but eq_rect never needs that.) *)
 
 
-Axiom Eq : forall (A : Set), A -> A -> Prop.
-Axiom refl : forall (A : Set) (x : A), Eq A x x.
+Inductive eq (A : Set) (x : A) : A -> Prop := | eq_refl : eq A x x.
 
-(* transport / Leibniz substitution: the induction principle *)
-Axiom eq_rect :
-  forall (A : Set) (x : A) (P : A -> Prop),
-  P x -> forall (y : A), Eq A x y -> P y.
+(* transport / Leibniz substitution -- this is the generated [eq_rec]. *)
+Definition transport (A : Set) (P : A -> Prop) (x y : A) (h : eq A x y) (p : P x)
+  : P y :=
+  eq_rec A x P p y h.
 
-
-(* symmetry: from x = y build y = x, by transporting refl along the proof. *)
-
-Infer fun (A : Set) (x y : A) (h : Eq A x y) =>
-  eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
-
-Extract fun (A : Set) (x y : A) (h : Eq A x y) =>
-  eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
+Check transport.
+Extract transport.
 
 
-(* transitivity: chain x = y and y = z into x = z. *)
+(* symmetry: transport [eq_refl] along the proof. *)
 
-Extract fun (A : Set) (x y z : A) (hxy : Eq A x y) (hyz : Eq A y z) =>
-  eq_rect A y (fun (w : A) => Eq A x w) hxy z hyz.
+Definition eq_sym (A : Set) (x y : A) (h : eq A x y) : eq A y x :=
+  eq_rec A x (fun (z : A) => eq A z x) (eq_refl A x) y h.
 
-
-(* congruence: equal inputs give equal outputs of any function. *)
-
-Extract fun (A B : Set) (f : A -> B) (x y : A) (h : Eq A x y) =>
-  eq_rect A x (fun (z : A) => Eq B (f x) (f z)) (refl B (f x)) y h.
+Extract eq_sym.
 
 
-(* Transport a value across a proven type-family equality.
-   Given p : P x and a proof x = y, obtain a P y.  In the extracted target
-   the dependent index disappears from the type of P, but the proof argument
-   h and the eliminator eq_rect remain as ordinary residual terms. *)
+(* transitivity. *)
 
-Extract fun (A : Set) (P : A -> Prop) (x y : A) (h : Eq A x y) (p : P x) =>
-  eq_rect A x P p y h.
+Definition eq_trans (A : Set) (x y z : A) (hxy : eq A x y) (hyz : eq A y z)
+  : eq A x z :=
+  eq_rec A y (fun (w : A) => eq A x w) hxy z hyz.
+
+Extract eq_trans.
+
+
+(* congruence: equal inputs give equal outputs. *)
+
+Definition f_equal (A B : Set) (f : A -> B) (x y : A) (h : eq A x y)
+  : eq B (f x) (f y) :=
+  eq_rec A x (fun (z : A) => eq B (f x) (f z)) (eq_refl B (f x)) y h.
+
+Extract f_equal.

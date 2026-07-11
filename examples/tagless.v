@@ -21,7 +21,7 @@
    - term-level codes with an axiomatized decoder ([El : ty -> Set],
      stlc.v): eval extracts at the RIGID abstract type [El] -- every
      computed type collapses into one opaque target type, and the source
-     cannot even use the result (no [El TNat = Nat] conversion);
+     cannot even use the result (no [El TNat = nat] conversion);
    - true CIC [match t ... : Set] -- a term-headed type computation that
      survives normalization -- is what would land in the translation's
      dyn fallback.  That requires large elimination in the SOURCE, i.e. the

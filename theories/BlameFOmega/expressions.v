@@ -60,6 +60,7 @@ Fixpoint free_db_below_typ (bound : nat) (t : typ) : Prop :=
   | dyn => True
   end.
 
+(** Every free type variable of [e] is below [tbound] and every free term variable is below [vbound]. *)
 Fixpoint free_db_below_term (tbound vbound : nat) (e : syntax.term) : Prop :=
   match e with
   | var n => n < vbound
@@ -213,6 +214,7 @@ Proof.
       assert (S m = S n) by (eapply Huniq; simpl; eauto). lia.
 Qed.
 
+(** Converse of [name_unique_NoDup]: [NoDup] implies [name_unique]. *)
 Lemma NoDup_name_unique : forall l, NoDup l -> name_unique l.
 Proof.
   intros l H. induction H.
@@ -220,6 +222,7 @@ Proof.
   - apply free_var_extension; assumption.
 Qed.
 
+(** Decides whether a name list has no duplicates. *)
 Fixpoint names_NoDup_dec (l : list name) : {NoDup l} + {~ NoDup l}.
 Proof.
   destruct l as [|x l].
@@ -231,6 +234,7 @@ Proof.
       * right. intro H. inversion H. contradiction.
 Defined.
 
+(** Decides [name_unique] via the [NoDup] decision procedure. *)
 Definition name_unique_dec : forall l, {name_unique l} + {~ name_unique l}.
 Proof.
   intro l. destruct (names_NoDup_dec l) as [H | H].
@@ -238,6 +242,7 @@ Proof.
   - right. intro Huniq. apply H. apply name_unique_NoDup. exact Huniq.
 Defined.
 
+(** Decides [free_db_below_typ]. *)
 Fixpoint free_db_below_typ_dec (bound : nat) (t : typ) :
   {free_db_below_typ bound t} + {~ free_db_below_typ bound t}.
 Proof.
@@ -254,6 +259,7 @@ Proof.
   - left. exact I.
 Defined.
 
+(** Decides [free_db_below_term]. *)
 Fixpoint free_db_below_term_dec (tbound vbound : nat) (e : syntax.term) :
   {free_db_below_term tbound vbound e} +
   {~ free_db_below_term tbound vbound e}.
@@ -287,6 +293,7 @@ Proof.
       [left | right | right | right]; tauto.
 Defined.
 
+(** Converts a well-scoped de Bruijn term into named form, threading fresh binder/type hints and producing an equivalence proof. *)
 Definition fterm_expression_of :
   forall (e : syntax.term) (tl vl : partial_names)
     (binder_hints type_hints : list name),
@@ -389,6 +396,7 @@ Proof.
     apply fterm_eqv_nu; auto.
 Defined.
 
+(** Runtime-checked wrapper around [fterm_expression_of]: validates the scoping/uniqueness preconditions and returns [None] instead of relying on an erased proof. *)
 Definition fterm_expression_of_checked
   (e : syntax.term) (tl vl : partial_names)
   (binder_hints type_hints : list name) :
@@ -409,6 +417,7 @@ Definition fterm_expression_of_checked
   | right _ => None
   end.
 
+(** When [fterm_expression_of_checked] succeeds, its result is indeed equivalent to the input term. *)
 Lemma fterm_expression_of_checked_correct : forall e tl vl bh th p,
   fterm_expression_of_checked e tl vl bh th = Some p ->
   fterm_expr_equiv tl vl e (fst p).
@@ -463,41 +472,68 @@ Lemma ftyp_expr_equiv_unique :
   forall tl t e, ftyp_expr_equiv tl t e ->
   forall t', ftyp_expr_equiv tl t' e -> t = t'.
 Proof.
-  induction 1; intros t' Ht'; inversion_clear Ht'; try reflexivity.
-  - (* var *) f_equal. apply (first_item_unique x tl n0 H0 n H).
-  - (* arrow *) f_equal; [apply IHftyp_expr_equiv1 | apply IHftyp_expr_equiv2]; auto.
-  - (* all *) f_equal. apply IHftyp_expr_equiv; auto.
-  - (* tyabs *) f_equal. apply IHftyp_expr_equiv; auto.
-  - (* tyapp *) f_equal; [apply IHftyp_expr_equiv1 | apply IHftyp_expr_equiv2]; auto.
+  induction 1 as [tl x n Hfirst|tl t1 t2 e1 e2 _ IH1 _ IH2
+    |tl K t e x _ IH|tl K t e x _ IH|tl t1 t2 e1 e2 _ IH1 _ IH2|tl];
+    intros t' Ht'; inversion_clear Ht' as
+    [tli xi ni Hfirst'|tli t1i t2i e1i e2i Ha1 Ha2
+    |tli Ki ti ei xi Ha|tli Ki ti ei xi Ha|tli t1i t2i e1i e2i Ha1 Ha2|tli];
+    try reflexivity.
+  - (* var *) f_equal. apply (first_item_unique x tl ni Hfirst' n Hfirst).
+  - (* arrow *) f_equal; [apply IH1 | apply IH2]; auto.
+  - (* all *) f_equal. apply IH; auto.
+  - (* tyabs *) f_equal. apply IH; auto.
+  - (* tyapp *) f_equal; [apply IH1 | apply IH2]; auto.
 Qed.
 
 Lemma fterm_expr_equiv_unique :
   forall tl vl e ee, fterm_expr_equiv tl vl e ee ->
   forall e', fterm_expr_equiv tl vl e' ee -> e = e'.
 Proof.
-  induction 1; intros e' He'; inversion_clear He'; try reflexivity.
-  - (* var *) f_equal. apply (first_item_unique x vl n0 H0 n H).
+  induction 1 as
+    [tl vl x n Hv
+    |tl vl t e te ee x Hty _ IHtm
+    |tl vl e1 e2 ee1 ee2 _ IH1 _ IH2
+    |tl vl K e ee x _ IH
+    |tl vl e t ee te _ IH Hty
+    |tl vl e A B p ee eA eB _ IH HA HB
+    |tl vl e G ee eG _ IH HG
+    |tl vl e G ee eG _ IH HG
+    |tl vl p
+    |tl vl K A e eA ee x HA _ IH];
+    intros e' He'; inversion_clear He' as
+    [tli vli xi ni Hvi
+    |tli vli ti ei tei eei xi Htyi Htmi
+    |tli vli e1i e2i ee1i ee2i H1i H2i
+    |tli vli Ki ei eei xi Hi
+    |tli vli ei ti eei tei H1i H2i
+    |tli vli ei Ai Bi pi eei eAi eBi H1i H2i H3i
+    |tli vli ei Gi eei eGi H1i H2i
+    |tli vli ei Gi eei eGi H1i H2i
+    |tli vli pi
+    |tli vli Ki Ai ei eAi eei xi H1i H2i];
+    try reflexivity.
+  - (* var *) f_equal. apply (first_item_unique x vl ni Hvi n Hv).
   - (* abs *) f_equal;
-      [ apply (ftyp_expr_equiv_unique tl t te H _ H1)
-      | apply IHfterm_expr_equiv; auto ].
-  - (* app *) f_equal; [apply IHfterm_expr_equiv1 | apply IHfterm_expr_equiv2]; auto.
-  - (* tabs *) f_equal. apply IHfterm_expr_equiv; auto.
+      [ apply (ftyp_expr_equiv_unique tl t te Hty _ Htyi)
+      | apply IHtm; auto ].
+  - (* app *) f_equal; [apply IH1 | apply IH2]; auto.
+  - (* tabs *) f_equal. apply IH; auto.
   - (* tapp *) f_equal;
-      [ apply IHfterm_expr_equiv; auto
-      | apply (ftyp_expr_equiv_unique tl t te H0 _ H2) ].
+      [ apply IH; auto
+      | apply (ftyp_expr_equiv_unique tl t te Hty _ H2i) ].
   - (* cast *) f_equal;
-      [ apply IHfterm_expr_equiv; auto
-      | apply (ftyp_expr_equiv_unique tl A eA H0 _ H3)
-      | apply (ftyp_expr_equiv_unique tl B eB H1 _ H4) ].
+      [ apply IH; auto
+      | apply (ftyp_expr_equiv_unique tl A eA HA _ H2i)
+      | apply (ftyp_expr_equiv_unique tl B eB HB _ H3i) ].
   - (* gnd *) f_equal;
-      [ apply IHfterm_expr_equiv; auto
-      | apply (ftyp_expr_equiv_unique tl G eG H0 _ H2) ].
+      [ apply IH; auto
+      | apply (ftyp_expr_equiv_unique tl G eG HG _ H2i) ].
   - (* is_gnd *) f_equal;
-      [ apply IHfterm_expr_equiv; auto
-      | apply (ftyp_expr_equiv_unique tl G eG H0 _ H2) ].
+      [ apply IH; auto
+      | apply (ftyp_expr_equiv_unique tl G eG HG _ H2i) ].
   - (* nu *) f_equal;
-      [ apply (ftyp_expr_equiv_unique tl A eA H _ H1)
-      | apply IHfterm_expr_equiv; auto ].
+      [ apply (ftyp_expr_equiv_unique tl A eA HA _ H1i)
+      | apply IH; auto ].
 Qed.
 
 (** ** Alpha-equivalence of rendered expressions
@@ -508,9 +544,11 @@ Qed.
 Definition ftyp_alpha (tl : partial_names) (a b : ftyp_expr) : Prop :=
   exists t, ftyp_expr_equiv tl t a /\ ftyp_expr_equiv tl t b.
 
+(** Term-level analogue of [ftyp_alpha]: two named terms decode to the same de Bruijn term. *)
 Definition fterm_alpha (tl vl : partial_names) (a b : fterm_expr) : Prop :=
   exists e, fterm_expr_equiv tl vl e a /\ fterm_expr_equiv tl vl e b.
 
+(** The named type produced by [ftyp_expression_of] does not depend, up to alpha-equivalence, on the hint list used. *)
 Theorem ftyp_expression_of_hints_alpha : forall t tl h1 h2 Hu Hf,
   ftyp_alpha tl
     (fst (proj1_sig (ftyp_expression_of t tl h1 Hu Hf)))
@@ -519,6 +557,7 @@ Proof.
   intros. exists t. split; apply (proj2_sig (ftyp_expression_of _ _ _ _ _)).
 Qed.
 
+(** The named term produced by [fterm_expression_of] does not depend, up to alpha-equivalence, on the hint lists used. *)
 Theorem fterm_expression_of_hints_alpha : forall e tl vl bh1 th1 bh2 th2
   Htu Hvu Hf,
   fterm_alpha tl vl

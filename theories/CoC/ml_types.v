@@ -35,6 +35,7 @@ Proof.
   - right. intro Heq. subst. rewrite compare_refl in H. discriminate.
 Defined.
 
+(** Decidable equality on names. *)
 Definition name_eq_dec : forall s1 s2 : name, {s1 = s2} + {s1 <> s2}.
 Proof.
   decide equality.
@@ -45,5 +46,6 @@ Defined.
 (** Injective name generation from naturals. *)
 Definition name_of_nat (n : nat) : name := gen_name n.
 
+(** [name_of_nat] is injective. *)
 Lemma name_of_nat_inj : forall m n : nat, name_of_nat m = name_of_nat n -> m = n.
 Proof. intros m n H. injection H. auto. Qed.

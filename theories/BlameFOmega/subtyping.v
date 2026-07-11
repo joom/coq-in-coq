@@ -381,7 +381,9 @@ Proof.
     rewrite <- tswap_tlift_10. auto.
 Qed.
 
+(** Positive-polarity projection of [pos_neg_subtype_tswap]. *)
 Definition pos_subtype_tswap := proj1 pos_neg_subtype_tswap.
+(** Negative-polarity projection of [pos_neg_subtype_tswap]. *)
 Definition neg_subtype_tswap := proj2 pos_neg_subtype_tswap.
 
 (** ** Ordinary subtyping metatheory *)

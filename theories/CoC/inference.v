@@ -182,14 +182,16 @@ Section TypeChecker.
 (** Well-formedness of the environment follows from an explained error. *)
   Lemma explanation_well_formed : forall e (err : type_error), explanation e err -> well_formed e.
   Proof.
-    simple induction 1; intros; auto with coc arith.
-    inversion_clear H0.
+    induction 1 as [e0 t err0 Hexp IH|e0 m at_ et Hty Hnty Hfree|e0 Hwf Hnk|e0 n Hwf Hlen
+                    |e0 m t Hty|e0 m t Hty Hnty2|e0 m t Hty Hnty3|e0 u v a b tv Hty1 Hty2 Hnty4];
+     intros; auto with coc arith.
+    inversion_clear IH as [ | e1 T s Hty0 ].
     apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
     apply has_type_well_formed with m at_; auto with coc arith.
 
     cut (well_formed (t :: e0)); intros.
-    inversion_clear H0.
+    inversion_clear H as [ | e1 T s Hty0 ].
     apply has_type_well_formed with t (sort_term s); auto with coc arith.
 
     apply has_type_well_formed with m (sort_term kind); auto with coc arith.
@@ -516,16 +518,16 @@ Section TypeChecker.
    forall e (m : term) t (err : type_error),
    check_error m t err -> explanation e err -> (has_type e m t -> False).
   Proof.
-    simple destruct 1; intros.
+    destruct 1 as [err0 Hinf|err0 Hinf Hnk|at_]; intros.
     apply infer_error_no_type with (m := m) (err := err0) (e := e) (t := t); auto with coc arith.
 
-    destruct (type_case e m t H3) as [[x H4]|H4].
+    destruct (type_case e m t H0) as [[x H1]|H1].
     apply infer_error_no_type with (m := t) (err := err0) (e := e) (t := sort_term x);
       auto with coc arith.
 
-    apply H1; assumption.
+    apply Hnk; assumption.
 
-    inversion_clear H0; auto with coc arith.
+    inversion_clear H; auto with coc arith.
   Qed.
 
 
@@ -616,14 +618,14 @@ Section TypeChecker.
    forall e t (err : type_error),
    declare_error t err -> explanation e err -> (well_formed (t :: e) -> False).
   Proof.
-    simple destruct 1; intros.
-    inversion_clear H2.
+    destruct 1 as [err0 Hinf|t0]; intros Hexp Hwf.
+    inversion_clear Hwf.
     apply infer_error_no_type with (m := t) (err := err0) (e := e) (t := sort_term s);
       auto with coc arith.
 
-    inversion_clear H0.
-    inversion_clear H1.
-    elim H3 with s; auto with coc arith.
+    inversion_clear Hexp.
+    inversion_clear Hwf.
+    elim H0 with s; auto with coc arith.
   Qed.
 
 
@@ -665,11 +667,11 @@ Section Decidabilite_typage.
 (** Decidability of well-formedness for environments. *)
   Lemma decide_well_formed : forall e, (well_formed e) + (well_formed e -> False).
   Proof.
-    simple induction e; intros.
+    induction e as [|a l IH]; intros.
     left.
     apply wf_nil.
 
-    elim H.
+    elim IH.
     intros wf_l.
     elim add_type with l a; trivial.
     intros (err, expl_err, decl_err).
@@ -679,17 +681,17 @@ Section Decidabilite_typage.
     left; trivial.
 
     intros not_wf_l.
-    right; intros.
+    right; intros Hwfa.
     apply not_wf_l.
-    inversion_clear H0.
-    apply has_type_well_formed with (1 := H1).
+    inversion_clear Hwfa.
+    apply has_type_well_formed with (1 := H).
   Qed.
 
 
 (** Decidability of typing judgments. *)
   Lemma decide_type : forall e t (tp : term), (has_type e t tp) + (has_type e t tp -> False).
   Proof.
-    intros.
+    intros e t tp.
     elim decide_well_formed with e.
     intros wf_e.
     elim check_type with e t tp; trivial.
@@ -700,9 +702,9 @@ Section Decidabilite_typage.
     left; trivial.
 
     intros not_wf_e.
-    right; intros.
+    right; intros Hty.
     apply not_wf_e.
-    apply has_type_well_formed with (1 := H).
+    apply has_type_well_formed with (1 := Hty).
   Qed.
 
 End Decidabilite_typage.

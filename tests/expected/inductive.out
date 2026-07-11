@@ -1,0 +1,41 @@
+bool is defined.
+true is defined.
+false is defined.
+bool_rec is defined.
+negb is defined.
+Computed: fun (x0 : Set) (x1 x2 : x0) => x2
+Computed: fun (x0 : Set) (x1 x2 : x0) => x1
+nat is defined.
+O is defined.
+S is defined.
+nat_rec is defined.
+add is defined.
+mul is defined.
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 (x2 x1))
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 (x2 (x2 x1)))
+list is defined.
+nil is defined.
+cons is defined.
+list_rec is defined.
+length is defined.
+app is defined.
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 x1)
+Tree is defined.
+leaf is defined.
+node is defined.
+Tree_rec is defined.
+leaves is defined.
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x2 (x2 (x2 x1))
+Computed: fun (x0 : Set) (x1 : x0) (x2 : x0 -> x0) => x1
+Extracted: fun (a : forall (x0 : *), x0 -> (x0 -> x0) -> x0) (X : *) (f0 : X) (f1 : X -> X) => f1 (a [X] f0 f1)
+Vec is defined.
+vnil is defined.
+vcons is defined.
+Vec_rec is defined.
+vmap is defined.
+Computed: fun (x0 : (forall (x0 : Set), x0 -> (x0 -> x0) -> x0) -> Set) (x1 : x0 (fun (x1 : Set) (x2 : x1) (x3 : x1 -> x1) => x2)) (x2 : forall (x2 : forall (x2 : Set), x2 -> (x2 -> x2) -> x2), (forall (x3 : Set), x3 -> (x3 -> x3) -> x3) -> x0 x2 -> x0 (fun (x5 : Set) (x6 : x5) (x7 : x5 -> x5) => x7 (x2 x5 x6 x7))) => x2 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 x4) (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 (x5 x4)) (x2 (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x4) (fun (x3 : Set) (x4 : x3) (x5 : x3 -> x3) => x5 x4) x1)
+eq is defined.
+eq_refl is defined.
+eq_rec is defined.
+eq_sym is defined.
+Extracted: fun (A : *) (x y : A) (h : forall (x0 : *), x0 -> x0) => (fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) (x2 : x0) (x3 : forall (x2 : *), x2 -> x2) => x3 [x1] x1) [A] x [forall (x0 : *), x0 -> x0] ((fun (x0 : *) (x0 : x0) (x1 : *) (x1 : x1) => x1) [A] x) y h

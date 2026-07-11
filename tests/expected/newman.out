@@ -1,12 +1,13 @@
 A admitted.
 R admitted.
-Rstar admitted.
-Rstar_refl admitted.
-Rstar_step admitted.
-Rstar_ind admitted.
+Rstar is defined.
+Rstar_refl is defined.
+Rstar_step is defined.
+Rstar_rec is defined.
 Rstar_case admitted.
-coherence admitted.
-coh_intro admitted.
+coherence is defined.
+coh_intro is defined.
+coherence_rec is defined.
 coh_elim admitted.
 Hyp1 admitted.
 Hyp2 admitted.

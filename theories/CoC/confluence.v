@@ -190,8 +190,8 @@ Section Church_Rosser.
   (** Normal forms are unique up to conversion. *)
   Lemma normal_form_uniqueness : forall u v, convertible u v -> normal u -> normal v -> u = v.
   Proof.
-    intros.
-    elim church_rosser_theorem with u v; intros; auto with coc core arith sets.
+    intros u v Hconv Hnu Hnv.
+    elim church_rosser_theorem with u v; [ | assumption ]; intros x Hux Hvx; auto with coc core arith sets.
     rewrite (reduces_normal u x); auto with coc core arith sets.
     elim reduces_normal with v x; auto with coc core arith sets.
   Qed.
@@ -199,16 +199,15 @@ Section Church_Rosser.
   (** Convertible sorts must be equal. *)
   Lemma convertible_sort : forall s1 s2, convertible (sort_term s1) (sort_term s2) -> s1 = s2.
   Proof.
-    intros.
-    cut (sort_term s1 = sort_term s2); intros.
-    injection H0; auto with coc core arith sets.
+    intros s1 s2 Hconv.
+    cut (sort_term s1 = sort_term s2); [ intros Heq; injection Heq; auto with coc core arith sets | ].
 
     apply normal_form_uniqueness; auto with coc core arith sets.
-    red in |- *; intros.
-    inversion_clear H0.
+    red in |- *; intros t Hred.
+    inversion_clear Hred.
 
-    red in |- *; intros.
-    inversion_clear H0.
+    red in |- *; intros t Hred.
+    inversion_clear Hred.
   Qed.
 
   (** Kind and prop are not convertible. *)

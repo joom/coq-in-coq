@@ -1,56 +1,43 @@
-(* Dependent pairs (Sigma types) and first-class modules in CoC.
+(* Dependent pairs (Sigma types) via the Inductive command.
 
-   [Sig A B] packages a witness [x : A] together with a payload [B x] whose
-   type DEPENDS on that witness.  This single construct models existentials,
-   dependent records, and -- when [A] is [Set] -- first-class modules and a
-   poor man's typeclass: a value paired with operations over it.
+   [Inductive sigT (A : Set) (B : A -> Set) : Set := existT : forall (x:A), B x -> sigT A B]
+   desugars to the impredicative existential encoding
 
-   Extraction erases the dependency.  The payload type [B x] mentions the term
-   [x], which is dropped, so a [Sig A B] becomes a plain pair type [Sig A B]
-   over the *type* arguments only.  When the witness is itself a type (the
-   module case), packing a type as a value is exactly the full-dependency
-   boundary: it extracts through the target's [?] and [blame] -- the honest
-   image of "a type used as data".
+     sigT A B  =  forall (X : Set), (forall (x : A), B x -> X) -> X
 
-   The axioms are the inductive kit of the (negative) Sigma type: the family
-   [Sig], its constructor [pair], and its eliminators -- the projections
-   [fst] and [snd].  ([snd]'s type mentions [fst], which is exactly why the
-   projections must be primitive here: deriving them from a recursor needs
-   the iota-conversion a bare PTS lacks.) *)
+   The generated [sigT_rec] is the non-dependent eliminator, which gives the
+   first projection.  The DEPENDENT second projection [snd : forall p, B (fst p)]
+   needs a motive over the VALUE [p] -- value-dependent elimination, which the
+   impredicative encoding cannot provide (Geuvers 2001).  It is not definable
+   here; that is the price of the encoding. *)
 
 
-Axiom Nat : Set.
-Axiom Vec : Set -> Nat -> Set.
+Inductive nat : Set := | O : nat | S : nat -> nat.
 
-Axiom Sig : forall (A : Set), (A -> Set) -> Set.
-Axiom pair : forall (A : Set) (B : A -> Set) (x : A), B x -> Sig A B.
-Axiom fst : forall (A : Set) (B : A -> Set), Sig A B -> A.
-Axiom snd : forall (A : Set) (B : A -> Set) (p : Sig A B), B (fst A B p).
+Inductive t (A : Set) : nat -> Set :=
+  | nil : t A O
+  | cons : forall (n : nat), A -> t A n -> t A (S n).
 
-
-(* build a dependent pair: the second component's type depends on the first. *)
-
-Infer fun (A : Set) (B : A -> Set) (x : A) (y : B x) => pair A B x y.
-
-Extract fun (A : Set) (B : A -> Set) (x : A) (y : B x) => pair A B x y.
+Inductive sigT (A : Set) (B : A -> Set) : Set :=
+  | existT : forall (x : A), B x -> sigT A B.
 
 
-(* the dependent second projection: its result type B (fst p) is computed
-   from the value being projected.  Extraction erases that computation. *)
+(* build a dependent existT. *)
 
-Extract fun (A : Set) (B : A -> Set) (p : Sig A B) => snd A B p.
-
-
-(* re-pack: project then rebuild -- an eta-like round trip through the pair. *)
-
-Extract fun (A : Set) (B : A -> Set) (p : Sig A B) =>
-  pair A B (fst A B p) (snd A B p).
+Extract fun (A : Set) (B : A -> Set) (x : A) (y : B x) => existT A B x y.
 
 
-(* Existential over a length: "a vector of SOME size".  Packing hides the
-   index [n] behind the pair, the classic use of Sigma to forget a static
-   quantity.  Extraction erases the index entirely: the witness is an ordinary
-   [Nat] and the payload an ordinary [Vec A]. *)
+(* first projection, via the generated [sigT_rec]. *)
 
-Extract fun (A : Set) (n : Nat) (v : Vec A n) =>
-  pair Nat (fun (m : Nat) => Vec A m) n v.
+Definition projT1 (A : Set) (B : A -> Set) (p : sigT A B) : A :=
+  sigT_rec A B A (fun (x : A) (_ : B x) => x) p.
+
+Check projT1.
+Extract projT1.
+
+
+(* existential over a length: "a vector of SOME size".  Packing hides the
+   index behind the existT. *)
+
+Extract fun (A : Set) (n : nat) (v : t A n) =>
+  existT nat (fun (m : nat) => t A m) n v.

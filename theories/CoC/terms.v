@@ -174,8 +174,10 @@ Section Beta_Reduction.
     | red_refl : forall M, reduces M M
     | red_trans : forall M P N, reduces_once P N -> reduces M P -> reduces M N.
 
+  (** [reduces] is reflexive. *)
   Definition refl_reduces : forall M, reduces M M := red_refl.
 
+  (** [reduces] is transitive with a single extra reduction step on the right. *)
   Definition trans_red : forall M (P : term) N, reduces M P -> reduces_once P N -> reduces M N :=
     fun M P N H1 H2 => red_trans M P N H2 H1.
 
@@ -185,11 +187,14 @@ Section Beta_Reduction.
     | conv_red : forall M P N, reduces_once P N -> convertible M P -> convertible M N
     | conv_exp : forall M P N, reduces_once N P -> convertible M P -> convertible M N.
 
+  (** [convertible] is reflexive. *)
   Definition refl_convertible : forall M, convertible M M := conv_refl.
 
+  (** [convertible] is transitive with a single extra reduction step on the right. *)
   Definition trans_conv_red : forall M (P : term) N, convertible M P -> reduces_once P N -> convertible M N :=
     fun M P N H1 H2 => conv_red M P N H2 H1.
 
+  (** [convertible] is transitive with a single extra expansion step on the right. *)
   Definition trans_conv_exp : forall M (P : term) N, convertible M P -> reduces_once N P -> convertible M N :=
     fun M P N H1 H2 => conv_exp M P N H2 H1.
 
