@@ -1,26 +1,15 @@
-(** * BlameFOmega.simulation: Simulation relation and Jack-of-All-Trades.
+(** * BlameFOmega.simulation: Syntactic extraction simulation.
 
     Defines the simulation relation [sim] (and its type-level companion
-    [typ_sim]), their reflexive-transitive closure [sim_star], observational
-    approximation, convergence, divergence, and proves the syntactic
-    Jack-of-All-Trades simulation lemma.
+    [typ_sim]), their reflexive-transitive closure [sim_star], and a syntactic
+    cast-instantiation lemma.
 
-    OPEN: [sim s t -> approximates s t].  This bridge is NOT merely a matter of
-    proving context compatibility for the present relation.  The current [sim] is
-    deliberately SYNTACTIC and too broad to be a contextual-approximation
-    principle: it contains one-sided rules such as [sim_blame] ([blame q]
-    simulates anything) and the [sim_left_*]/type-application rules, which are
-    valid as extraction bookkeeping but are not sound approximation principles
-    for an untyped relation.  Closing the gap therefore requires a TYPED
-    replacement (or typed restriction) of [sim], together with context
-    compatibility / CIU adequacy for THAT typed relation, via a CIU-style
-    argument or a step-indexed logical relation.  Two infrastructure pieces are
-    already in place: typed progress ([progress], [progress.v]) and
-    determinism ([step_deterministic], [semantics.v], which subsumes
-    "determinism-up-to-blame").  The extraction in [proofs.v] establishes the
-    syntactic simulation ([extract_reduces_once], [extract_reduces]) and
-    blame-safety ([extracted_safe]); the semantic bridge to observational
-    approximation remains a conjecture. *)
+    The current [sim] is deliberately syntactic and is not a contextual
+    approximation: one-sided rules such as [sim_blame] and [sim_left_*] are
+    extraction bookkeeping rules, not behavioral principles.  A future
+    contextual theorem would require typed program contexts, explicit
+    observations (including blame), and a typed logical relation or CIU
+    argument.  No such theorem or conjectural API is exported here. *)
 
 From Stdlib Require Import Arith.
 From Stdlib Require Import Compare_dec.
@@ -29,36 +18,13 @@ From BlameFOmega Require Import syntax.
 From BlameFOmega Require Import infrastructure.
 From BlameFOmega Require Import semantics.
 
-(** ** Convergence and divergence *)
-
-(** A term converges if it reduces to a value.  Currently unused; retained as
-    the intended semantic target for [sim] (see OPEN note above). *)
-Definition converges (s: term): Prop := exists v, value v /\ [s ~>* v].
-
-(** A term diverges if every reduct has a further reduct. *)
-Definition diverges (s: term): Prop := forall t, [s ~>* t] -> exists t', [t ~> t'].
-
-(** ** Observational approximation *)
-
-(** Observational approximation (provisional): [s] approximates [t] if every
-    context that makes [s] converge/diverge does the same for [t].  The intended
-    theorem is [sim s t -> approximates s t]; see OPEN note above.  This
-    definition is retained as a target for the open bridge; it is not used by
-    any current theorem. *)
-Definition approximates (s t: term): Prop :=
-  forall (E: term -> term),
-  (forall a b, [a ~> b] -> [E a ~> E b]) ->
-  (diverges (E s) -> diverges (E t)) /\
-  (converges (E s) -> converges (E t)).
-
 (** ** Simulation relation *)
 
 (** Syntactic simulation relation used by extraction.
 
     This relation is intentionally broader than a contextual approximation
     relation.  It supports the extraction proofs and the syntactic
-    Jack-of-All-Trades lemma, but [sim s t -> approximates s t] is not proved
-    and is false for the current untyped relation (see header). *)
+    cast-instantiation lemma, but it is not a behavioral preorder. *)
 Inductive sim: term -> term -> Prop :=
   | sim_pos_cast: forall s t A A' B p,
     sim s t -> typ_sim A A' ->
@@ -162,7 +128,7 @@ Proof. intros s t u H1 H2. unfold sim_star in *. eapply rt_trans; eauto. Qed.
 
 Hint Resolve sim_star_refl sim_star_step: blame.
 
-(** ** Jack-of-All-Trades *)
+(** ** Syntactic instantiation simulation *)
 
 (** Substituting any type [C] is related by [typ_sim] to substituting [?]. *)
 Lemma typ_sim_tsubst_dyn: forall A C k,
@@ -172,10 +138,10 @@ Proof.
   destruct (lt_eq_lt_dec k n) as [[?|?]|?]; eauto with blame.
 Qed.
 
-(** Jack-of-All-Trades: instantiating at [?] simulates instantiation at any type [C].
-    The two [sim] obligations decompose into [sim_type_app] (the term part)
-    and [typ_sim_tsubst_dyn] (the type part). *)
-Theorem jack_of_all_trades:
+(** Instantiating at [?] is related by the extraction's syntactic [sim]
+    relation to instantiating at any type [C].  This is not the contextual
+    Jack-of-All-Trades theorem from Ahmed et al. *)
+Theorem cast_instantiation_sim:
   forall v A B C p,
   sim (cast (tapp v C) (tsubst C 0 A) B p)
       (cast (tapp v dyn) (tsubst dyn 0 A) B p).

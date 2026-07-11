@@ -6,14 +6,20 @@ Vec admitted.
 vnil admitted.
 vcons admitted.
 vrec admitted.
-Inferred type: forall (A : Set), forall (B : Set), (A -> B) -> forall (n : Nat), Vec A n -> Vec B n
-Extracted: ΛA:*. ΛB:*. λf:A -> B. λn:Nat. λxs:Vec A. (vrec [A] [Vec B] (vnil [B]) (λx0:Nat. λx1:A. λx2:Vec B. (vcons [B] x0 ((f x1)) x2)) n xs)
-Inferred type: forall (A : Set), forall (B : Set), (A -> B -> B) -> B -> forall (n : Nat), Vec A n -> B
-Extracted: ΛA:*. ΛB:*. λf:A -> B -> B. λz:B. λn:Nat. λxs:Vec A. (vrec [A] [B] z (λx0:Nat. λx1:A. λx2:B. (f x1 x2)) n xs)
+vmap is defined.
+Inferred type: forall (A B : Set), (A -> B) -> forall (n : Nat), Vec A n -> Vec B n
+Extracted: fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) => vrec [A] [Vec B] (vnil [B]) (fun (x0 : Nat) (x1 : A) (x2 : Vec B) => vcons [B] x0 (f x1) x2) n xs
+vfoldr is defined.
+Inferred type: forall (A B : Set), (A -> B -> B) -> B -> forall (n : Nat), Vec A n -> B
+Extracted: fun (A B : *) (f : A -> B -> B) (z : B) (n : Nat) (xs : Vec A) => vrec [A] [B] z (fun (x0 : Nat) (x1 : A) (x2 : B) => f x1 x2) n xs
+vreplicate is defined.
 Correct.
-Extracted: ΛA:*. λx:A. λn:Nat. (Nat_rec [Vec A] (vnil [A]) (λx0:Nat. λx1:Vec A. (vcons [A] x0 x x1)) n)
-Inferred type: forall (A : Set), forall (n : Nat), Vec A n -> Nat
-Extracted: ΛA:*. λn:Nat. λxs:Vec A. (vrec [A] [Nat] NZ (λx0:Nat. λx1:A. λx2:Nat. (NS x2)) n xs)
+Extracted: fun (A : *) (x : A) (n : Nat) => Nat_rec [Vec A] (vnil [A]) (fun (x0 : Nat) (x1 : Vec A) => vcons [A] x0 x x1) n
+vlength is defined.
+Inferred type: forall (A : Set) (n : Nat), Vec A n -> Nat
+Extracted: fun (A : *) (n : Nat) (xs : Vec A) => vrec [A] [Nat] NZ (fun (x0 : Nat) (x1 : A) (x2 : Nat) => NS x2) n xs
+vsingleton is defined.
 Correct.
-Extracted: ΛA:*. λx:A. (vcons [A] NZ x (vnil [A]))
-Extracted: ΛA:*. ΛB:*. ΛC:*. λf:A -> B. λg:B -> C -> C. λz:C. λn:Nat. λxs:Vec A. (vrec [A] [C] z (λx0:Nat. λx1:A. λx2:C. (g ((f x1)) x2)) n xs)
+Extracted: fun (A : *) (x : A) => vcons [A] NZ x (vnil [A])
+vmapfold is defined.
+Extracted: fun (A B C : *) (f : A -> B) (g : B -> C -> C) (z : C) (n : Nat) (xs : Vec A) => vrec [A] [C] z (fun (x0 : Nat) (x1 : A) (x2 : C) => g (f x1) x2) n xs

@@ -1,17 +1,17 @@
 (** Assumption audit for the headline results.
 
     Compiling this file prints, for each main theorem, the axioms it depends on.
-    The development is intended to be free of admitted goals; the only
-    assumptions that should appear are those inherent to the standard library's
-    primitive strings and integers (used for source variable names) and
-    [eq_rect_eq] introduced by dependent case analysis.  Any other axiom -- in
-    particular any admitted goal -- is a regression.  A CI step can grep this
-    output for unexpected names. *)
+    The audited core theorem set should use at most [eq_rect_eq], introduced by
+    dependent case analysis. Name-rendering theorems, which use primitive names,
+    are outside this file. Any other axiom in this listed set is a regression;
+    [check-assumptions.sh] also scans all theory sources for proof holes and
+    axiom declarations. *)
 
 From Extraction Require Import proofs.
 From BlameFOmega Require Import blame ty_confluence typing_metatheory progress.
 From BlameFOmega Require Import subtyping_safety.
 From BlameFOmega Require Import preservation.
+From BlameFOmega Require Import nonnormalization.
 
 (* Extraction metatheory *)
 Print Assumptions extract_well_typed.
@@ -23,7 +23,7 @@ Print Assumptions extract_reduces_once.
 Print Assumptions extract_reduces.
 Print Assumptions extract_deriv_indep.
 Print Assumptions extraction_blame_free.
-Print Assumptions extraction_simulates_any_instantiation.
+Print Assumptions extraction_instantiation_sim.
 Print Assumptions extract_typ_dyn_free.
 Print Assumptions extract_typ_dyn_free_iff.
 
@@ -58,8 +58,12 @@ Print Assumptions progress.
 Print Assumptions preservation.
 Print Assumptions preservation_star.
 Print Assumptions typing_regular.
+Print Assumptions typing_annotations_regular.
 Print Assumptions typing_swap_type_def.
 Print Assumptions typing_swap_kind_def.
 
 (* Subtyping / blame safety corollary *)
 Print Assumptions subtyping_theorem.
+Print Assumptions subtyping_cast_blame_free.
+Print Assumptions blame_theorem_pos.
+Print Assumptions typing_does_not_imply_strong_normalization.

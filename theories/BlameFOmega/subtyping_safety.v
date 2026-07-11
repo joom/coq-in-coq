@@ -1,9 +1,9 @@
-(** * BlameFOmega.subtyping_safety: The Subtyping Theorem.
+(** * BlameFOmega.subtyping_safety: Subtyping-label safety.
 
     Proves that [safe_sub p] is preserved by one-step and multi-step
-    reduction, and derives the Subtyping Theorem (Corollary 18): a term
-    whose casts carry ordinary subtyping evidence never reduces to [blame p]
-    or [blame p̄]. *)
+    reduction.  A term satisfying that syntactic invariant cannot reduce to
+    either polarity of the tracked label.  This file does not formalize the
+    unique-cast-in-a-program premise of Ahmed et al.'s contextual corollary. *)
 
 From Stdlib Require Import Arith.
 From Stdlib Require Import Lia.
@@ -21,11 +21,12 @@ From BlameFOmega Require Import safety.
     theorem: it does not assert that a non-value can step.) *)
 Lemma safe_sub_step_no_tracked_blame:
   forall s p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_sub p s -> forall s', [s ~> s'] ->
   s' <> blame p /\ s' <> blame (negate p).
 Proof.
   intros s p Hid Hsafe s' Hstep.
+  unfold external_label, first_external_label_id in Hid.
   revert Hsafe. induction Hstep; intros Hsafe; inversion Hsafe; subst;
   try (split; discriminate).
   all: try solve [split; intro Heq; try discriminate;
@@ -155,10 +156,11 @@ Qed.
 (** One-step preservation of [safe_sub]: if [s] is safe and steps to [s'], so is [s']. *)
 Lemma subtyping_preservation:
   forall s s' p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_sub p s -> [s ~> s'] -> safe_sub p s'.
 Proof.
   intros s s' p Hid Hsafe Hstep.
+  unfold external_label, first_external_label_id in Hid.
   revert Hsafe. induction Hstep; intros Hsafe; inversion Hsafe; subst;
   eauto with blame.
   (* beta *)
@@ -341,23 +343,36 @@ Qed.
 (** Multi-step preservation of [safe_sub]. *)
 Lemma subtyping_preservation_star:
   forall s s' p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_sub p s -> [s ~>* s'] -> safe_sub p s'.
 Proof.
   intros s s' p Hid Hsafe Hstar. induction Hstar; eauto.
   eapply subtyping_preservation; eauto.
 Qed.
 
-(** ** Subtyping Theorem (Corollary 18) *)
+(** ** Subtyping-label safety theorem *)
 
-(** Corollary 18: a [safe_sub p] term never reduces to [blame p] or [blame p̄]. *)
+(** A [safe_sub p] term never reduces to either polarity of the tracked label. *)
 Theorem subtyping_theorem:
   forall t p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_sub p t ->
   ~ [t ~>* blame p] /\ ~ [t ~>* blame (negate p)].
 Proof.
   intros t p Hid Hsafe. split; intro Hstar;
     destruct (safe_sub_not_blame _ _ (subtyping_preservation_star _ _ _ Hid Hsafe Hstar));
     auto.
+Qed.
+
+(** Direct-cast specialization of [subtyping_theorem]. *)
+Corollary subtyping_cast_blame_free : forall t A B p,
+  external_label p ->
+  subtype A B ->
+  safe_sub p t ->
+  ~ [cast t A B p ~>* blame p] /\
+  ~ [cast t A B p ~>* blame (negate p)].
+Proof.
+  intros t A B p Hexternal Hsub Hsafe.
+  apply subtyping_theorem; [exact Hexternal |].
+  apply ss_cast_pos; assumption.
 Qed.

@@ -72,7 +72,7 @@ Qed.
 
 Definition omega_type : typ := arrow dyn dyn.
 
-Definition loop_label : label := mk_label 2 true.
+Definition loop_label : label := mk_label first_external_label_id true.
 
 Definition omega_body : term :=
   app (cast (var 0) dyn omega_type loop_label) (var 0).

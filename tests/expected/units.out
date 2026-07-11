@@ -2,13 +2,23 @@ Dim admitted.
 one admitted.
 dmul admitted.
 dinv admitted.
+Nat admitted.
+NZ admitted.
+NS admitted.
+Nat_rec admitted.
+add is defined.
+mul is defined.
 Qty admitted.
-qmul admitted.
-qadd admitted.
-qinv admitted.
-Inferred type: forall (len : Dim), forall (time : Dim), Qty len -> Qty time -> Qty (dmul len (dinv time))
-Extracted: λlen:Dim. λtime:Dim. λd:Qty. λt:Qty. (qmul len ((dinv time)) d ((qinv time t)))
-Extracted: λmass:Dim. λvel:Dim. λm:Qty. λv:Qty. (qmul ((dmul mass vel)) vel ((qmul mass vel m v)) v)
-Extracted: λd:Dim. λx:Qty. λy:Qty. (qadd d x y)
-Extracted: λd:Dim. λx:Qty. λy:Qty. (qmul d ((dinv d)) x ((qinv d y)))
-Extracted: λd:Dim. ((<? => Dim -> ?>^0+ blame(0+)) d)
+qty admitted.
+qty_rec admitted.
+unqty is defined.
+qmul is defined.
+qadd is defined.
+qinv is defined.
+speed is defined.
+Correct.
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Dim -> Qty -> Nat) => (fun (x3 : Dim -> Dim -> Qty -> Qty -> Qty) => (fun (x4 : Dim -> Qty -> Qty) (x5 x6 : Dim) (x7 x8 : Qty) => x3 x5 (dinv x6) x7 (x4 x6 x8)) (fun (x4 : Dim) (x5 : Qty) => qty (dinv x4) (x2 x4 x5))) (fun (x3 x4 : Dim) (x5 x6 : Qty) => qty (dmul x3 x4) (x1 (x2 x3 x5) (x2 x4 x6)))) (fun (x2 : Dim) (x3 : Qty) => qty_rec x2 [Nat] (fun (x4 : Nat) => x4) x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Dim -> Qty -> Nat) => (fun (x3 : Dim -> Dim -> Qty -> Qty -> Qty) (x4 x5 : Dim) (x6 x7 : Qty) => x3 (dmul x4 x5) x5 (x3 x4 x5 x6 x7) x7) (fun (x3 x4 : Dim) (x5 x6 : Qty) => qty (dmul x3 x4) (x1 (x2 x3 x5) (x2 x4 x6)))) (fun (x2 : Dim) (x3 : Qty) => qty_rec x2 [Nat] (fun (x4 : Nat) => x4) x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Dim -> Qty -> Nat) => (fun (x2 : Dim -> Qty -> Qty -> Qty) (x3 : Dim) (x4 x5 : Qty) => x2 x3 x4 x5) (fun (x2 : Dim) (x3 x4 : Qty) => qty x2 (x0 (x1 x2 x3) (x1 x2 x4)))) (fun (x1 : Dim) (x2 : Qty) => qty_rec x1 [Nat] (fun (x3 : Nat) => x3) x2)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Dim -> Qty -> Nat) => (fun (x3 : Dim -> Dim -> Qty -> Qty -> Qty) => (fun (x4 : Dim -> Qty -> Qty) (x5 : Dim) (x6 x7 : Qty) => x3 x5 (dinv x5) x6 (x4 x5 x7)) (fun (x4 : Dim) (x5 : Qty) => qty (dinv x4) (x2 x4 x5))) (fun (x3 x4 : Dim) (x5 x6 : Qty) => qty (dmul x3 x4) (x1 (x2 x3 x5) (x2 x4 x6)))) (fun (x2 : Dim) (x3 : Qty) => qty_rec x2 [Nat] (fun (x4 : Nat) => x4) x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: fun (d : Dim) => cast<Dyn => Dim -> Dyn>^2+(blame(2+)) d

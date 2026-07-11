@@ -53,11 +53,11 @@ Fixpoint extract_kind_L (t: terms.term) : syntax.kind :=
 
 (** The blame label carried by every cast the extraction introduces.
     Label id scheme:
-    - id 0 is reserved for internal target failures, including extraction
-      casts and ν-tampering (see [nu_tamper_label] in syntax.v);
+    - id 0 is reserved for ν-tampering (see [nu_tamper_label]);
     - id 1 is reserved for is_gnd tampering (see [is_tamper_label]);
-    - ids >= 2 are external labels tracked by the blame-freedom theorem. *)
-Definition internal_label : syntax.label := syntax.mk_label 0 true.
+    - id 2 is reserved for extraction/coercion failure;
+    - ids from [first_external_label_id] onward are external. *)
+Definition internal_label : syntax.label := syntax.extraction_failure_label.
 
 (** The dynamic function type [? -> ?]. *)
 Definition dyn_fun : syntax.typ := syntax.arrow syntax.dyn syntax.dyn.
@@ -69,13 +69,14 @@ Definition dyn_fun : syntax.typ := syntax.arrow syntax.dyn syntax.dyn.
 Definition dyn_token : syntax.term :=
   syntax.gnd (syntax.abs syntax.dyn (syntax.var 0)) dyn_fun.
 
-(** Coerce [s : A] to type [B].  When [A = B], the identity.  When [compat A B]
-    holds (decidable via [compat_dec]), a real executable cast.  Otherwise the
-    target calculus cannot express the coercion, so we emit reserved internal
-    blame immediately — an honest representation of target-inexpressible
-    coercions (e.g. higher-kinded type-family instantiation).  The simulation
-    theorem records this as a disjunction: either the extraction simulates the
-    source, or it reduces to internal blame. *)
+(** Coerce [s : A] to type [B]. When [A = B], return [s]. When [compat A B]
+    holds (decidable via [compat_dec]), build an executable cast. Otherwise,
+    emit reserved internal blame. This fallback means only that the current
+    syntactic compatibility relation has no case; it is not an inexpressibility
+    theorem modulo target definitional equality. The syntactic simulation
+    relation can relate this internal failure to the translated source term
+    through [sim_blame]. No contextual-approximation claim is made for that
+    rule. *)
 Definition coerce (s: syntax.term) (A B: syntax.typ) : syntax.term :=
   if syntax.typ_eq_dec A B then s
   else match infrastructure.compat_dec A B with

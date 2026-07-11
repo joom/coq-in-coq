@@ -10,10 +10,10 @@ let () = List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     "let", LET; "in", IN;
     "Quit", QUIT; "Axiom", AXIOM; "Infer", INFER;
     "Check", CHECK; "Delete", DELETE; "List", LIST;
-    "Help", HELP; "Extract", EXTRACT ]
+    "Help", HELP; "Extract", EXTRACT; "Definition", DEFINITION ]
 }
 
-let white = [' ' '\t' '\r' '\n']
+let white = [' ' '\t' '\r']
 let letter = ['a'-'z' 'A'-'Z']
 let digit = ['0'-'9']
 let ident_char = letter | digit | ['_' '\'']

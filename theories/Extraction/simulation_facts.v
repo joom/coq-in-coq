@@ -499,124 +499,6 @@ Proof.
     auto with coc core arith datatypes.
 Qed.
 
-(** ** Type-level one-step reduction *)
-Inductive reduces_once_t : term -> term -> Type :=
-  | beta_t : forall M N T,
-      reduces_once_t (terms.app (terms.lam T M) N) (subst N M)
-  | abs_reduces_left_t :
-      forall M M', reduces_once_t M M' ->
-      forall N, reduces_once_t (terms.lam M N) (terms.lam M' N)
-  | abs_reduces_right_t :
-      forall M M', reduces_once_t M M' ->
-      forall N, reduces_once_t (terms.lam N M) (terms.lam N M')
-  | app_reduces_left_t :
-      forall M1 N1, reduces_once_t M1 N1 ->
-      forall M2, reduces_once_t (terms.app M1 M2) (terms.app N1 M2)
-  | app_reduces_right_t :
-      forall M2 N2, reduces_once_t M2 N2 ->
-      forall M1, reduces_once_t (terms.app M1 M2) (terms.app M1 N2)
-  | prod_reduces_left_t :
-      forall M1 N1, reduces_once_t M1 N1 ->
-      forall M2, reduces_once_t (terms.prod M1 M2) (terms.prod N1 M2)
-  | prod_reduces_right_t :
-      forall M2 N2, reduces_once_t M2 N2 ->
-      forall M1, reduces_once_t (terms.prod M1 M2) (terms.prod M1 N2).
-
-(** Computable decision of [reduces_once_t t v]. *)
-Fixpoint reduces_once_dec (t v : term) {struct t} : option (reduces_once_t t v).
-Proof.
-  destruct t as [s | n | T M | u1 u2 | T U].
-  - exact None.
-  - exact None.
-  - (* lam T M *)
-    destruct v as [| | T' M' | |]; [exact None | exact None | | exact None | exact None].
-    destruct (term_eq_dec M M') as [<- |].
-    + destruct (reduces_once_dec T T') as [r |].
-      * exact (Some (abs_reduces_left_t T T' r M)).
-      * destruct (term_eq_dec T T') as [<- |].
-        -- destruct (reduces_once_dec M M) as [r |].
-           ++ exact (Some (abs_reduces_right_t M M r T)).
-           ++ exact None.
-        -- exact None.
-    + destruct (term_eq_dec T T') as [<- |].
-      * destruct (reduces_once_dec M M') as [r |].
-        -- exact (Some (abs_reduces_right_t M M' r T)).
-        -- exact None.
-      * exact None.
-  - (* app u1 u2 — try beta then congruences *)
-    destruct (match u1 return option term with
-              | terms.lam _ M1 => Some M1
-              | _ => None
-              end) as [M1|] eqn:Hbeta.
-    + (* u1 is a lam — try beta *)
-      destruct (term_eq_dec (subst u2 M1) v) as [<- |].
-      * destruct u1 as [| | T1 M1' | |]; try discriminate.
-        injection Hbeta as Heq. subst M1'.
-        exact (Some (beta_t M1 u2 T1)).
-      * destruct v as [| | | v1 v2 |]; [exact None | exact None | exact None | | exact None].
-        destruct (term_eq_dec u2 v2) as [<- |].
-        -- destruct (reduces_once_dec u1 v1) as [r |].
-           ++ exact (Some (app_reduces_left_t u1 v1 r u2)).
-           ++ destruct (term_eq_dec u1 v1) as [<- |].
-              ** destruct (reduces_once_dec u2 u2) as [r |].
-                 --- exact (Some (app_reduces_right_t u2 u2 r u1)).
-                 --- exact None.
-              ** exact None.
-        -- destruct (term_eq_dec u1 v1) as [<- |].
-           ++ destruct (reduces_once_dec u2 v2) as [r |].
-              ** exact (Some (app_reduces_right_t u2 v2 r u1)).
-              ** exact None.
-           ++ exact None.
-    + (* u1 is not a lam — only congruences *)
-      destruct v as [| | | v1 v2 |]; [exact None | exact None | exact None | | exact None].
-      destruct (term_eq_dec u2 v2) as [<- |].
-      * destruct (reduces_once_dec u1 v1) as [r |].
-        -- exact (Some (app_reduces_left_t u1 v1 r u2)).
-        -- destruct (term_eq_dec u1 v1) as [<- |].
-           ++ destruct (reduces_once_dec u2 u2) as [r |].
-              ** exact (Some (app_reduces_right_t u2 u2 r u1)).
-              ** exact None.
-           ++ exact None.
-      * destruct (term_eq_dec u1 v1) as [<- |].
-        -- destruct (reduces_once_dec u2 v2) as [r |].
-           ++ exact (Some (app_reduces_right_t u2 v2 r u1)).
-           ++ exact None.
-        -- exact None.
-  - (* prod T U *)
-    destruct v as [| | | | T' U']; [exact None | exact None | exact None | exact None |].
-    destruct (term_eq_dec U U') as [<- |].
-    + destruct (reduces_once_dec T T') as [r |].
-      * exact (Some (prod_reduces_left_t T T' r U)).
-      * destruct (term_eq_dec T T') as [<- |].
-        -- destruct (reduces_once_dec U U) as [r |].
-           ++ exact (Some (prod_reduces_right_t U U r T)).
-           ++ exact None.
-        -- exact None.
-    + destruct (term_eq_dec T T') as [<- |].
-      * destruct (reduces_once_dec U U') as [r |].
-        -- exact (Some (prod_reduces_right_t U U' r T)).
-        -- exact None.
-      * exact None.
-Defined.
-
-(** The Type-valued one-step reduction implies the Prop-valued one. *)
-Fixpoint reduces_once_t_sound (t v: term) (r: reduces_once_t t v) : reduces_once t v :=
-  match r with
-  | beta_t M N T => beta M N T
-  | abs_reduces_left_t M M' r' N =>
-      abs_reduces_left M M' (reduces_once_t_sound M M' r') N
-  | abs_reduces_right_t M M' r' N =>
-      abs_reduces_right M M' (reduces_once_t_sound M M' r') N
-  | app_reduces_left_t M1 N1 r' M2 =>
-      app_reduces_left M1 N1 (reduces_once_t_sound M1 N1 r') M2
-  | app_reduces_right_t M2 N2 r' M1 =>
-      app_reduces_right M2 N2 (reduces_once_t_sound M2 N2 r') M1
-  | prod_reduces_left_t M1 N1 r' M2 =>
-      prod_reduces_left M1 N1 (reduces_once_t_sound M1 N1 r') M2
-  | prod_reduces_right_t M2 N2 r' M1 =>
-      prod_reduces_right M2 N2 (reduces_once_t_sound M2 N2 r') M1
-  end.
-
 (** Inversion of product typing through conversions (Type-level). *)
 Lemma inversion_has_type_prod_t :
   forall e T U S, has_type e (terms.prod T U) S ->
@@ -702,7 +584,7 @@ Qed.
 (** Subject reduction (Type-level): typing is preserved under one-step reduction. *)
 Lemma subject_reduction_t :
   forall e t T, has_type e t T ->
-  forall v, reduces_once_t t v -> well_formed e ->
+  forall v, reduces_once t v -> well_formed e ->
   has_type e v T.
 Proof.
   fix IH 4.
@@ -720,13 +602,13 @@ Proof.
       * apply type_abs with s1 s2.
         -- exact HD'.
         -- exact (has_type_reduces_environment_t _ _ _ H0 _
-                    (red_env_hd e T M' (reduces_once_t_sound _ _ H5)) wfe').
+                    (red_env_hd e T M' H5) wfe').
         -- exact (has_type_reduces_environment_t _ _ _ H1 _
-                    (red_env_hd e T M' (reduces_once_t_sound _ _ H5)) wfe').
+                    (red_env_hd e T M' H5) wfe').
       * apply convertible_convertible_product.
         -- apply sym_convertible. apply trans_conv_red with T.
            ++ exact (refl_convertible T).
-           ++ exact (reduces_once_t_sound _ _ H5).
+           ++ exact H5.
         -- exact (refl_convertible U).
       * exact (type_prod e T s1 H U s2 H0).
     + (* abs_reduces_right: body M reduced to M' *)
@@ -773,7 +655,7 @@ Proof.
       * unfold subst. apply convertible_convertible_subst.
         -- apply sym_convertible. apply trans_conv_red with v0.
            ++ exact (refl_convertible v0).
-           ++ exact (reduces_once_t_sound _ _ H4).
+           ++ exact H4.
         -- exact (refl_convertible Ur).
       * exact HsubUr.
   - (* type_prod: prod T U -> v *)
@@ -784,7 +666,7 @@ Proof.
       apply type_prod with s1.
       * exact HD'.
       * exact (has_type_reduces_environment_t _ _ _ H0 _
-                  (red_env_hd e T N1 (reduces_once_t_sound _ _ H4)) wfe').
+                  (red_env_hd e T N1 H4) wfe').
     + (* prod_reduces_right: U reduced to N2 *)
       assert (HU' : has_type (T :: e) N2 (sort_term s2)).
       { exact (IH _ _ _ H0 _ H4 (wf_var e T s1 H)). }

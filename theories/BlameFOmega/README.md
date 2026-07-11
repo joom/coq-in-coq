@@ -16,12 +16,16 @@ decisions a reader/reviewer should know; the paper's §3 is the fuller account.
 - **Preservation** for the kind-regular `typing` judgment and a
   well-formed-context invariant `wf_ctx`, for the full `step` relation,
   including `step_nu_abs` and `step_nu_tabs` (`preservation`,
-  `preservation_star`, `typing_regular`, `preservation.v`).
-- **Blame safety**: the Blame Theorem (`blame.v`) and the subtyping/blame-safety
-  corollary (`subtyping_safety.v`).
+  `preservation_star`, `typing_regular`, `typing_annotations_regular`,
+  `preservation.v`).
+- **Blame-label safety invariants** (`blame.v`, `subtyping_safety.v`), including
+  direct-cast corollaries. These are not numbered as Ahmed et al.'s contextual
+  corollaries.
+- **Failure of strong normalization**: `nonnormalization.v` constructs a
+  closed, well-typed reduction cycle.
 
-`theories/Extraction/Assumptions.v` audits the axiom footprint; every headline
-theorem depends only on the standard-library `eq_rect_eq`.
+`theories/Extraction/Assumptions.v` audits the headline theorem set, which
+depends only on the standard-library `eq_rect_eq`.
 
 ## Design decisions (and their current scope)
 
@@ -30,8 +34,10 @@ theorem depends only on the standard-library `eq_rect_eq`.
 cast-elaboration judgment: every constructor corresponds to a concrete cast
 reduction (ID, WRAP, ALL/ALL, GENERALIZE, INSTANTIATE, GROUND, COLLAPSE/CONFLICT).
 This is what makes `progress` hold with **no** "stuck cast" rule — the cast case
-falls out of `compat_dec`. `compat` is currently **syntactic/unkinded** (`compat A B`,
-not `compat Γ A B`); a kind-regular version would add `wf_typ` premises.
+falls out of `compat_dec`. `compat` is **syntactic/unkinded** (`compat A B`,
+not `compat Γ A B`); `typing_cast` separately requires both annotations to be
+well kinded. Compatibility is not closed under `defeq`, so clients normalize
+non-identity annotations before constructing casts.
 Exception: `compat_refl` (identity) steps without inspecting its annotation; every
 other constructor decomposes a canonical cast-form head.
 
@@ -43,6 +49,8 @@ variable through its `has_def` binding. This is what makes the two binder
 commutations `step_nu_abs` and `step_nu_tabs` type preserving: after the
 context entries are reordered, the shifted annotation remains definitionally
 equal to its payload-substituted form.
+`typing_annotations_regular` proves that annotations not visible in the result
+type, including `is_gnd` tags, are well formed at their syntactic positions.
 
 ### Neutral type substitution (`typing_tsubst`, `typing_metatheory.v`)
 Type substitution through target terms is sound **only for neutral type names**
@@ -57,6 +65,16 @@ generalizing Blame-for-All's bare type-variable tag to Fω's type applications.
 `ν`-tampering fires on *any* occurrence of the sealed variable in a ground tag
 (including as an argument to an outer neutral head), and `is_gnd` treats any
 neutral tag as tampering.
+
+The reserved label ids are disjoint: 0 for `nu` tampering, 1 for `is_gnd`
+tampering, and 2 for extraction/coercion failure. `external_label` starts at
+`first_external_label_id = 3`.
+
+### Syntactic simulation (`simulation.v`)
+`sim` and `sim_star` are proof relations used to account for extraction steps.
+They are deliberately not contextual approximation: rules such as `sim_blame`
+and `sim_left_tabs` are not sound untyped behavioral principles. The repository
+does not claim or define a contextual containment theorem for them.
 
 ## Relationship to the extraction
 

@@ -189,11 +189,10 @@ Qed.
 
 (** ** Helper: safe terms are not blame p
 
-    The tracked label [p] is assumed to have [lbl_id p >= 2] (see
-    [external_label] in syntax.v), distinguishing it from the internal
-    labels [nu_tamper_label] (id 0), [is_tamper_label] (id 1), and the
-    extraction module's [internal_label] (id 0).  Internal label id 0 is
-    shared by ν-tampering and extraction-time blame/casts. *)
+    The preservation theorems apply this helper to [external_label]s, whose
+    ids begin at [first_external_label_id].  The reserved labels are
+    [nu_tamper_label] (id 0), [is_tamper_label] (id 1), and
+    [extraction_failure_label] (id 2). *)
 
 (** A [safe_pos_neg p] term is never the blame term [blame p]. *)
 Lemma safe_pos_neg_not_blame: forall p s,

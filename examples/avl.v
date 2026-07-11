@@ -7,16 +7,24 @@
    states unrepresentable" idea in its purest form.)
 
    Extraction erases the height: [Tree h] becomes the plain type [Tree], and
-   constructors/operations become ordinary data.  The invariant that guided
-   construction has no run-time footprint, yet the extracted program is
-   certified to simulate the source.  [height] shows the dual direction --
-   recovering the erased index as an honest run-time [Nat] via the eliminator. *)
+   constructors/operations have unindexed target signatures.  Axioms declare
+   only the inductive kit ([Nat] and [Tree] with their eliminators); [add]
+   and the tree operations are ordinary [Definition]s.  [count] shows the
+   dual direction -- recovering the erased index as an honest run-time [Nat]
+   via the eliminator. *)
 
 
 Axiom Nat : Set.
 Axiom NZ : Nat.
 Axiom NS : Nat -> Nat.
-Axiom add : Nat -> Nat -> Nat.
+
+Axiom Nat_rec : forall (P : Nat -> Set),
+  P NZ ->
+  (forall (m : Nat), P m -> P (NS m)) ->
+  forall (n : Nat), P n.
+
+Definition add (a b : Nat) : Nat :=
+  Nat_rec (fun (_ : Nat) => Nat) b (fun (_ : Nat) (r : Nat) => NS r) a.
 
 Axiom Elem : Set.
 
@@ -36,31 +44,34 @@ Axiom tree_rec :
 (* Build a balanced tree of height 2 from a single element.  Only type-checks
    because both subtrees at each level have matching heights. *)
 
-Infer fun (x : Elem) =>
+Definition example_tree (x : Elem) : Tree (NS (NS NZ)) :=
   node (NS NZ) x
     (node NZ x leaf leaf)
     (node NZ x leaf leaf).
 
-Extract fun (x : Elem) =>
-  node (NS NZ) x
-    (node NZ x leaf leaf)
-    (node NZ x leaf leaf).
+Check example_tree.
+
+Extract example_tree.
 
 
 (* mirror: swap left and right subtrees, preserving the height index. *)
 
-Extract fun (h : Nat) (t : Tree h) =>
+Definition mirror (h : Nat) (t : Tree h) : Tree h :=
   tree_rec (fun (k : Nat) => Tree k)
     leaf
     (fun (k : Nat) (x : Elem) (l r : Tree k) => node k x r l)
     h t.
 
+Extract mirror.
+
 
 (* count the nodes: fold into a plain Nat, ignoring the height motive.
    The result type does not mention h, so it extracts cleanly to Tree -> Nat. *)
 
-Extract fun (h : Nat) (t : Tree h) =>
+Definition count (h : Nat) (t : Tree h) : Nat :=
   tree_rec (fun (_ : Nat) => Nat)
     NZ
     (fun (k : Nat) (x : Elem) (cl cr : Nat) => NS (add cl cr))
     h t.
+
+Extract count.

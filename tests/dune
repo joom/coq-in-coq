@@ -26,92 +26,140 @@
 ; after an intentional change to the extraction or pretty-printer.
 
 (rule
- (with-stdin-from newman.v
+ (with-stdin-from ../examples/newman.v
   (with-stdout-to newman.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/newman.out newman.out.gen)))
 
 (rule
- (with-stdin-from vectors.v
+ (with-stdin-from ../examples/vectors.v
   (with-stdout-to vectors.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/vectors.out vectors.out.gen)))
 
 (rule
- (with-stdin-from fin.v
+ (with-stdin-from ../examples/fin.v
   (with-stdout-to fin.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/fin.out fin.out.gen)))
 
 (rule
- (with-stdin-from equality.v
+ (with-stdin-from ../examples/equality.v
   (with-stdout-to equality.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/equality.out equality.out.gen)))
 
 (rule
- (with-stdin-from sigma.v
+ (with-stdin-from ../examples/sigma.v
   (with-stdout-to sigma.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/sigma.out sigma.out.gen)))
 
 (rule
- (with-stdin-from printf.v
+ (with-stdin-from ../examples/printf.v
   (with-stdout-to printf.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/printf.out printf.out.gen)))
 
 (rule
- (with-stdin-from matrix.v
+ (with-stdin-from ../examples/matrix.v
   (with-stdout-to matrix.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/matrix.out matrix.out.gen)))
 
 (rule
- (with-stdin-from units.v
+ (with-stdin-from ../examples/units.v
   (with-stdout-to units.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/units.out units.out.gen)))
 
 (rule
- (with-stdin-from avl.v
+ (with-stdin-from ../examples/avl.v
   (with-stdout-to avl.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/avl.out avl.out.gen)))
 
 (rule
- (with-stdin-from session.v
+ (with-stdin-from ../examples/session.v
   (with-stdout-to session.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/session.out session.out.gen)))
 
 (rule
- (with-stdin-from stlc.v
+ (with-stdin-from ../examples/stlc.v
   (with-stdout-to stlc.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/stlc.out stlc.out.gen)))
 
 (rule
- (with-stdin-from universe.v
+ (with-stdin-from ../examples/universe.v
   (with-stdout-to universe.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/universe.out universe.out.gen)))
 
 (rule
- (with-stdin-from functor.v
+ (with-stdin-from ../examples/functor.v
   (with-stdout-to functor.out.gen (run ./top.exe))))
 (rule
  (alias runtest)
  (action (diff expected/functor.out functor.out.gen)))
+
+(rule
+ (with-stdin-from ../examples/tagless.v
+  (with-stdout-to tagless.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/tagless.out tagless.out.gen)))
+
+; Name recovery keeps source term-binder hints out of type annotations.
+(rule
+ (with-stdin-from naming.v
+  (with-stdout-to naming.out.gen (run ./top.exe))))
+(rule
+ (alias runtest)
+ (action (diff expected/naming.out naming.out.gen)))
+
+; Batch command failures are diagnostics and nonzero process exits.
+(rule
+ (with-stdin-from bad-semantic.v
+  (with-accepted-exit-codes 1
+   (with-stdout-to bad-semantic.out.gen (run ./top.exe)))))
+(rule
+ (alias runtest)
+ (action (diff expected/bad-semantic.out bad-semantic.out.gen)))
+
+; Newlines must update the lexer position used by parser diagnostics.
+(rule
+ (with-stdin-from bad-syntax.v
+  (with-accepted-exit-codes 1
+   (with-stderr-to bad-syntax.err.gen (run ./top.exe)))))
+(rule
+ (alias runtest)
+ (action (diff expected/bad-syntax.err bad-syntax.err.gen)))
+
+; Replay the axiom audit in the Dune sandbox and scan every theory source for
+; proof-hole or axiom-declaration commands.
+(rule
+ (alias runtest)
+ (deps
+  %{project_root}/check-assumptions.sh
+  %{project_root}/theories/Extraction/Assumptions.v
+  (alias %{project_root}/theories/CoC/all)
+  (alias %{project_root}/theories/BlameFOmega/all)
+  (alias %{project_root}/theories/Extraction/all))
+ (action
+  (chdir %{project_root}
+   (setenv BLAME_AUDIT_DIRECT 1
+    (run bash check-assumptions.sh)))))

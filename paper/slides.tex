@@ -1,0 +1,677 @@
+\documentclass[aspectratio=169]{beamer}
+
+%% ---------------------------------------------------------------------------
+%%  Extracting Blame — talk slides
+%%  Theme: Metropolis (mtheme). Build: make slides  (XeLaTeX + Fira preferred)
+%%
+%%  Color system (used consistently throughout):
+%%    srcBlue   — the source language (CoC)
+%%    tgtTeal   — the target language (F-omega + blame) and its casts
+%%    dynOrange — the dynamic type ? / Dyn: the boundary
+%%    blameRed  — blame, failure, alerts
+%%    okGreen   — mechanized/proved facts (Rocq theorem names)
+%% ---------------------------------------------------------------------------
+
+\usetheme[progressbar=frametitle]{metropolis}
+\metroset{block=fill, numbering=fraction}
+
+\usepackage{amssymb}
+\usepackage{mathpartir}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+%% --- palette ----------------------------------------------------------------
+\definecolor{srcBlue}{HTML}{2A6099}
+\definecolor{tgtTeal}{HTML}{0F766E}
+\definecolor{dynOrange}{HTML}{C2410C}
+\definecolor{blameRed}{HTML}{B91C1C}
+\definecolor{okGreen}{HTML}{15803D}
+\definecolor{outBg}{HTML}{F4F1EA}
+\definecolor{accentOrange}{HTML}{EB811B}
+
+\setbeamercolor{progress bar}{fg=accentOrange}
+\setbeamercolor{alerted text}{fg=blameRed}
+\setbeamercolor{example text}{fg=okGreen}
+
+%% --- notation macros (colored variants of main.tex's) -----------------------
+\newcommand{\dyn}{{\color{dynOrange}\mathord{?}}}
+\newcommand{\kstar}{\ensuremath{\star}}
+\newcommand{\karr}{\ensuremath{\Rightarrow}}
+\newcommand{\PropS}{\mathsf{Prop}}
+\newcommand{\SetS}{\mathsf{Set}}
+\newcommand{\KindS}{\mathsf{Kind}}
+\newcommand{\Nat}{\mathsf{Nat}}
+\newcommand{\castt}[4]{{\color{tgtTeal}\langle} #2 {\color{tgtTeal}\Rightarrow}
+  #3 {\color{tgtTeal}\rangle^{#4}}\, #1}
+\newcommand{\gnd}[2]{\mathsf{gnd}(#1, #2)}
+\newcommand{\isgnd}[2]{\mathsf{is\_gnd}(#1, #2)}
+\newcommand{\blame}[1]{{\color{blameRed}\mathsf{blame}\,#1}}
+\newcommand{\nub}[4]{\nu #1{:}#2 := #3.\,#4}
+\newcommand{\ext}{\mathcal{E}}
+\newcommand{\extt}{\mathcal{T}}
+\newcommand{\extk}{\mathcal{K}}
+\newcommand{\extc}{\mathcal{C}}
+\newcommand{\coerce}[3]{\mathsf{coerce}\,#1\,#2\,#3}
+\newcommand{\islarge}{\mathsf{large}}
+\newcommand{\nf}{\mathsf{nf}}
+\newcommand{\lint}{\ell_{\mathsf{int}}}
+\newcommand{\reduces}{\longrightarrow}
+\newcommand{\reducesstar}{\longrightarrow^{*}}
+\newcommand{\sepsim}{\mathrel{\lesssim}}
+\newcommand{\hastype}[3]{#1 \vdash #2 : #3}
+%% semantic text helpers
+\newcommand{\src}[1]{\textcolor{srcBlue}{#1}}
+\newcommand{\tgt}[1]{\textcolor{tgtTeal}{#1}}
+\newcommand{\mech}[1]{\textcolor{okGreen}{\texttt{#1}}}
+
+%% --- listings: CoC source vs. REPL output -----------------------------------
+\lstdefinelanguage{coc}{
+  morekeywords={fun,forall,Set,Prop,Kind,Axiom,Definition,Infer,Check,Extract,let,in},
+  sensitive=true,
+  morecomment=[s]{(*}{*)}
+}
+\lstset{
+  language=coc,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{srcBlue}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  xleftmargin=1em
+}
+%% REPL output: shaded box, teal text, boundary constructs highlighted
+\lstdefinestyle{replout}{
+  language={},
+  basicstyle=\ttfamily\footnotesize\color{tgtTeal!90!black},
+  backgroundcolor=\color{outBg},
+  frame=leftline, framerule=2pt, rulecolor=\color{accentOrange},
+  framesep=6pt, xleftmargin=1.5em,
+  keywords={Dyn}, keywordstyle=\color{dynOrange}\bfseries,
+  morekeywords=[2]{blame}, keywordstyle={[2]\color{blameRed}\bfseries},
+  morekeywords=[3]{cast}, keywordstyle={[3]\color{tgtTeal}\bfseries},
+  columns=fullflexible, keepspaces=true, breaklines=true
+}
+
+\title{Extracting Blame}
+\subtitle{Verified Optimistic Extraction from CoC to System~F$\omega$ + Blame}
+\author{Joomy Korkut}
+\institute{Bloomberg}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{frame}{The color code for this talk}
+  \begin{center}
+  \Large
+  \src{source: CoC} \qquad \tgt{target: F$\omega$ + blame} \\[2ex]
+  ${\dyn}$ \ \textcolor{dynOrange}{the dynamic type --- the boundary} \\[1ex]
+  $\blame{p}$ \ \textcolor{blameRed}{run-time cast failure} \\[1ex]
+  \mech{theorem\_name} \ \textcolor{okGreen}{mechanized in Rocq, admit-free}
+  \end{center}
+\end{frame}
+
+%% ==========================================================================
+\section{The Problem}
+%% ==========================================================================
+
+\begin{frame}{Program extraction today}
+  Dependently typed languages (Rocq, Agda, Lean, Idris) let us
+  \emph{prove} properties of code.
+
+  \medskip
+  To \emph{run} that code, extraction erases the static parts:
+  Gallina $\to$ OCaml / Haskell / Scheme.
+
+  \pause
+  \medskip
+  This makes \alert{two concessions}:
+  \begin{enumerate}
+    \item<3-> The target types \alert<3>{cannot express the source's dependent
+      invariants} --- a verified program becomes an ML term whose safety is no
+      longer in its type.
+    \item<4-> The extractor is part of the \alert<4>{trusted computing base}
+      --- its correctness is argued informally.
+  \end{enumerate}
+
+  \onslide<5->{
+  \medskip
+  Forster, Sozeau \& Tabareau (PLDI '24) address \#2: verified extraction to
+  OCaml.\\
+  \textbf{We address \#1.}}
+\end{frame}
+
+\begin{frame}{The question}
+  \begin{center}
+    \Large
+    How much of a dependently typed program's structure can we
+    \alert{preserve} if we extract into a \alert{typed} target ---\\[1ex]
+    and can the translation be \alert{proved correct}?
+  \end{center}
+
+  \pause
+  \medskip
+  \begin{itemize}
+    \item \textbf{Source:} \src{the Calculus of Constructions (CoC)}, as a
+      pure type system --- mechanized following Barras' \emph{Coq-in-Coq}.
+    \pause
+    \item \textbf{Target:} \tgt{System~F$\omega$} + a dynamic type $\dyn$ +
+      casts + \textcolor{blameRed}{blame}\\
+      --- a \emph{polymorphic blame calculus} in the line of
+      Ahmed--Findler--Siek--Wadler, lifted to higher kinds.
+    \pause
+    \item \textbf{Lineage:} Paulin-Mohring (POPL '89) extracted F$\omega$
+      programs from CoC proofs.\\
+      We return to that design point, with an explicit dynamic/blame boundary.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Why a dynamic/blame target?}
+  \tgt{F$\omega$} preserves a large skeleton: type abstraction, type
+  application, higher-kinded families.
+
+  \src{CoC} has strictly more: \alert{full dependency} --- types may mention
+  terms.
+
+  \pause
+  \medskip
+  Three things happen at the boundary:
+  \begin{enumerate}
+    \item<3-> \textbf{Term indices are erased from types.}\\
+      \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}} --- the
+      invariant disappears, not the runtime index.
+    \item<4-> \textbf{Type indices are kept.}\\
+      Type families extract to type applications; parametricity survives.
+    \item<5-> \textbf{Values used as types become dynamic residue.}\\
+      A decoder \src{\texttt{El : U -> Set}} has no F$\omega$ image
+      $\rightsquigarrow$ $\dyn$ + \textcolor{blameRed}{internal blame}.
+  \end{enumerate}
+
+  \onslide<6->{
+  \medskip
+  We call the translation \alert{optimistic}: it never protectively dynamizes
+  what F$\omega$ can express.}
+\end{frame}
+
+%% ==========================================================================
+\section{Overview by Example}
+%% ==========================================================================
+
+\begin{frame}[fragile]{Term indices disappear from types}
+  A bounds-checked lookup on length-indexed vectors --- a real
+  \texttt{Definition} over the axiomatized eliminators:
+\begin{lstlisting}
+Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n) : A :=
+  vrec A (fun (m : Nat) => Fin m -> A)
+    (fun (i0 : Fin NZ) => fin0 A i0)
+    (fun (m : Nat) (a : A) (rest : Fin m -> A) (j : Fin (NS m)) =>
+     fin_case m A a rest j)
+    n xs i.
+
+Extract vnth.
+\end{lstlisting}
+  \pause
+\begin{lstlisting}[style=replout]
+fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) => vrec [A] [Fin -> A] (fun (x0 : Fin) => fin0 [A] x0) (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) => fin_case x0 [A] x1 x2 x3) n xs i
+\end{lstlisting}
+  \pause
+  \begin{itemize}
+    \item \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}, \
+      \src{\texttt{Fin n}} $\rightsquigarrow$ \tgt{\texttt{Fin}} --- the
+      \alert{typing invariant} is gone; the implementation survives.
+    \item The terms \texttt{n}, \texttt{i} remain: they are ordinary data.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Equality indices vanish; proof terms remain}
+\begin{lstlisting}
+Extract fun (A : Set) (x y : A) (h : Eq A x y) =>
+  eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
+\end{lstlisting}
+  \pause
+\begin{lstlisting}[style=replout]
+fun (A : *) (x y : A) (h : Eq A) => eq_rect [A] x [Eq A] (refl [A] x) y h
+\end{lstlisting}
+  \pause
+  \begin{itemize}
+    \item \src{\texttt{Eq A x y}} $\rightsquigarrow$ \tgt{\texttt{Eq A}}:
+      endpoints erased from the \emph{type}.
+    \item Transport (\texttt{eq\_rect}) is the static ancestor of a cast.
+    \item \alert{Not} proof erasure --- proof terms are ordinary residual terms
+      (future work).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Where the dynamic type earns its keep}
+  A Tarski universe: codes \src{\texttt{U}}, decoder
+  \src{\texttt{El : U -> Set}}.
+\begin{lstlisting}
+Extract fun (c : U) => El c.
+\end{lstlisting}
+  \pause
+\begin{lstlisting}[style=replout]
+fun (c : U) => cast<Dyn => U -> Dyn>^2+(blame(2+)) c
+\end{lstlisting}
+  \pause
+  \begin{itemize}
+    \item \src{\texttt{El}} maps \alert{data to types} --- no F$\omega$ image
+      exists.
+    \item The extraction emits reserved
+      \textcolor{blameRed}{internal blame} (label 2), cast through $\dyn$.
+    \pause
+    \item This is the translation's \emph{explicit, marked} fallback --- and a
+      theorem says an extracted term reduced in isolation never reaches an
+      \alert{external} label.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{The example you'd expect to need
+    \texorpdfstring{$\dyn$}{?} --- and doesn't}
+  CIC's quintessential computed return type:
+\begin{lstlisting}
+Fixpoint eval {t} (e : expr t)
+  : match t with TNat => nat | TBool => bool end := ...
+\end{lstlisting}
+  \pause
+  Church-encode the codes \alert{one level up}, at kind
+  $\kstar \karr \kstar \karr \kstar$: \ \texttt{TNat} $= \lambda a\,b.\,a$,
+  and \texttt{match} becomes type-level \emph{application}
+  $t\;\mathrm{CNat}\;\mathrm{CBool}$.
+  \pause
+\begin{lstlisting}[style=replout]
+fun (t : (* => (* => *))) (x : t (forall (x0 : *), (x0 -> x0) -> x0 -> x0) (forall (x0 : *), x0 -> x0 -> x0)) => x
+\end{lstlisting}
+  \begin{itemize}
+    \item<4-> \texttt{tagless.v}: the full interpreter extracts with
+      \alert{no $\dyn$, no casts, no blame} --- the higher-kinded target
+      expresses the computed type natively.
+    \item<5-> Term-level codes + decoder axiom (\texttt{stlc.v}): eval
+      collapses to a \emph{rigid} abstract type \tgt{\texttt{El}} --- also
+      no $\dyn$.
+    \item<6-> Forcing $\dyn$ as a computed return type needs
+      \alert{large elimination in the source}: the CIC extension.
+  \end{itemize}
+\end{frame}
+
+%% ==========================================================================
+\section{The Target: System F\texorpdfstring{$\omega$}{omega} + Blame}
+%% ==========================================================================
+
+\begin{frame}{Target syntax}
+  \begin{align*}
+    K &::= \kstar \mid K \karr K
+      &&\text{(kinds)}\\
+    \onslide<2->
+    A, B &::= \alpha \mid A \to B \mid \forall \alpha{:}K.\,A
+      \mid \Lambda \alpha{:}K.\,A \mid A\ B \mid \dyn
+      &&\text{(types)}\\
+    \onslide<3->
+    e &::= x \mid \lambda x{:}A.\,e \mid e\ e
+      \mid \Lambda \alpha{:}K.\,e \mid e\,[A]\\
+    &\quad \mid \castt{e}{A}{B}{p} \mid \gnd{e}{G} \mid \isgnd{e}{G}
+      \mid \blame{p} \mid \nub{\alpha}{K}{A}{e}
+      &&\text{(terms)}
+  \end{align*}
+
+  \begin{itemize}
+    \item<4-> $\dyn$ is a proper type of kind $\kstar$ (no kind-indexed
+      $\dyn_K$).
+    \item<5-> Ground types $G ::= \dyn \to \dyn \mid N$ where
+      $N ::= \alpha \mid N\,A$ is \alert{neutral}\\
+      --- the F$\omega$ generalization of Blame-for-All's type-variable tag.
+    \item<6-> Labels: id + polarity. Ids $0,1,2$ reserved
+      (\textcolor{blameRed}{internal}); $\ge 3$ external.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Executable compatibility}
+  Unlike Blame for All's \emph{consistency}, our $\mathsf{compat}(A,B)$ is an
+  \alert{executable} judgment:
+
+  \medskip
+  \begin{center}
+  \begin{tabular}{ll}
+    \toprule
+    constructor & cast-reduction rule \\
+    \midrule
+    \tgt{$\mathsf{compat\_refl}$}        & \textcolor{accentOrange}{ID} \\
+    \tgt{$\mathsf{compat\_arrow}$}       & \textcolor{accentOrange}{WRAP} \\
+    \tgt{$\mathsf{compat\_all}$}         & \textcolor{accentOrange}{ALL/ALL} \\
+    \tgt{$\mathsf{compat\_generalize}$}  & \textcolor{accentOrange}{GENERALIZE} \\
+    \tgt{$\mathsf{compat\_instantiate}$} & \textcolor{accentOrange}{INSTANTIATE} (at $\kstar$ only) \\
+    \tgt{$\mathsf{compat\_to\_dyn}$}     & \textcolor{accentOrange}{GROUND} \\
+    \tgt{$\mathsf{compat\_from\_dyn}$}   & \textcolor{accentOrange}{COLLAPSE / CONFLICT} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \medskip
+  \begin{itemize}
+    \item<2-> Every well-typed cast has an operational step:
+      \alert{no ``stuck cast'' case}. Progress falls out of
+      \mech{compat\_dec}.
+    \item<3-> Decidability is also what makes the extraction's
+      $\mathsf{coerce}$ a total function.
+    \item<4-> Caveat: $\mathsf{compat}$ is syntactic, not closed under
+      definitional equality.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Characteristic redexes (selection)}
+  \begin{mathpar}
+    \onslide<1->{
+    (\Lambda\alpha{:}K.v)[A] \reduces \nub{\alpha}{K}{A}{v}}
+
+    \onslide<2->{
+    \castt{v}{A}{\dyn}{p} \reduces \gnd{\castt{v}{A}{G}{p}}{G}
+    \;\;(\mathsf{ground\_tag}(A,G))}
+
+    \onslide<3->{
+    \castt{\gnd{v}{G}}{\dyn}{A}{p} \reduces \castt{v}{G}{A}{p}
+    \;\;(\mathsf{compat}(G,A))}
+
+    \onslide<3->{
+    \castt{\gnd{v}{G}}{\dyn}{A}{p} \reduces \blame{p}
+    \;\;(\neg\mathsf{compat}(G,A))}
+
+    \onslide<4->{
+    \nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces
+      \gnd{\nub{\alpha}{K}{A}{v}}{G[A/\alpha]}
+    \;\;(\alpha\notin G)}
+
+    \onslide<4->{
+    \nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces \blame{0}
+    \;\;(\alpha\in G)}
+  \end{mathpar}
+
+  \onslide<5->{
+  \medskip
+  Type application \emph{seals} ($\nu$); injection picks the unique ground
+  tag; projection collapses or blames; $\nu$-elimination detects an escaping
+  seal --- \alert{scoped $\nu$, no global store}: stricter than Blame for
+  All.}
+\end{frame}
+
+\begin{frame}{Target metatheory (all mechanized, admit-free)}
+  \begin{itemize}
+    \item<1-> \textbf{Determinism} (\mech{step\_deterministic}) ---
+      proving it flushed out a real overlap, fixed by guarding
+      GENERALIZE with $A \neq \dyn$.
+    \item<2-> \textbf{Type-level confluence + Church--Rosser} for genuine
+      F$\omega$ type computation (Takahashi method).
+    \item<3-> \textbf{Structural metatheory}: weakening, substitution,
+      inversion through conversion, canonical forms.
+    \item<4-> \textbf{Progress} (\mech{progress}) --- the cast case is
+      exactly the case analysis on executable $\mathsf{compat}$.
+    \item<5-> \textbf{Preservation} (\mech{preservation},
+      \mech{preservation\_star}), kind regularity of results and \emph{all}
+      annotations.
+    \item<6-> \textbf{Blame theorem} (\mech{blame\_theorem}): if
+      $\mathrm{lbl\_id}(p) \ge 3$ and $\mathsf{safe}(p,e)$ then
+      $\neg\,(e \reducesstar \blame{p})$.
+    \item<7-> \alert{Not} strongly normalizing: a closed, well-typed
+      self-application cycle (\mech{well\_typed\_non\_normalizing}).
+  \end{itemize}
+\end{frame}
+
+%% ==========================================================================
+\section{The Extraction}
+%% ==========================================================================
+
+\begin{frame}{Three translations, one invariant}
+  \begin{description}
+    \item<1->[Kinds] $\extk(s) = \kstar$; classifier domains become kind
+      arrows, term domains are dropped:\\
+      \src{$\SetS \to \Nat \to \SetS$} \;$\rightsquigarrow$\;
+      \tgt{$\kstar \karr \kstar$}
+      --- exactly what a vector-like family needs.
+    \item<2->[Types] $\extt(\Gamma, T) = \extt_L(\Gamma, \nf(T))$:
+      \alert{normalize first} (justified by strong normalization), then
+      translate.\\
+      Sorts, term variables, term-headed applications in type position
+      $\rightsquigarrow \dyn$.
+    \item<3->[Terms] $\ext$ recurses on the \alert{typing derivation}.
+  \end{description}
+
+  \onslide<4->{
+  \medskip
+  \begin{block}{The invariant}
+    Every classification uses the reduction-stable, semantic $\islarge$
+    predicate ($\hastype{\Gamma}{T}{\KindS}$), so the whole translation
+    \alert{respects definitional equality}.
+  \end{block}}
+\end{frame}
+
+\begin{frame}{The coercion, and the term translation's hard case}
+  \[
+  \coerce{s}{A}{B} =
+    \begin{cases}
+      s & A = B \\
+      \castt{s}{A}{B}{\lint} & A \neq B,\ \mathsf{compat}(A,B) \\
+      \blame{\lint} & \text{otherwise}
+    \end{cases}
+  \]
+
+  \pause
+  \medskip
+  The interesting case: an application $u\,v$ whose function domain is
+  \emph{large} is a type application ($\Lambda$-elimination), and extracts to
+  a \alert{bare} $e\,[A]$.
+
+  \pause
+  \medskip
+  Why bare? Its natural type and the expected result type
+  \[
+    \extt(V{:}\Gamma, U_r)[\extt(\Gamma,v)/0]
+    \qquad\text{vs.}\qquad
+    \extt(\Gamma,\, U_r[v])
+  \]
+  are equal only \alert{up to F$\omega$ definitional equality} --- so the
+  target's conversion rule absorbs the mismatch. No runtime cast needed.
+\end{frame}
+
+\begin{frame}{Extraction does not commute with substitution syntactically}
+  A naive commutation lemma phrased with $=$ is \alert{false}, for two
+  independent reasons:
+
+  \begin{enumerate}
+    \item<2-> \textbf{Target $\beta$.} Plugging a large argument can put a
+      type operator in head position: the left side contains a redex
+      $(\Lambda\alpha{:}K.A)\,B$ whose contractum is the right side.
+    \item<3-> \textbf{Annotation drift under $\nf$.} Source substitution
+      rewrites binder annotations up to conversion; $\extt = \extt_L \circ \nf$
+      collapses them.
+  \end{enumerate}
+
+  \onslide<4->{
+  \medskip
+  The correct statement (\mech{extract\_typ\_tsubst\_coc\_equiv}) replaces
+  $=$ with $\mathsf{ty\_equiv}$.
+
+  \medskip
+  The same phenomenon defeats the naive \emph{kind} index: kind regularity
+  must thread the target kind through the CoC kinding derivation
+  (\mech{extract\_typ\_L\_wf\_kind}).}
+\end{frame}
+
+%% ==========================================================================
+\section{Metatheory}
+%% ==========================================================================
+
+\begin{frame}{The headline theorems}
+  All mechanized in Rocq; audited assumptions: only \texttt{eq\_rect\_eq}.
+
+  \medskip
+  \begin{enumerate}
+    \item<2-> \textbf{Well-typed extraction} (\mech{extract\_well\_typed}):
+      \[
+        \hastype{\extc(\Gamma)}{\ext(\Gamma \vdash t : T)}{\extt(\Gamma, T)}
+      \]
+    \item<3-> \textbf{Simulation} (\mech{extract\_reduces}): if
+      $t \reduces v$ then
+      $\ext(\Gamma \vdash t : T) \;\sepsim^{*}\; \ext(\Gamma \vdash v : T)$
+    \item<4-> \textbf{Derivation independence}
+      (\mech{extract\_deriv\_indep}): any two derivations of the same
+      judgment extract to $\sepsim^{*}$-related terms.
+    \item<5-> \textbf{External-label non-generation}
+      (\mech{extraction\_blame\_free}): an extracted term, reduced in
+      isolation, never reaches $\blame{p}$ with $\mathrm{lbl\_id}(p) \ge 3$.
+    \item<6-> \textbf{Optimism / $\dyn$-freedom}
+      (\mech{extract\_typ\_dyn\_free\_iff}):
+      \[
+        \mathsf{typ\_dyn\_free}(\extt(\Gamma, T))
+        \iff
+        \mathsf{fo}(\Gamma, \nf(T))
+      \]
+      --- an \emph{exact} syntactic characterization.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{What the simulation relation is --- and is not}
+  $s \sepsim t$ (Rocq: \texttt{sim}) relates terms differing by:
+  replacing a type argument with $\dyn$; inserting/stripping casts; unfolding
+  $\beta$/type-$\beta$ redexes; and
+  \[
+    \blame{q} \sepsim t \quad\text{for \emph{any} } t
+    \qquad (\mathsf{sim\_blame})
+  \]
+
+  \pause
+  \begin{alertblock}{Deliberately syntactic}
+    $\sepsim$ is \alert{not} a behavioral preorder:
+    $\mathsf{sim\_left\_tabs}$ relates $\Lambda K.s$ to $s$, yet the context
+    $[\cdot]\,[\dyn]$ distinguishes them.
+  \end{alertblock}
+
+  \pause
+  The relation records extraction bookkeeping --- e.g.\ that the target has
+  entered an internal-residue case --- rather than asserting behavioral
+  preservation.
+
+  A contextual-approximation bridge (typed relation + CIU/logical relations)
+  is open.
+\end{frame}
+
+%% ==========================================================================
+\section{Mechanization \& REPL}
+%% ==========================================================================
+
+\begin{frame}{Mechanization}
+  \begin{itemize}
+    \item<1-> Rocq 9.0 + dune; \alert{no proof holes, no project-local
+      axioms}; audited core uses only \texttt{eq\_rect\_eq}.
+    \item<2-> $\approx$ 27{,}500 lines of Rocq:\\[0.5ex]
+      \begin{tabular}{ll}
+        \src{CoC layer} (adapted Coq-in-Coq) & $\approx$ 10{,}900 \\
+        \tgt{BlameFOmega target}             & $\approx$ 8{,}300 \\
+        Extraction layer                     & $\approx$ 8{,}300 \\
+      \end{tabular}
+    \item<3-> The consequential decision: $\ext$ recurses on derivations
+      $\Rightarrow$ \texttt{has\_type} and the whole reduction/conversion
+      layer moved from \texttt{Prop} to \alert{\texttt{Type}}\\
+      (Rocq forbids eliminating \texttt{Prop} into \texttt{Type}).
+    \item<4-> $\ext$ calls $\nf$ and \texttt{is\_large\_dec}: a total
+      \emph{metatheoretic} function, not an efficient compiler pass.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{A REPL with verified name recovery}
+  Extracted to OCaml; Rocq-like commands: \texttt{Axiom},
+  \texttt{Definition}, \texttt{Check}/\texttt{Infer}, \texttt{Extract}.
+
+\begin{lstlisting}
+Definition vmap (A B : Set) (f : A -> B) (n : Nat) (xs : Vec A n)
+  : Vec B n := ...
+
+Extract vmap.
+\end{lstlisting}
+\begin{lstlisting}[style=replout]
+fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) => vrec [A] [Vec B] (vnil [B]) (fun (x0 : Nat) (x1 : A) (x2 : Vec B) => vcons [B] x0 (f x1) x2) n xs
+\end{lstlisting}
+
+  \pause
+  \begin{itemize}
+    \item \texttt{Definition} = shell-level let-expansion; the verified
+      checker sees only the expanded term (transparency = $\beta$).
+    \item De~Bruijn $\to$ named conversion is \alert{verified}: equivalence,
+      alpha-equivalence, uniqueness; name recovery is capture-free by
+      construction (\mech{pick\_name} carries a freshness proof).
+    \item Fourteen golden example batches: vectors, \texttt{printf},
+      matrices, units, AVL, session types, STLC interpreter, Tarski universe,
+      functors/monads, Newman's lemma, \ldots
+    \item Only final string layout is unverified OCaml.
+  \end{itemize}
+\end{frame}
+
+%% ==========================================================================
+\section{Honest Limitations}
+%% ==========================================================================
+
+\begin{frame}{What this work does not claim}
+  \begin{itemize}
+    \item<1-> \textbf{Not a production extractor}, and \textbf{not
+      proof-erasing}: proof terms are ordinary small terms.
+    \item<2-> \textbf{Internal blame is reachable by design}: a value-as-type
+      exercised at run time reduces to $\blame{\lint}$ --- the marked
+      fallback.
+    \item<3-> \textbf{Scoped $\nu$ is stricter than Blame for All}: a sealed
+      value escaping through $\dyn$ blames label 0; no store, no scope
+      extrusion.
+    \item<4-> \textbf{Simulation is syntactic}, not contextual approximation.
+    \item<5-> \textbf{Compatibility is syntactic}: blame is not stable under
+      definitional equality; clients (and the extraction) normalize
+      annotations first.
+    \item<6-> \textbf{$\dyn$ lives at kind $\kstar$ only}: higher-kinded
+      quantifiers do not cross the dynamic boundary.
+    \item<7-> \textbf{Inductive families are axiomatized}: the bare PTS has no
+      inductives; extending to CIC would stress the value-as-type boundary.
+  \end{itemize}
+
+  \onslide<8->{
+  \medskip
+  Each is a possible extension --- not a limitation of the results proved.}
+\end{frame}
+
+%% ==========================================================================
+\section{Conclusion}
+%% ==========================================================================
+
+\begin{frame}{Takeaways}
+  \begin{enumerate}
+    \item<1-> Extraction from a dependently typed language \alert{need not
+      throw away all types}: a single verified translation preserves the
+      parametric-polymorphic skeleton and erases many dependent indices from
+      target types.
+    \item<2-> The genuine residue of dependency --- \alert{values used as
+      types} --- is marked explicitly with $\dyn$ and reserved
+      \textcolor{blameRed}{internal blame}.
+    \item<3-> The whole pipeline is \textcolor{okGreen}{\textbf{mechanized
+      and admit-free}}: a machine-checked F$\omega$-style polymorphic blame
+      calculus, target progress / preservation / determinism / confluence,
+      and the extraction metatheorems.
+    \item<4-> Paulin-Mohring's CoC-to-F$\omega$ vision, revisited with a
+      dynamic/blame target.
+  \end{enumerate}
+
+  \onslide<5->{
+  \medskip
+  \begin{center}
+    \alert{Next:} typed logical relation + contextual observation theorem;
+    transparent algorithmic extraction; proof erasure; inductive families.
+  \end{center}}
+\end{frame}
+
+\begin{frame}[standout]
+  Thank you!
+
+  \bigskip
+  {\small
+  \texttt{dune exec tests/top.exe} --- try the REPL\\
+  Rocq development: admit-free, audited down to \texttt{eq\_rect\_eq}}
+\end{frame}
+
+\end{document}

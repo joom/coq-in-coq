@@ -12,15 +12,16 @@
    remain as ordinary term-level components of the extracted program.  This
    example therefore demonstrates index erasure from types, not proof erasure.
    A future proof-erasing optimization could eliminate these residual proof
-   terms. *)
+   terms.
 
+   The axioms are exactly the inductive kit of equality: the family [Eq],
+   its constructor [refl], and its induction principle [eq_rect]. *)
 
-Axiom Nat : Set.
 
 Axiom Eq : forall (A : Set), A -> A -> Prop.
 Axiom refl : forall (A : Set) (x : A), Eq A x x.
 
-(* transport / Leibniz substitution *)
+(* transport / Leibniz substitution: the induction principle *)
 Axiom eq_rect :
   forall (A : Set) (x : A) (P : A -> Prop),
   P x -> forall (y : A), Eq A x y -> P y.

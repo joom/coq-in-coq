@@ -1,4 +1,5 @@
-(lang dune 3.8)
+(lang dune 3.21)
 (name extracting-blame)
 (using coq 0.8)
 (using menhir 2.1)
+(warnings (deprecated_coq_lang disabled))

@@ -1,13 +1,17 @@
 Nat admitted.
 NZ admitted.
 NS admitted.
-add admitted.
+Nat_rec admitted.
+add is defined.
 Elem admitted.
 Tree admitted.
 leaf admitted.
 node admitted.
 tree_rec admitted.
+example_tree is defined.
 Inferred type: Elem -> Tree (NS (NS NZ))
-Extracted: λx:Elem. (node ((NS NZ)) x ((node NZ x leaf leaf)) ((node NZ x leaf leaf)))
-Extracted: λh:Nat. λt:Tree. (tree_rec [Tree] leaf (λx0:Nat. λx1:Elem. λx2:Tree. λx3:Tree. (node x0 x1 x3 x2)) h t)
-Extracted: λh:Nat. λt:Tree. (tree_rec [Nat] NZ (λx0:Nat. λx1:Elem. λx2:Nat. λx3:Nat. (NS ((add x2 x3)))) h t)
+Extracted: fun (x : Elem) => node (NS NZ) x (node NZ x leaf leaf) (node NZ x leaf leaf)
+mirror is defined.
+Extracted: fun (h : Nat) (t : Tree) => tree_rec [Tree] leaf (fun (x0 : Nat) (x1 : Elem) (x2 x3 : Tree) => node x0 x1 x3 x2) h t
+count is defined.
+Extracted: (fun (x0 : Nat -> Nat -> Nat) (x1 : Nat) (x2 : Tree) => tree_rec [Nat] NZ (fun (x3 : Nat) (x4 : Elem) (x5 x6 : Nat) => NS (x0 x5 x6)) x1 x2) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)

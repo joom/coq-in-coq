@@ -7,11 +7,17 @@
    channel, or [close] twice, is a type error -- an illegal protocol run is
    simply not typeable.
 
+   Axioms declare only the inductive kit: the state constructors, the message
+   type with a distinguished [greeting], and the channel family [Chan] with
+   constructor [mkchan] and eliminator [chan_rec].  The operations are
+   ordinary [Definition]s over a deliberately minimal model -- a channel in
+   any state carries the in-flight message, and the "network" echoes it back.
+   The protocol discipline lives entirely in the state INDEX, which the model
+   never inspects.
+
    Extraction erases the state index: [Chan s] becomes the plain type [Chan],
    and the protocol operations become ordinary function calls.  The session
-   discipline is compile-time only.  This is exactly the boundary gradual
-   typing addresses: the erased channel is what an untyped peer would hold, and
-   the verified extraction shows the typed client compiles to it faithfully. *)
+   discipline is absent from target types. *)
 
 
 Axiom St : Set.
@@ -20,18 +26,31 @@ Axiom Sent  : St.        (* may recv   *)
 Axiom Done  : St.        (* may close  *)
 
 Axiom Msg : Set.
-Axiom Chan : St -> Set.
+Axiom greeting : Msg.
 
-Axiom open  : Chan Ready.
-Axiom send  : Msg -> Chan Ready -> Chan Sent.
-Axiom recv  : Chan Sent -> Chan Done.
-Axiom close : Chan Done -> Msg.          (* yields the received reply *)
+(* Channels: an inductive family over states; a channel carries the message
+   currently in flight. *)
+Axiom Chan : St -> Set.
+Axiom mkchan : forall (s : St), Msg -> Chan s.
+Axiom chan_rec : forall (s : St) (C : Set), (Msg -> C) -> Chan s -> C.
+
+Definition open : Chan Ready :=
+  mkchan Ready greeting.
+
+Definition send (m : Msg) (c : Chan Ready) : Chan Sent :=
+  mkchan Sent m.
+
+Definition recv (c : Chan Sent) : Chan Done :=          (* the echo "network" *)
+  mkchan Done (chan_rec Sent Msg (fun (m : Msg) => m) c).
+
+Definition close (c : Chan Done) : Msg :=               (* yields the reply *)
+  chan_rec Done Msg (fun (m : Msg) => m) c.
 
 
 (* the one legal run of the protocol: open, send, recv, close.
    Inferred type is just Msg -> Msg: send a request, get a reply. *)
 
-Infer fun (req : Msg) => close (recv (send req open)).
+Check fun (req : Msg) => close (recv (send req open)).
 
 Extract fun (req : Msg) => close (recv (send req open)).
 

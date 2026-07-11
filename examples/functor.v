@@ -3,7 +3,13 @@
    These examples demonstrate extraction of terms abstracted over type
    constructors (Set -> Set).  In the target, such binders become
    higher-kinded type variables of kind * => *, directly exercising the
-   Fω part of the target type system. *)
+   Fω part of the target type system.
+
+   [Functor], [Sym], and [Monad] are typeclass-style records over a type
+   constructor; [fmap], [lit], [add], [ret], and [bind] are their field
+   projections (the records' eliminators).  Like all record kits here they
+   are axiomatized; the example terms are ordinary programs against those
+   signatures. *)
 
 
 (* --- Functors ---------------------------------------------------------- *)

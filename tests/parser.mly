@@ -8,8 +8,21 @@
     - [A -> B]                      non-dependent product
     - [f x y]                       application (left-associative juxtaposition)
     - [let x : T := e in body]      local definition
-    - [(e)]                         grouping *)
+    - [(e)]                         grouping
+
+    Commands (Rocq-like):
+    - [Definition f (x : A) : T := body.]   top-level definition
+    - [Check e : T.]                        type checking
+    - [Check e.] / [Infer e.]               type inference *)
 let ps = Pstring.unsafe_of_string
+
+(* Fold Definition binders [(x : A) (y : B)] into the body and return type:
+   body becomes [fun (x : A) (y : B) => body]; the declared type, if present,
+   becomes [forall (x : A) (y : B), T]. *)
+let fold_abs binders body =
+  List.fold_right (fun (x, t) acc -> Core.Expr_abs (x, t, acc)) binders body
+let fold_prod binders ty =
+  List.fold_right (fun (x, t) acc -> Core.Expr_prod (x, t, acc)) binders ty
 %}
 
 %token <string> IDENT
@@ -18,12 +31,14 @@ let ps = Pstring.unsafe_of_string
 %token COLON COMMA DOT ARROW DARROW ASSIGN
 %token FUN FORALL
 %token LET IN UNDERSCORE
-%token QUIT AXIOM INFER CHECK DELETE LIST HELP EXTRACT
+%token QUIT AXIOM INFER CHECK DELETE LIST HELP EXTRACT DEFINITION
 %token EOF
 
 %start file toplevel
-%type <[`Coc of Core.ast | `Extract of Core.expr] list> file
-%type <[`Coc of Core.ast | `Extract of Core.expr] option> toplevel
+%type <[`Coc of Core.ast | `Extract of Core.expr
+       | `Def of Pstring.t * Core.expr option * Core.expr] list> file
+%type <[`Coc of Core.ast | `Extract of Core.expr
+       | `Def of Pstring.t * Core.expr option * Core.expr] option> toplevel
 
 %%
 
@@ -41,11 +56,24 @@ command:
   | INFER expr                  { `Coc (Core.Ast_infer $2) }
   | AXIOM IDENT COLON expr      { `Coc (Core.Ast_axiom (ps $2, $4)) }
   | CHECK expr COLON expr       { `Coc (Core.Ast_check ($2, $4)) }
+  /* Check without a type ascription behaves like Infer. */
+  | CHECK expr                  { `Coc (Core.Ast_infer $2) }
+  | DEFINITION IDENT def_binders COLON expr ASSIGN expr
+    { `Def (ps $2, Some (fold_prod $3 $5), fold_abs $3 $7) }
+  | DEFINITION IDENT def_binders ASSIGN expr
+    { `Def (ps $2, None, fold_abs $3 $5) }
   | DELETE                      { `Coc Core.Ast_delete }
   | LIST                        { `Coc Core.Ast_list }
   | HELP                        { `Coc Core.Ast_help }
   | QUIT                        { `Coc Core.Ast_quit }
   | EXTRACT expr                { `Extract $2 }
+  ;
+
+/* Zero or more Definition binder groups: (x y : A) (z : B) ... */
+def_binders:
+  | /* empty */                 { [] }
+  | LPAREN vars COLON expr RPAREN def_binders
+    { List.map (fun v -> (v, $4)) $2 @ $6 }
   ;
 
 /* Top-level expression: fun, forall, let, arrow, or application. */

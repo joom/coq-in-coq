@@ -1,14 +1,32 @@
 Nat admitted.
-Real admitted.
+NZ admitted.
+NS admitted.
+Nat_rec admitted.
+add is defined.
+mul is defined.
+Bool admitted.
+btrue admitted.
+bfalse admitted.
+bool_case admitted.
+Fin admitted.
+fz admitted.
+fs admitted.
+fin_case admitted.
+fin_rec admitted.
+fin_eq is defined.
+sumf is defined.
 Mat admitted.
-madd admitted.
-mmul admitted.
-trans admitted.
-ident admitted.
-scale admitted.
-Inferred type: forall (m : Nat), forall (n : Nat), forall (p : Nat), Mat m n -> Mat n p -> Mat m p
-Extracted: λm:Nat. λn:Nat. λp:Nat. λa:Mat. λb:Mat. (mmul m n p a b)
-Extracted: λm:Nat. λn:Nat. λa:Mat. (mmul n m n ((trans m n a)) a)
-Extracted: λm:Nat. λn:Nat. λp:Mat. λb:Mat. (mmul m n m ((mmul m n n p b)) ((trans m n p)))
-Extracted: λn:Nat. λs:Real. λa:Mat. λb:Mat. (madd n n ((scale n n s ((mmul n n n a b)))) ((ident n)))
-Extracted: λm:Nat. λn:Nat. ((<? => Nat -> Nat -> ?>^0+ blame(0+)) m n)
+mat admitted.
+mat_rec admitted.
+entry is defined.
+madd is defined.
+mmul is defined.
+trans is defined.
+ident is defined.
+scale is defined.
+Inferred type: forall (x0 x1 x2 : Nat), Mat x0 x1 -> Mat x1 x2 -> Mat x0 x2
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Nat -> (Fin -> Nat) -> Nat) => (fun (x3 : Nat -> Nat -> Mat -> Fin -> Fin -> Nat) => (fun (x4 : Nat -> Nat -> Nat -> Mat -> Mat -> Mat) (x5 x6 x7 : Nat) (x8 x9 : Mat) => x4 x5 x6 x7 x8 x9) (fun (x4 x5 x6 : Nat) (x7 x8 : Mat) => mat x4 x6 (fun (x9 x10 : Fin) => x2 x5 (fun (x11 : Fin) => x1 (x3 x4 x5 x7 x9 x11) (x3 x5 x6 x8 x11 x10))))) (fun (x3 x4 : Nat) (x5 : Mat) (x6 x7 : Fin) => mat_rec x3 x4 [Nat] (fun (x8 : Fin -> Fin -> Nat) => x8 x6 x7) x5)) (fun (x2 : Nat) (x3 : Fin -> Nat) => Nat_rec [(Fin -> Nat) -> Nat] (fun (x4 : Fin -> Nat) => NZ) (fun (x4 : Nat) (x5 : (Fin -> Nat) -> Nat) (x6 : Fin -> Nat) => x0 (x6 (fz x4)) (x5 (fun (x7 : Fin) => x6 (fs x4 x7)))) x2 x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Nat -> (Fin -> Nat) -> Nat) => (fun (x3 : Nat -> Nat -> Mat -> Fin -> Fin -> Nat) => (fun (x4 : Nat -> Nat -> Nat -> Mat -> Mat -> Mat) => (fun (x5 : Nat -> Nat -> Mat -> Mat) (x6 x7 : Nat) (x8 : Mat) => x4 x7 x6 x7 (x5 x6 x7 x8) x8) (fun (x5 x6 : Nat) (x7 : Mat) => mat x6 x5 (fun (x8 x9 : Fin) => x3 x5 x6 x7 x9 x8))) (fun (x4 x5 x6 : Nat) (x7 x8 : Mat) => mat x4 x6 (fun (x9 x10 : Fin) => x2 x5 (fun (x11 : Fin) => x1 (x3 x4 x5 x7 x9 x11) (x3 x5 x6 x8 x11 x10))))) (fun (x3 x4 : Nat) (x5 : Mat) (x6 x7 : Fin) => mat_rec x3 x4 [Nat] (fun (x8 : Fin -> Fin -> Nat) => x8 x6 x7) x5)) (fun (x2 : Nat) (x3 : Fin -> Nat) => Nat_rec [(Fin -> Nat) -> Nat] (fun (x4 : Fin -> Nat) => NZ) (fun (x4 : Nat) (x5 : (Fin -> Nat) -> Nat) (x6 : Fin -> Nat) => x0 (x6 (fz x4)) (x5 (fun (x7 : Fin) => x6 (fs x4 x7)))) x2 x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Nat -> (Fin -> Nat) -> Nat) => (fun (x3 : Nat -> Nat -> Mat -> Fin -> Fin -> Nat) => (fun (x4 : Nat -> Nat -> Nat -> Mat -> Mat -> Mat) => (fun (x5 : Nat -> Nat -> Mat -> Mat) (x6 x7 : Nat) (x8 x9 : Mat) => x4 x6 x7 x6 (x4 x6 x7 x7 x8 x9) (x5 x6 x7 x8)) (fun (x5 x6 : Nat) (x7 : Mat) => mat x6 x5 (fun (x8 x9 : Fin) => x3 x5 x6 x7 x9 x8))) (fun (x4 x5 x6 : Nat) (x7 x8 : Mat) => mat x4 x6 (fun (x9 x10 : Fin) => x2 x5 (fun (x11 : Fin) => x1 (x3 x4 x5 x7 x9 x11) (x3 x5 x6 x8 x11 x10))))) (fun (x3 x4 : Nat) (x5 : Mat) (x6 x7 : Fin) => mat_rec x3 x4 [Nat] (fun (x8 : Fin -> Fin -> Nat) => x8 x6 x7) x5)) (fun (x2 : Nat) (x3 : Fin -> Nat) => Nat_rec [(Fin -> Nat) -> Nat] (fun (x4 : Fin -> Nat) => NZ) (fun (x4 : Nat) (x5 : (Fin -> Nat) -> Nat) (x6 : Fin -> Nat) => x0 (x6 (fz x4)) (x5 (fun (x7 : Fin) => x6 (fs x4 x7)))) x2 x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: (fun (x0 : Nat -> Nat -> Nat) => (fun (x1 : Nat -> Nat -> Nat) => (fun (x2 : Nat -> Fin -> Fin -> Bool) => (fun (x3 : Nat -> (Fin -> Nat) -> Nat) => (fun (x4 : Nat -> Nat -> Mat -> Fin -> Fin -> Nat) => (fun (x5 : Nat -> Nat -> Mat -> Mat -> Mat) => (fun (x6 : Nat -> Nat -> Nat -> Mat -> Mat -> Mat) => (fun (x7 : Nat -> Mat) => (fun (x8 : Nat -> Nat -> Nat -> Mat -> Mat) (x9 x10 : Nat) (x11 x12 : Mat) => x5 x9 x9 (x8 x9 x9 x10 (x6 x9 x9 x9 x11 x12)) (x7 x9)) (fun (x8 x9 x10 : Nat) (x11 : Mat) => mat x8 x9 (fun (x12 x13 : Fin) => x1 x10 (x4 x8 x9 x11 x12 x13)))) (fun (x7 : Nat) => mat x7 x7 (fun (x8 x9 : Fin) => bool_case [Nat] (NS NZ) NZ (x2 x7 x8 x9)))) (fun (x6 x7 x8 : Nat) (x9 x10 : Mat) => mat x6 x8 (fun (x11 x12 : Fin) => x3 x7 (fun (x13 : Fin) => x1 (x4 x6 x7 x9 x11 x13) (x4 x7 x8 x10 x13 x12))))) (fun (x5 x6 : Nat) (x7 x8 : Mat) => mat x5 x6 (fun (x9 x10 : Fin) => x0 (x4 x5 x6 x7 x9 x10) (x4 x5 x6 x8 x9 x10)))) (fun (x4 x5 : Nat) (x6 : Mat) (x7 x8 : Fin) => mat_rec x4 x5 [Nat] (fun (x9 : Fin -> Fin -> Nat) => x9 x7 x8) x6)) (fun (x3 : Nat) (x4 : Fin -> Nat) => Nat_rec [(Fin -> Nat) -> Nat] (fun (x5 : Fin -> Nat) => NZ) (fun (x5 : Nat) (x6 : (Fin -> Nat) -> Nat) (x7 : Fin -> Nat) => x0 (x7 (fz x5)) (x6 (fun (x8 : Fin) => x7 (fs x5 x8)))) x3 x4)) (fun (x2 : Nat) (x3 : Fin) => fin_rec [Fin -> Bool] (fun (x4 : Nat) (x5 : Fin) => fin_case x4 [Bool] btrue (fun (x6 : Fin) => bfalse) x5) (fun (x4 : Nat) (x5 : Fin) (x6 : Fin -> Bool) (x7 : Fin) => fin_case x4 [Bool] bfalse x6 x7) x2 x3)) (fun (x1 x2 : Nat) => Nat_rec [Nat] NZ (fun (x3 x4 : Nat) => x0 x2 x4) x1)) (fun (x0 x1 : Nat) => Nat_rec [Nat] x1 (fun (x2 x3 : Nat) => NS x3) x0)
+Extracted: fun (m n : Nat) => cast<Dyn => Nat -> Nat -> Dyn>^2+(blame(2+)) m n

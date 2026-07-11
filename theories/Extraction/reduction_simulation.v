@@ -372,7 +372,7 @@ Qed.
 (** One-step simulation for [extract]: a source reduction step is simulated
     by [sim_star] of the typed extractions. *)
 Theorem extract_reduces_once : forall e t T (H: has_type e t T)
-  (w: well_formed e) v (Hred: reduces_once_t t v),
+  (w: well_formed e) v (Hred: reduces_once t v),
   simulation.sim_star (extract e t T H)
     (extract e v T (subject_reduction_t e t T H v Hred w)).
 Proof.
@@ -391,38 +391,38 @@ Proof.
       pose (HT' := subject_reduction_t _ _ _ HT _ Hred_T w).
       pose (wfe' := wf_var e0 M' s1 HT').
       pose (HU' := has_type_reduces_environment_t _ _ _ HU _
-                     (red_env_hd e0 T0 M' (reduces_once_t_sound _ _ Hred_T)) wfe').
+                     (red_env_hd e0 T0 M' Hred_T) wfe').
       pose (HM' := has_type_reduces_environment_t _ _ _ HM _
-                     (red_env_hd e0 T0 M' (reduces_once_t_sound _ _ Hred_T)) wfe').
+                     (red_env_hd e0 T0 M' Hred_T) wfe').
       pose (H'lam := type_abs e0 M' s1 HT' M U s2 HU' HM').
       pose (Hsrt := subject_reduction_t e0 (lam T0 M) (prod T0 U)
               (type_abs e0 T0 s1 HT M U s2 HU HM) (lam M' M) Hred w).
       eapply simulation.sim_star_trans;
         [| apply (extract_deriv_indep_conv _ _ _ _ H'lam Hsrt);
            apply convertible_convertible_product;
-             [ exact (one_step_convertible_expansion _ _ (reduces_once_t_sound _ _ Hred_T))
+             [ exact (one_step_convertible_expansion _ _ Hred_T)
              | apply refl_convertible ] ].
       subst H'lam HM' HU' wfe' HT' Hsrt. cbn [extract].
       assert (Hlarge_iff : iffT (is_large e0 T0) (is_large e0 M'))
         by (apply is_large_iff with (1 := HT);
-            exact (reduces_once_t_sound _ _ Hred_T)).
+            exact Hred_T).
       assert (Hkind_eq : forall sn1 sn2, extract_kind T0 sn1 = extract_kind M' sn2)
-        by (intros; exact (extract_kind_stable _ _ _ _ (reduces_once_t_sound _ _ Hred_T))).
+        by (intros; exact (extract_kind_stable _ _ _ _ Hred_T)).
       assert (Htyp_eq : forall sn1 sn2, extract_typ e0 T0 sn1 = extract_typ e0 M' sn2).
       { intros. unfold extract_typ.
         rewrite (nf_respects_conv _ _ sn1 sn2
-          (sym_convertible _ _ (one_step_convertible_expansion _ _ (reduces_once_t_sound _ _ Hred_T)))).
+          (sym_convertible _ _ (one_step_convertible_expansion _ _ Hred_T))).
         reflexivity. }
       destruct (is_large_dec e0 T0); destruct (is_large_dec e0 M');
         try (iffT_contra Hlarge_iff).
       * erewrite Hkind_eq. apply sim_star_tabs.
         apply (extract_ctx_swap nil T0 M' e0
-                 (reduces_once_t_sound _ _ Hred_T)
+                 Hred_T
                  ((wf_var e0 T0 s1 HT))
                  (wf_var e0 M' s1 (subject_reduction_t _ _ _ HT _ Hred_T w))).
       * erewrite Htyp_eq. apply sim_star_abs.
         apply (extract_ctx_swap nil T0 M' e0
-                 (reduces_once_t_sound _ _ Hred_T)
+                 Hred_T
                  ((wf_var e0 T0 s1 HT))
                  (wf_var e0 M' s1 (subject_reduction_t _ _ _ HT _ Hred_T w))).
     + (* abs_reduces_right: M -> M', lam T0 M' *)
@@ -499,7 +499,7 @@ Proof.
       assert (Hconv_sub : convertible (subst N2 Ur) (subst v0 Ur)).
       { unfold subst. apply convertible_convertible_subst.
         - apply one_step_convertible_expansion.
-          exact (reduces_once_t_sound _ _ Hred_v).
+          exact Hred_v.
         - apply refl_convertible. }
       eapply simulation.sim_star_trans;
         [| apply (extract_deriv_indep_conv _ _ _ _ H'app _ Hconv_sub)].
@@ -512,7 +512,7 @@ Proof.
       { unfold extract_typ.
         apply f_equal. apply nf_respects_conv.
         apply sym_convertible. apply one_step_convertible_expansion.
-        exact (reduces_once_t_sound _ _ Hred_v). }
+        exact Hred_v. }
       assert (Heq_sub : forall sn1 sn2,
           extract_typ e0 (terms.subst v0 Ur) sn1 = extract_typ e0 (terms.subst N2 Ur) sn2).
       { intros sn1 sn2. unfold extract_typ. apply f_equal. apply nf_respects_conv.
@@ -530,7 +530,7 @@ Proof.
       pose (HT' := subject_reduction_t _ _ _ HT _ Hred_T w).
       pose (wfe' := wf_var e0 N1 s1 HT').
       pose (HU' := has_type_reduces_environment_t _ _ _ HU _
-                     (red_env_hd e0 T0 N1 (reduces_once_t_sound _ _ Hred_T)) wfe').
+                     (red_env_hd e0 T0 N1 Hred_T) wfe').
       pose (H'prod := type_prod e0 N1 s1 HT' U0 s2 HU').
       eapply simulation.sim_star_trans; [| apply (extract_deriv_indep _ _ _ H'prod)].
       subst H'prod HU' wfe' HT'. cbn [extract].
@@ -556,24 +556,19 @@ Proof.
 Unshelve. all: try (eapply strong_normalization; eassumption).
 Qed.
 
-(** Type-valued reflexive-transitive closure of one-step reduction. *)
-Inductive reduces_t : term -> term -> Type :=
-  | reduces_t_refl : forall t, reduces_t t t
-  | reduces_t_step : forall t u v, reduces_once_t t u -> reduces_t u v -> reduces_t t v.
-
 (** Multi-step simulation: source multi-step reduction is simulated by
     [sim_star] of the typed extractions (for any derivation of the reduct). *)
 Corollary extract_reduces : forall e t T (H: has_type e t T)
-  (w: well_formed e) v (Hred: reduces_t t v) (Hv: has_type e v T),
+  (w: well_formed e) v (Hred: reduces t v) (Hv: has_type e v T),
   simulation.sim_star (extract e t T H) (extract e v T Hv).
 Proof.
-  intros e t T H w v Hred. revert H. induction Hred; intros H Hv.
+  intros e t T H w v Hred. revert H.
+  induction Hred as [M | M P N Hstep Hprefix IH]; intros H Hv.
   - apply extract_deriv_indep.
-  - set (Hu := subject_reduction_t e t T H u r w).
+  - set (HP := subject_reduction_theorem e M P Hprefix T H).
     eapply simulation.sim_star_trans.
-    + exact (extract_reduces_once e t T H w u r).
+    + exact (IH H HP).
     + eapply simulation.sim_star_trans.
+      * exact (extract_reduces_once e P T HP w N Hstep).
       * apply extract_deriv_indep.
-      * exact (IHHred Hu Hv).
 Qed.
-

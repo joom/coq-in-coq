@@ -3,8 +3,8 @@
     Naming conventions:
     - [_L] suffix: "raw/pre-normalization" — the function operates on its argument
       directly; the unsuffixed version normalizes first (e.g. [extract_typ_L] vs
-      [extract_typ = extract_typ_L ∘ nf]).  Exception: [fo_typ_L] where [_L] means
-      "first-order level" (classifies using the syntactic [classifier]).
+      [extract_typ = extract_typ_L ∘ nf]).  [fo_typ_L] likewise describes the
+      raw, pre-normalization syntax inspected by [extract_typ_L].
     - [_gen] suffix: "generalized" — the lemma is stated with extra generality.
       [extract_typ_L_swap_gen] generalizes over context depth; [sim_star_tapp_gen]
       generalizes over both type arguments. *)
@@ -24,5 +24,5 @@ From Extraction Require Export derivation_independence.
 From Extraction Require Export substitution_simulation.
 From Extraction Require Export reduction_simulation.
 From Extraction Require Export optimism.
-From Extraction Require Export jack.
+From Extraction Require Export instantiation.
 From Extraction Require Export well_typed.

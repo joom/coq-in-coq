@@ -132,7 +132,9 @@ Proof.
     + inversion H0 as [g1 G' HGnd HWf]; subst. constructor.
       * exact HGnd.
       * apply wf_typ_weaken_type; exact HWf.
-  - (* is_gnd *) simpl. apply typing_is_gnd; auto.
+  - (* is_gnd *) simpl. apply typing_is_gnd.
+    + apply IHtyping; reflexivity.
+    + inversion H0; subst. constructor; auto using wf_typ_weaken_type.
   - (* blame *) simpl. apply typing_blame. apply wf_typ_weaken_type; auto.
   - (* nu *) simpl. apply typing_nu.
     + apply (IHtyping (has_def K A :: G1)). reflexivity.
@@ -562,7 +564,10 @@ Proof.
   - (* gnd *) simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | ].
     inversion H0; subst; constructor;
       [ apply ground_tlift; auto | apply wf_typ_weaken_kind; auto ].
-  - (* is_gnd *) simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)). apply (IHtyping G1). reflexivity.
+  - (* is_gnd *) simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)).
+    + apply (IHtyping G1). reflexivity.
+    + inversion H0; subst. constructor;
+        [ apply ground_tlift; auto | apply wf_typ_weaken_kind; auto ].
   - (* blame *) simpl. apply typing_blame. apply wf_typ_weaken_kind; auto.
   - (* nu *) simpl.
     replace (tlift 1 (ntype G1) (tsubst A 0 B))
@@ -892,7 +897,10 @@ Proof.
   - simpl. apply typing_gnd; [ apply (IHtyping G1); reflexivity | ].
     inversion H0; subst; constructor;
       [ apply ground_tlift; auto | apply wf_typ_weaken_def; auto ].
-  - simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)). apply (IHtyping G1). reflexivity.
+  - simpl. apply (typing_is_gnd _ _ (tlift 1 (ntype G1) G)).
+    + apply (IHtyping G1). reflexivity.
+    + inversion H0; subst. constructor;
+        [ apply ground_tlift; auto | apply wf_typ_weaken_def; auto ].
   - simpl. apply typing_blame. apply wf_typ_weaken_def; auto.
   - simpl.
     replace (tlift 1 (ntype G1) (tsubst A 0 B))
@@ -1115,6 +1123,7 @@ Proof.
   - (* gnd *) apply typing_gnd; eauto.
     inversion H; subst; constructor; [ auto | eapply wf_typ_strengthen_type; eauto ].
   - (* is_gnd *) apply (typing_is_gnd _ _ G); eauto.
+    inversion H; subst; constructor; [auto | eapply wf_typ_strengthen_type; eauto].
   - (* blame *) apply typing_blame. eapply wf_typ_strengthen_type; eauto.
   - (* nu *)
     replace (term_tlift 1 0 (term_tlift (ntype G1) 0 u))
@@ -1480,7 +1489,10 @@ Proof.
   - (* gnd *) apply typing_gnd; [ apply (IHHe G1); reflexivity | ].
     inversion H; subst; constructor;
       [ apply ground_tsubst; assumption | eapply wf_typ_tsubst; eauto ].
-  - (* is_gnd *) apply (typing_is_gnd _ _ (tsubst S (ntype G1) G)). apply (IHHe G1). reflexivity.
+  - (* is_gnd *) apply (typing_is_gnd _ _ (tsubst S (ntype G1) G)).
+    + apply (IHHe G1). reflexivity.
+    + inversion H; subst; constructor;
+        [ apply ground_tsubst; assumption | eapply wf_typ_tsubst; eauto ].
   - (* blame *) apply typing_blame. eapply wf_typ_tsubst; eauto.
   - (* nu *)
     pose proof (distribute_tsubst_rec B A S (ntype G1) 0) as Hd. simpl in Hd.
@@ -2098,6 +2110,14 @@ Proof.
     pose proof (wf_typ_tsubst nil g K A B KStar W H0) as P.
     simpl in P. exact P.
   - assumption.
+Qed.
+
+(** Typing also regularizes annotations that are not reflected in the result
+    type, notably the ground tag inspected by [is_gnd]. *)
+Lemma typing_annotations_regular : forall g e A,
+  typing g e A -> term_annotations_wf g e.
+Proof.
+  intros g e A H. induction H; simpl; eauto 8.
 Qed.
 
 (** ** Inversion of [typing] through [typing_conv]

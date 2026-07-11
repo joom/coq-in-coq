@@ -1,11 +1,20 @@
 A admitted.
 R admitted.
 Rstar admitted.
-unfold_Rstar admitted.
-Rstar' admitted.
-unfold_Rstar' admitted.
+Rstar_refl admitted.
+Rstar_step admitted.
+Rstar_ind admitted.
+Rstar_case admitted.
 coherence admitted.
-unfold_coherence admitted.
+coh_intro admitted.
+coh_elim admitted.
 Hyp1 admitted.
 Hyp2 admitted.
+Rstar_trans is defined.
+Rstar_coherence is defined.
+coherence_sym is defined.
+Diagram is defined.
+caseRxy is defined.
+Ind_proof is defined.
+newman is defined.
 Correct.

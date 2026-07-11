@@ -2,10 +2,15 @@ opam-version: "2.0"
 name: "extracting-blame"
 version: "0.1.0"
 synopsis: "Verified extraction from CoC to System Fω + blame"
+maintainer: "Joomy Korkut <joomy@type.systems>"
+authors: ["Joomy Korkut <joomy@type.systems>"]
+license: "LGPL-2.1-or-later"
+homepage: "https://github.com/joom/coq-in-coq"
+bug-reports: "https://github.com/joom/coq-in-coq/issues"
 depends: [
   "ocaml"
-  "dune" {>= "3.8"}
-  "rocq-prover" {>= "9.0"}
+  "dune" {>= "3.21" & < "3.24"}
+  "rocq-prover" {>= "9.0" & < "9.1"}
   "rocq-runtime"
   "menhir"
 ]

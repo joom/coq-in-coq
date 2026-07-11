@@ -1,0 +1,1 @@
+Extracted: fun (f : forall (x0 : *), x0 -> x0) => f

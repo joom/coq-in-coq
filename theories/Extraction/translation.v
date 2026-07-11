@@ -65,6 +65,18 @@ Definition type_binding (e: environment) (n: nat) : bool :=
   | None => false
   end.
 
+(** Whether a source term occupies the type-level namespace. This is a
+    one-way dependency of [extract_typ_L], so it is defined separately rather
+    than as an unnecessary mutual fixpoint. *)
+Fixpoint type_expr (e: environment) (t: terms.term) : bool :=
+  match t with
+  | sort_term _ => true
+  | terms.var n => type_binding e n
+  | terms.prod _ _ => true
+  | terms.lam T M => type_expr (T :: e) M
+  | terms.app u _ => type_expr e u
+  end.
+
 (** Raw is_large-based type extraction (assumes an already-normal argument); [extract_typ] normalizes first. *)
 Fixpoint extract_typ_L (e: environment) (t: terms.term) : syntax.typ :=
   match t with
@@ -85,14 +97,6 @@ Fixpoint extract_typ_L (e: environment) (t: terms.term) : syntax.typ :=
            then syntax.tyapp (extract_typ_L e u) (extract_typ_L e v)
            else extract_typ_L e u
       else syntax.dyn
-  end
-with type_expr (e: environment) (t: terms.term) : bool :=
-  match t with
-  | sort_term _ => true
-  | terms.var n => type_binding e n
-  | terms.prod _ _ => true
-  | terms.lam T M => type_expr (T :: e) M
-  | terms.app u _ => type_expr e u
   end.
 
 (** ** Term extraction ([extract])

@@ -4,13 +4,16 @@ NS admitted.
 Vec admitted.
 vnil admitted.
 vcons admitted.
+vrec admitted.
 Fin admitted.
 fz admitted.
 fs admitted.
-vnth admitted.
-Inferred type: forall (A : Set), forall (n : Nat), Vec A n -> Fin n -> A
-Extracted: ΛA:*. λn:Nat. λxs:Vec A. λi:Fin. (vnth [A] n xs i)
-Extracted: ΛA:*. λn:Nat. λxs:Vec A. (vnth [A] ((NS n)) xs ((fz n)))
-Extracted: ΛA:*. λn:Nat. λxs:Vec A. (vnth [A] ((NS ((NS n)))) xs ((fs ((NS n)) ((fz n)))))
-Extracted: λn:Nat. λi:Fin. (fs n i)
-Extracted: λn:Nat. ((<? => Nat -> ?>^0+ blame(0+)) n)
+fin0 admitted.
+fin_case admitted.
+vnth is defined.
+Inferred type: forall (A : Set) (n : Nat), Vec A n -> Fin n -> A
+Extracted: fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) => vrec [A] [Fin -> A] (fun (x0 : Fin) => fin0 [A] x0) (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) => fin_case x0 [A] x1 x2 x3) n xs i
+Extracted: (fun (x0 : forall (x0 : *), Nat -> Vec x0 -> Fin -> x0) (x0 : *) (x1 : Nat) (x2 : Vec x0) => x0 [x0] (NS x1) x2 (fz x1)) (fun (x0 : *) (x0 : Nat) (x1 : Vec x0) (x2 : Fin) => vrec [x0] [Fin -> x0] (fun (x3 : Fin) => fin0 [x0] x3) (fun (x3 : Nat) (x4 : x0) (x5 : Fin -> x0) (x6 : Fin) => fin_case x3 [x0] x4 x5 x6) x0 x1 x2)
+Extracted: (fun (x0 : forall (x0 : *), Nat -> Vec x0 -> Fin -> x0) (x0 : *) (x1 : Nat) (x2 : Vec x0) => x0 [x0] (NS (NS x1)) x2 (fs (NS x1) (fz x1))) (fun (x0 : *) (x0 : Nat) (x1 : Vec x0) (x2 : Fin) => vrec [x0] [Fin -> x0] (fun (x3 : Fin) => fin0 [x0] x3) (fun (x3 : Nat) (x4 : x0) (x5 : Fin -> x0) (x6 : Fin) => fin_case x3 [x0] x4 x5 x6) x0 x1 x2)
+Extracted: fun (n : Nat) (i : Fin) => fs n i
+Extracted: fun (n : Nat) => cast<Dyn => Nat -> Dyn>^2+(blame(2+)) n

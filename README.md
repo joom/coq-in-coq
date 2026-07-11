@@ -2,12 +2,12 @@
 
 A fully mechanized verified extraction from the Calculus of
 Constructions (CoC) to a higher-order polymorphic blame calculus (System Fω + blame),
-with proofs of well-typed extraction, simulation, and blame safety.
+with proofs of well-typed extraction, syntactic source-reduction simulation,
+and external-label safety.
 
-This is, to our knowledge, the first definition and the first mechanization of a
-higher-order polymorphic blame calculus, and the first
-verified extraction from a dependently-typed language to a gradually-typed
-target.
+The target is an explicit dynamic/blame calculus. The repository does not
+define a gradual surface language, cast insertion, a precision relation, or a
+gradual guarantee.
 
 ### Historical positioning
 
@@ -15,8 +15,8 @@ This project is not the first extraction from CoC to an Fω-like language:
 Paulin-Mohring's 1989 POPL paper ("Extracting Fω's Programs from Proofs in
 the Calculus of Constructions") established that foundational direction.
 This repository instead studies a mechanized optimistic extraction into an
-Fω-style blame calculus, preserving the Fω-expressible skeleton and containing
-the remaining dependency with `dyn`, casts, and internal blame.
+Fω-style blame calculus, preserving an Fω-expressible skeleton and marking the
+remaining dependency with `dyn`, casts, and internal blame.
 
 ## Background
 
@@ -24,13 +24,12 @@ the remaining dependency with `dyn`, casts, and internal blame.
 
 System Fω + blame is a polymorphic blame calculus: System Fω (the
 higher-order polymorphic lambda calculus) extended with a dynamic type `?`,
-casts between static and dynamic types, and blame tracking that identifies
-which cast boundary is responsible when a runtime type error occurs. The
+casts between static and dynamic types, and labeled cast failures. The
 language combines ideas from:
 
 - **System Fω** (Girard, 1972) — polymorphism with higher-kinded types
-- **Gradual typing** (Siek and Taha, 2006) — seamless mixing of static and
-  dynamic typing via the dynamic type `?` and type-directed casts
+- **Gradual typing** (Siek and Taha, 2006) — the use of a dynamic type and
+  type-directed casts; this artifact formalizes only the explicit target
 - **Blame tracking** (Wadler and Findler, 2009; Ahmed, Findler, Siek, and
   Wadler, 2011) — labeling casts so that when a cast fails at runtime, the
   responsible boundary is identified
@@ -49,6 +48,8 @@ value, steps, or is `blame`. Target **preservation** is also mechanized
 (`preservation`, `preservation_star`, `preservation.v`) for the same
 kind-regular `typing` judgment, a well-formed-context invariant `wf_ctx`, and
 the full `step` relation, including `step_nu_abs` and `step_nu_tabs`.
+The target is not strongly normalizing: `nonnormalization.v` gives a closed,
+well-typed reduction cycle.
 The key types are:
 
 | Layer  | Constructors |
@@ -159,7 +160,7 @@ Extracted: Λα:*. Λβ:*. λx:α -> β. λy:α. (x y)
 You can also run a batch file:
 
 ```
-dune exec tests/top.exe < tests/newman.v
+dune exec tests/top.exe < examples/newman.v
 ```
 
 ## Structure
@@ -199,12 +200,15 @@ dune exec tests/top.exe < tests/newman.v
 │   │   ├── typing.v                        Typing contexts, kinding, typing judgment
 │   │   ├── subtyping.v                     Subtype, pos/neg subtype, mutual induction, inversion
 │   │   ├── safety.v                        safe_pos_neg / safe_sub predicates and preservation
-│   │   ├── blame.v                         Blame Theorem (Thm 14), Corollary 15
-│   │   ├── subtyping_safety.v              Subtyping Theorem (Cor 18)
-│   │   ├── simulation.v                    sim / typ_sim, sim_star, Jack-of-All-Trades (Thm 7)
+│   │   ├── blame.v                         Positive/negative label-safety preservation
+│   │   ├── subtyping_safety.v              Subtyping-label safety preservation
+│   │   ├── simulation.v                    Syntactic sim / typ_sim and sim_star
 │   │   ├── ty_confluence.v                 Type-level β confluence, Church–Rosser, head inversions
 │   │   ├── typing_metatheory.v             Weakening, substitution (term/type), inversion, canonical forms
-│   │   └── expressions.v                   Named Fω syntax, de Bruijn → named conversion + proofs
+│   │   ├── progress.v                      Progress for closed, well-typed target terms
+│   │   ├── preservation.v                  One-step and multi-step preservation
+│   │   ├── nonnormalization.v              A closed, well-typed target reduction cycle
+│   │   └── expressions.v                   Checked named conversion, alpha-equivalence, uniqueness
 │   │
 │   └── Extraction/                       Verified extraction from CoC to Fω + blame
 │       ├── extraction.v                    Shared defs: classifier, is_large, extract_kind_L, coerce, labels
@@ -213,14 +217,14 @@ dune exec tests/top.exe < tests/newman.v
 │       ├── translation.v                   The translation: extract_kind/typ/ctx and extract (term) + witness-independence
 │       ├── context_facts.v                 Classification stability, context lookup, type-preservation building blocks
 │       ├── type_extraction_facts.v         Kind-regularity + substitution-commutation for the large-App typing_conv
-│       ├── typing_proof.v                  blame freedom (extracted_safe, extraction_blame_free)
+│       ├── typing_proof.v                  External-label non-generation
 │       ├── well_typed.v                     extract_well_typed + the large-App conversion lemma (extract_typ_tsubst_coc_equiv)
 │       ├── simulation_facts.v              Simulation infrastructure + target typing/weakening/subst lemmas it uses
 │       ├── substitution_simulation.v       extract weakening/substitution commutation (formerly the six admits)
 │       ├── reduction_simulation.v          One-step and multi-step simulation (extract_reduces_once, extract_reduces)
 │       ├── derivation_independence.v       extract_deriv_indep
-│       ├── optimism.v                      dyn-freedom on the first-order fragment (extract_typ_dyn_free)
-│       ├── jack.v                          Jack-of-All-Trades (extraction_simulates_any_instantiation)
+│       ├── optimism.v                      Exact syntactic characterization of dyn-free extracted types
+│       ├── instantiation.v                 Syntactic instantiation simulation
 │       ├── proofs.v                        Compatibility facade: Require Export of the modules above
 │       └── Assumptions.v                   Print Assumptions audit of the headline theorems
 │
@@ -229,19 +233,25 @@ dune exec tests/top.exe < tests/newman.v
 │   ├── lexer.mll                           Menhir/ocamllex lexer for named CoC syntax
 │   ├── parser.mly                          Menhir parser for exprs and REPL commands
 │   ├── top.ml                              REPL main loop and Fω+blame pretty-printer
-│   ├── newman.v                            Example: Newman's lemma (type-checking)
-│   ├── vectors.v                           Example: length-indexed vectors
-│   ├── fin.v                               Example: bounds-checked indexing (Fin n)
-│   ├── equality.v                          Example: propositional equality + transport
-│   ├── sigma.v                             Example: dependent pairs / existentials
-│   ├── printf.v                            Example: type-safe printf (dependent arity)
-│   ├── matrix.v                            Example: dimension-indexed matrices
-│   ├── units.v                             Example: units of measure
-│   ├── avl.v                               Example: height-indexed balanced trees
-│   ├── session.v                           Example: session-typed protocols
-│   ├── stlc.v                              Example: intrinsically-typed interpreter
-│   ├── universe.v                          Example: Tarski universe / dynamic type (dyn + blame)
-│   └── functor.v                           Example: higher-kinded (functors, tagless-final, monads)
+│   ├── naming.v                            Name-hint regression test
+│   ├── bad-semantic.v                      Batch error/exit-status regression
+│   └── bad-syntax.v                        Lexer source-position regression
+│
+├── examples/                             Showcase CoC command batches
+│   ├── newman.v                            Newman's lemma over inductive-predicate axioms
+│   ├── vectors.v                           Length-indexed vectors (map/fold/replicate)
+│   ├── fin.v                               Bounds-checked indexing; vnth implemented
+│   ├── equality.v                          Propositional equality + transport
+│   ├── sigma.v                             Dependent pairs / existentials
+│   ├── printf.v                            Type-safe printf; sprintf implemented
+│   ├── matrix.v                            Dimension-indexed matrices, fully implemented
+│   ├── units.v                             Units of measure over a qty carrier
+│   ├── avl.v                               Height-indexed balanced trees
+│   ├── session.v                           Session-typed protocols (echo model)
+│   ├── stlc.v                              Intrinsically-typed interpreter signature
+│   ├── universe.v                          Tarski universe / dynamic type (dyn + blame)
+│   ├── functor.v                           Higher-kinded (functors, tagless-final, monads)
+│   └── tagless.v                           Computed return types via type-level codes; dyn-free
 │
 └── paper/                                 POPL-style paper (LaTeX, acmart)
     ├── main.tex                            The paper
@@ -249,25 +259,31 @@ dune exec tests/top.exe < tests/newman.v
     └── Makefile                            `make` → main.pdf
 ```
 
-The `Axiom` commands in `tests/*.v` are inputs to the object-language REPL;
+The `Axiom` commands in `examples/*.v` are inputs to the object-language REPL;
 they extend the object-language context and are not Rocq axioms used by the
 mechanized metatheory.
 
-The example files are self-contained CoC programs, each run with
-`dune exec tests/top.exe < tests/<file>.v`.  They showcase what the extraction
-keeps (polymorphic structure), erases (many term indices from target types),
-and dynamizes (target-inexpressible type-level residue → `?` + internal
-`blame`).  The current extractor does not implement Coq-style proof erasure;
-proof terms are treated as ordinary residual terms.
+The showcase files are self-contained CoC command batches, each run with
+`dune exec tests/top.exe < examples/<file>.v`.  They showcase what the
+extraction keeps (polymorphic structure), erases (many term indices from
+target types), and dynamizes (the translation's type-level fallback → `?` +
+internal `blame`). Object-language `Axiom` commands introduce only what native
+inductive definitions would provide — type formers, constructors, and
+elimination/induction principles — plus the deliberate value-as-type
+boundaries (`El`, `eval`) that need large elimination, which the bare PTS
+lacks. Every other function (`vnth`, matrix multiplication, `sprintf`,
+Newman's-lemma proof steps, ...) is an ordinary REPL `Definition`, expanded by
+let at its use sites (the bare PTS has no delta rule, so definitions are
+opaque at uses; each is built from the axiomatized eliminators). The current
+extractor does not implement Coq-style proof erasure; proof terms are treated
+as ordinary residual terms.
 
 ## Main results
 
-**The entire development is admit-free** — zero `Admitted` lemmas across
-`theories/`. Every headline theorem (well-typed extraction, simulation,
-derivation independence, blame freedom, Jack-of-All-Trades, dyn-freedom, the
-Blame Theorem, determinism, and progress) depends only on the standard-library
-axiom `eq_rect_eq` (introduced by dependent case analysis); nothing depends on a
-project-local axiom.
+**The entire development is admit-free**: the source scan rejects proof-hole
+and axiom-declaration commands across `theories/`. The audited headline theorem
+set depends only on the standard-library axiom `eq_rect_eq` (introduced by
+dependent case analysis); nothing in that set depends on a project-local axiom.
 
 The two type-extraction lemmas that discharge the large-`App` case's
 `typing_conv` premises are both now proved:
@@ -292,11 +308,11 @@ The six former simulation admits (`term_tlift_extract_sim`,
 `extract_tsubst_gen`, and — transitively — `extract_reduces_once`) are likewise
 proved (in `substitution_simulation.v`/`reduction_simulation.v`).
 
-`theories/Extraction/Assumptions.v` runs `Print Assumptions` on every headline
-theorem; compiling it shows the whole set depends only on `eq_rect_eq`
+`theories/Extraction/Assumptions.v` runs `Print Assumptions` on the headline
+theorem set; compiling it shows that audited set depends only on `eq_rect_eq`
 (`extract_typ_wf_sort` is even free of that). The script `./check-assumptions.sh`
-rebuilds that file and fails if any unexpected axiom or `Admitted` goal appears —
-a CI-friendly check of the admit-free claim. The REPL name-recovery lemmas
+rebuilds that file and rejects unexpected assumptions, proof-hole commands, and
+axiom-like declarations. The same audit runs under `dune test`. The REPL name-recovery lemmas
 additionally depend on the standard library's primitive-string/integer axioms,
 since they manipulate variable `name`s; the core metatheory does not.
 
@@ -310,17 +326,27 @@ since they manipulate variable `name`s; the core metatheory does not.
   CoC term is well-typed in the target.
 
 - **`extract_reduces_once`**: One-step simulation — if `t` reduces to `v` in
-  CoC, then `extract(t)` simulates `extract(v)` under `sim_star`.
+  CoC's canonical `reduces_once` relation, then `extract(t)` simulates
+  `extract(v)` under `sim_star`; `extract_reduces` consumes CoC's canonical
+  reflexive-transitive `reduces` relation.
 
-- **`extracted_safe` / `extraction_blame_free`**: Blame safety — the extraction never
-  blames an external label (labels with id >= 2).
+- **`extracted_safe` / `extraction_blame_free`**: external-label non-generation
+  under reduction of an extracted term in isolation. External labels satisfy
+  `external_label` (currently ids at least `first_external_label_id = 3`). This
+  is not a theorem about arbitrary linking contexts or programmer boundaries.
 
 - **`extract_deriv_indep`**: Derivation independence — two derivations of the
   same judgment produce `sim_star`-related extractions.
 
-- **`extraction_simulates_any_instantiation`**: Jack-of-All-Trades — for any
-  type `C`, the `C`-instantiated extraction simulates the `dyn`-instantiated
-  one.
+- **`extraction_instantiation_sim`**: for strongly normalizing source terms
+  used as type annotations, concrete and `dyn` instantiations are related by
+  the extraction's syntactic `sim`. This is not Ahmed et al.'s contextual
+  Jack-of-All-Trades principle.
+
+- **`extract_typ_dyn_free_iff`**: the recursive predicate `fo_typ_L` exactly
+  characterizes which source-type normal forms this translation maps to target
+  types containing no `dyn`. This is a syntactic characterization, not a
+  semantic optimality result.
 
 - **`step_deterministic`** (`semantics.v`): the target operational semantics is
   deterministic — each term steps to at most one result.
@@ -335,14 +361,25 @@ since they manipulate variable `name`s; the core metatheory does not.
   `compat A G` at the chosen ground tag `G`, so GROUND only ever manufactures a
   cast the rest of `compat` already accepts.
 
+- **`preservation` / `preservation_star`** (`preservation.v`): target typing is
+  preserved by the full one-step and multi-step semantics. `typing_regular` and
+  `typing_annotations_regular` establish kind regularity of result types and of
+  every embedded term annotation, respectively.
+
+- **`typing_does_not_imply_strong_normalization`** (`nonnormalization.v`): the
+  dynamic target has a closed, well-typed reduction cycle. Target type safety
+  does not imply termination; source CoC strong normalization is the separate
+  fact used to define `nf` during extraction.
+
 ## Known limitations
 
 1. **Internal blame is reachable.** The extraction maps type-variables-used-as-terms
    to `blame internal_label`. This placeholder is well-typed at any type and
-   simulates anything (via `sim_blame`), but it is a runtime error — programs
+   is related to anything by the syntactic bookkeeping rule `sim_blame`, but it is a runtime error — programs
    that exercise dependent-type features at runtime will blame internally.
-   The external-blame-freedom theorem (`extraction_blame_free`) only covers labels
-   with id >= 2; `internal_label` (id 0) is excluded by design.
+   The external-label theorem (`extraction_blame_free`) only covers
+   `external_label`s. The reserved ids are 0 for `nu` tampering, 1 for
+   `is_gnd` tampering, and 2 for extraction/coercion failure.
 
 2. **Non-computable extraction.** The `extract` function uses `is_large_dec` (which
    invokes the type inference decision procedure) and `nf` (which computes
@@ -350,27 +387,43 @@ since they manipulate variable `name`s; the core metatheory does not.
    extractable to efficient code. The extraction exists as a mathematical function,
    not a practical compiler pass.
 
-3. **Simulation /= observational approximation (yet).** The simulation
+3. **Simulation is not observational approximation.** The simulation
    (`extract_reduces_once`, `extract_reduces`) is stated in terms of `sim_star`,
-   not `approximates`. The bridge `sim s t -> approximates s t` requires a
-   CIU-style or logical-relations argument that is not yet formalized. Two of
-   its three prerequisites are now proved — typed progress (`progress`) and
-   determinism (`step_deterministic`, which subsumes the weaker
-   "determinism-up-to-blame" this bridge needs) — leaving context
-   compatibility of `sim` as the remaining gap. See the OPEN note in
-   `simulation.v`.
+   which deliberately contains rules that are false as untyped behavioral
+   principles. No contextual-approximation relation or containment theorem is
+   formalized. A future result needs typed program contexts, observations that
+   include blame, and a new typed relation with a CIU/logical-relations proof.
 
-4. **Fragment-restricted dyn-freedom.** The optimism result
-   (`extract_typ_dyn_free`) — that type extraction avoids `dyn` — holds only for the
-   first-order polymorphic fragment (`fo_typ_L`): types built from variables,
-   arrows, and type application, with no dependent types or higher kinds beyond
-   `Type -> ... -> Type`. Full CoC types may extract to types containing `dyn`.
+4. **Syntactically characterized dyn-freedom.** The optimism result
+   (`extract_typ_dyn_free_iff`) exactly characterizes when this extractor avoids
+   `dyn`, using the recursive source predicate `fo_typ_L`. This is a property of
+   the current translation's syntax, not a semantic maximality or
+   full-abstraction result; accepting more source forms without `dyn` would
+   require changing the translation or target.
 
 5. **No irrelevance/proof erasure.** The extractor does not perform irrelevance
    erasure. Term indices are erased from target types, but the corresponding
    source term arguments remain as ordinary target term arguments whenever the
    source program uses them computationally. A future proof/irrelevance-erasing
    optimization could be layered on top of the present translation.
+
+6. **Syntactic compatibility and definitional equality are separate.**
+   `compat` is executable and syntax-directed, while typing also admits
+   context-indexed `defeq`. Identity casts may carry identical non-normal
+   annotations; non-identity clients must normalize annotations before choosing
+   `compat`. No coherence theorem modulo `defeq` is claimed.
+
+7. **The OCaml executable crosses an opacity boundary.** Rocq extraction warns
+   that it accesses opaque proof bodies used by computational, `Type`-valued
+   decision procedures. The kernel-checked mathematical theorems remain as
+   stated, but the generated executable is not a separately verified compiler
+   with a small transparent algorithmic trusted base.
+
+8. **Rocq 9.0 pins the legacy Dune language.** Dune 3.22's new Rocq language
+   invokes `rocq --config`, which Rocq 9.0 does not provide (`rocq c --config`
+   is the supported form). The package therefore bounds Dune below 3.24, where
+   the legacy language is removed; upgrading both tools is required before
+   migrating to `rocq.theory`.
 
 ## References
 

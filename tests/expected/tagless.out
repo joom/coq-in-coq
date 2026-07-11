@@ -1,0 +1,26 @@
+ctrue is defined.
+cfalse is defined.
+andb is defined.
+czero is defined.
+csucc is defined.
+cone is defined.
+ctwo is defined.
+cadd is defined.
+mkpair is defined.
+cpred is defined.
+csub is defined.
+iszero is defined.
+ceqb is defined.
+ENat is defined.
+EBool is defined.
+EAdd is defined.
+EEq is defined.
+EIf is defined.
+eval is defined.
+sample is defined.
+id_at is defined.
+Extracted: fun (t : (* => (* => *))) (x : t (forall (x0 : *), (x0 -> x0) -> x0 -> x0) (forall (x0 : *), x0 -> x0 -> x0)) => x
+Correct.
+Correct.
+Inferred type: forall (x0 : Set -> Set -> Set), (forall (x1 : (Set -> Set -> Set) -> Set), ((forall (x2 : Set), (x2 -> x2) -> x2 -> x2) -> x1 (fun (x3 x4 : Set) => x3)) -> ((forall (x3 : Set), x3 -> x3 -> x3) -> x1 (fun (x4 x5 : Set) => x5)) -> (x1 (fun (x4 x5 : Set) => x4) -> x1 (fun (x5 x6 : Set) => x5) -> x1 (fun (x6 x7 : Set) => x6)) -> (x1 (fun (x5 x6 : Set) => x5) -> x1 (fun (x6 x7 : Set) => x6) -> x1 (fun (x7 x8 : Set) => x8)) -> (forall (x6 : Set -> Set -> Set), x1 (fun (x7 x8 : Set) => x8) -> x1 x6 -> x1 x6 -> x1 x6) -> x1 x0) -> x0 (forall (x2 : Set), (x2 -> x2) -> x2 -> x2) (forall (x2 : Set), x2 -> x2 -> x2)
+Extracted: (fun (x0 : forall (x0 : *), x0 -> x0 -> x0) => (fun (x1 : forall (x0 : *), x0 -> x0 -> x0) => (fun (x2 : (forall (x0 : *), x0 -> x0 -> x0) -> (forall (x0 : *), x0 -> x0 -> x0) -> forall (x0 : *), x0 -> x0 -> x0) => (fun (x3 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => (fun (x4 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), (x0 -> x0) -> x0 -> x0) => (fun (x5 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), (x0 -> x0) -> x0 -> x0) => (fun (x6 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), ((forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> x0) -> x0) => (fun (x7 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), (x0 -> x0) -> x0 -> x0) => (fun (x8 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), (x0 -> x0) -> x0 -> x0) => (fun (x9 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), x0 -> x0 -> x0) => (fun (x10 : (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> (forall (x0 : *), (x0 -> x0) -> x0 -> x0) -> forall (x0 : *), x0 -> x0 -> x0) (x0 : (* => (* => *))) (x11 : forall (x1 : ((* => (* => *)) => *)), ((forall (x2 : *), (x2 -> x2) -> x2 -> x2) -> x1 (fun (x2 x3 : *) => x2)) -> ((forall (x2 : *), x2 -> x2 -> x2) -> x1 (fun (x2 x3 : *) => x3)) -> (x1 (fun (x2 x3 : *) => x2) -> x1 (fun (x2 x3 : *) => x2) -> x1 (fun (x2 x3 : *) => x2)) -> (x1 (fun (x2 x3 : *) => x2) -> x1 (fun (x2 x3 : *) => x2) -> x1 (fun (x2 x3 : *) => x3)) -> (forall (x2 : (* => (* => *))), x1 (fun (x3 x4 : *) => x4) -> x1 x2 -> x1 x2 -> x1 x2) -> x1 x0) => x11 [fun (x1 : (* => (* => *))) => x1 (forall (x2 : *), (x2 -> x2) -> x2 -> x2) (forall (x2 : *), x2 -> x2 -> x2)] (fun (x12 : forall (x1 : *), (x1 -> x1) -> x1 -> x1) => x12) (fun (x12 : forall (x1 : *), x1 -> x1 -> x1) => x12) (fun (x12 x13 : forall (x1 : *), (x1 -> x1) -> x1 -> x1) => x5 x12 x13) (fun (x12 x13 : forall (x1 : *), (x1 -> x1) -> x1 -> x1) => x10 x12 x13) (fun (x1 : (* => (* => *))) (x12 : forall (x2 : *), x2 -> x2 -> x2) (x13 x14 : x1 (forall (x2 : *), (x2 -> x2) -> x2 -> x2) (forall (x2 : *), x2 -> x2 -> x2)) => x12 [x1 (forall (x2 : *), (x2 -> x2) -> x2 -> x2) (forall (x2 : *), x2 -> x2 -> x2)] x13 x14)) (fun (x10 x11 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x2 (x9 (x8 x10 x11)) (x9 (x8 x11 x10)))) (fun (x9 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x9 [forall (x0 : *), x0 -> x0 -> x0] (fun (x10 : forall (x0 : *), x0 -> x0 -> x0) => x1) x0)) (fun (x8 x9 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x9 [forall (x0 : *), (x0 -> x0) -> x0 -> x0] x7 x8)) (fun (x7 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x7 [forall (x0 : *), ((forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> x0) -> x0] (fun (x8 : forall (x0 : *), ((forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> x0) -> x0) => x8 [forall (x0 : *), ((forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> x0) -> x0] (fun (x9 x10 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x6 x10 (x4 x10))) (x6 x3 x3) [forall (x0 : *), (x0 -> x0) -> x0 -> x0] (fun (x8 x9 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) => x8))) (fun (x6 x7 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) (x0 : *) (x8 : (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> (forall (x1 : *), (x1 -> x1) -> x1 -> x1) -> x0) => x8 x6 x7)) (fun (x5 x6 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) (x0 : *) (x7 : x0 -> x0) (x8 : x0) => x5 [x0] x7 (x6 [x0] x7 x8))) (fun (x4 : forall (x0 : *), (x0 -> x0) -> x0 -> x0) (x0 : *) (x5 : x0 -> x0) (x6 : x0) => x5 (x4 [x0] x5 x6))) (fun (x0 : *) (x3 : x0 -> x0) (x4 : x0) => x4)) (fun (x2 x3 : forall (x0 : *), x0 -> x0 -> x0) => x2 [forall (x0 : *), x0 -> x0 -> x0] x3 x1)) (fun (x0 : *) (x1 x2 : x0) => x2)) (fun (x0 : *) (x0 x1 : x0) => x0)

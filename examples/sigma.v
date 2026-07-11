@@ -10,7 +10,13 @@
    over the *type* arguments only.  When the witness is itself a type (the
    module case), packing a type as a value is exactly the full-dependency
    boundary: it extracts through the target's [?] and [blame] -- the honest
-   image of "a type used as data". *)
+   image of "a type used as data".
+
+   The axioms are the inductive kit of the (negative) Sigma type: the family
+   [Sig], its constructor [pair], and its eliminators -- the projections
+   [fst] and [snd].  ([snd]'s type mentions [fst], which is exactly why the
+   projections must be primitive here: deriving them from a recursor needs
+   the iota-conversion a bare PTS lacks.) *)
 
 
 Axiom Nat : Set.

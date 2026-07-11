@@ -47,7 +47,7 @@
 \definecolor{kw}{rgb}{0.15,0.15,0.6}
 \definecolor{cmt}{rgb}{0.3,0.5,0.3}
 \lstdefinelanguage{coc}{
-  morekeywords={fun,forall,Set,Prop,Kind,Axiom,Infer,Check,Extract,let,in},
+  morekeywords={fun,forall,Set,Prop,Kind,Axiom,Definition,Infer,Check,Extract,let,in},
   sensitive=true,
   morecomment=[s]{(*}{*)},
   moredelim=[s][\color{cmt}]{(*}{*)}
@@ -82,60 +82,30 @@
 \renewcommand{\shortauthors}{Korkut}
 
 \begin{abstract}
-Program extraction turns a proof-carrying, dependently typed development into
-executable code. Standard Rocq extraction erases dependent structure into
-ML-like programs (OCaml, Haskell, or Scheme) whose target types cannot express
-the original dependent invariants; verified erasure and compilation projects
-reduce the trusted base of that pipeline, but they do not make the lost
-dependent structure explicit in the target type system. We ask a complementary
-question: how much of a dependently typed program's structure can be preserved
-if we extract into a \emph{typed} target, and can the translation be proved
-correct?
+Program extraction turns a dependently typed development into executable code,
+but standard extraction erases dependent structure into ML-like programs whose
+types cannot express the original invariants. We ask a complementary question:
+how much of a dependently typed program's structure can be preserved if we
+extract into a \emph{typed} target, and can the translation be proved correct?
 
-We present a mechanized extraction and metatheory for the Calculus of
-Constructions (CoC) targeting System~F$\omega$ extended with a dynamic type and
-blame tracking (``System~F$\omega$ + blame''), a polymorphic blame calculus in the
-tradition of Ahmed, Findler, Siek, and Wadler. The target is expressive enough
-to keep the parametric-polymorphic skeleton of CoC programs---type abstractions,
-type applications, and type-family structure are preserved---while its dynamic
-type~$\dyn$ and casts make target-inexpressible residue explicit rather than
-silently dropping it. The extraction is \emph{optimistic}: many term-level dependent indices
-are erased from target types, type-level indices are kept, and only translation
-cases outside the syntactic F$\omega$-skeletal fragment characterized by our
-$\dyn$-freedom theorem---most visibly values used as types---introduce $\dyn$;
-when such residue is forced in term position, extraction uses a reserved internal
-blame label. (The current extractor does not implement Coq-style proof erasure;
-proof terms are treated as ordinary residual terms.)
-
-Everything is formalized in Rocq with no admitted lemmas and no project-local
-axioms: the target calculus, well-typedness of extraction, the source-reduction
-simulation theorem, and derivation independence are all machine-checked, with the
-only assumption anywhere being the standard-library \texttt{eq\_rect\_eq}
-introduced by dependent case analysis (\S\ref{sec:mech}). We prove that the
-extraction of a well-typed source term is well typed in the current permissive
-target typing judgment, a one-step simulation stated with a syntactic simulation
-relation, derivation
-independence, a Jack-of-All-Trades instantiation lemma, and---crucially---%
-\emph{external blame freedom}: no programmer-supplied cast boundary can ever
-fire; the reserved internal labels are deliberately outside the theorem's
-scope.
-To make the
-formalization concrete we build a REPL that type-checks CoC terms and prints
-their extractions, with a verified de~Bruijn-to-named printer, and we exhibit
-eleven worked examples---bounds-checked indexing, propositional equality and
-transport, dependent pairs, type-safe \texttt{printf}, height-indexed trees,
-session types, an intrinsically typed interpreter, dimension-indexed matrices,
-units of measure, a Tarski universe, and higher-kinded functors/monads---each
-illustrating what survives extraction and where the dynamic type earns its
-place. To our knowledge this is
-the first proof-assistant mechanization of a polymorphic blame calculus with
-F$\omega$-style higher-kinded type syntax, operational determinism, type-level
-definitional equality, and progress, and the first verified extraction from a
-dependently typed source into a gradually typed target calculus.  It is not the
-first extraction from CoC to an F$\omega$-like language---Paulin-Mohring
-established that lineage~\cite{paulinmohring1989fomega}---but rather the first
-to target a gradual/blame calculus with mechanized extraction and blame-safety
-metatheory.
+We present a mechanized extraction from the Calculus of Constructions (CoC) to
+System~F$\omega$ extended with a dynamic type, explicit casts, and blame
+tracking, together with the metatheory of both the target calculus and the
+translation. The translation is \emph{optimistic}: it preserves the
+parametric-polymorphic skeleton of CoC terms---including higher-kinded type
+families---erases term indices from target types, and routes the genuine
+residue of dependency (values used as types) through the dynamic type under a
+reserved internal blame label. In Rocq, with no proof holes or project-local
+axioms, we prove: for the target, kind-regular typing, operational
+determinism, type-level confluence, progress, and preservation; for the
+translation, well-typed extraction, simulation of source reduction by a
+syntactic target relation, derivation independence, an exact syntactic
+characterization of when extracted types avoid the dynamic type, and a
+guarantee that an extracted term reduced in isolation never raises blame at an
+external label. The simulation relation is syntactic rather than contextual,
+and proof erasure is out of scope; we delimit both boundaries precisely. An
+extracted OCaml REPL with verified de~Bruijn-to-named printing makes the
+translation inspectable on fourteen dependently typed programming idioms.
 \end{abstract}
 
 \begin{CCSXML}
@@ -174,9 +144,11 @@ First, the \emph{target type system cannot express the source's dependent
 invariants}: a well-typed dependent program becomes an ML term whose safety is
 no longer captured by the target's types. Second, the extractor is part of the
 \emph{trusted computing base}: its correctness is argued informally, not proved
-inside the proof assistant. (Recent work \cite{forster2024verified} verifies
-extraction from Coq to OCaml, reducing this trust; our work is complementary,
-studying extraction into a typed target that makes lost dependency explicit.)
+inside the proof assistant. Recent work by Forster, Sozeau, and
+Tabareau~\cite{forster2024verified} verifies extraction from Coq to OCaml and
+so addresses the second concession; our work is complementary and addresses
+the first, studying extraction into a typed target that makes the lost
+dependency explicit.
 
 The idea of extracting a non-dependent polymorphic program from a CoC
 development goes back to Paulin-Mohring's extraction of F$\omega$ programs from
@@ -186,32 +158,37 @@ and non-informative propositions to remove logical content.  We return to the
 same high-level source/target tension, but with a different target and theorem:
 rather than extracting only the F$\omega$-realizable fragment, we extract
 optimistically into F$\omega$ extended with $\dyn$, casts, blame, and
-$\nu$-style sealing, so that target-inexpressible residue is explicit and
-covered by an external-blame-freedom theorem.
+$\nu$-style sealing, so that the translation's fallback cases are explicit and
+covered by an external-label non-generation theorem for isolated extraction.
 
 This paper investigates this design point. We fix an expressive
 \emph{typed} target and ask how much of a dependently typed program's structure
 we can \emph{preserve}, and whether the translation can be \emph{verified}. Our
 source is the Calculus of Constructions (CoC) \cite{coquand1988coc}, presented
-as a pure type system and mechanized following Barras' \emph{Coq-in-Coq}
+as a pure type system (\S\ref{sec:source}) and mechanized following Barras'
+\emph{Coq-in-Coq}
 development \cite{barras1999,barras1997coqincoq}. Our target is System~F$\omega$
 extended with a dynamic type $\dyn$, type-directed casts, and blame tracking:
 a \emph{polymorphic blame calculus} in the line of Wadler and Findler
 \cite{wadler2009blame} and Ahmed, Findler, Siek, and Wadler
 \cite{ahmed2011blame}. We call it \emph{System~F$\omega$ + blame}.
 
-\paragraph{Why a gradual target?}
+\paragraph{Why an explicit dynamic/blame target?}
 F$\omega$ preserves a large parametric-polymorphic skeleton: type
 abstraction, type application, and higher-kinded type families
 \cite{reynolds1983types}. CoC has strictly more---full dependency, in which
 types may mention terms. The mismatch is fundamental for a direct,
 type-preserving translation into ordinary F$\omega$: arbitrary term dependency is
-not part of the target's type formation. A gradual target resolves the tension without
+not part of the target's type formation. Adding $\dyn$ and explicit casts
+represents this mismatch without
 falling back to a fully untyped image: we keep everything F$\omega$ can express
 and route the genuine residue of dependency through the dynamic type $\dyn$,
-with casts marking the boundary and blame labels attributing responsibility if a
-boundary ever fails. The result is a translation that is \emph{optimistic}: it
-stays maximally static, becoming dynamic only where it must.
+with casts and a reserved failure label marking the boundary. We call the
+translation \emph{optimistic}: it never protectively dynamizes structure the
+target can express, and a recursively defined source predicate characterizes
+exactly when the extracted type contains no $\dyn$
+(Theorem~\ref{thm:dynfree}). We do not prove that this predicate is
+semantically maximal.
 
 Concretely, three things happen at the boundary (\S\ref{sec:overview}
 illustrates all three):
@@ -231,23 +208,24 @@ A source term used where the target expects a type, such as the decoding
 function of a Tarski universe, has no direct F$\omega$ type-level image.
 In target types this residue becomes $\dyn$; in term position, extraction
 uses a reserved internal blame term cast through $\dyn$. It is well typed at
-every type and simulates anything, but it is a run-time error by design: it
-marks exactly where the source outran the target.
+every proper type and the syntactic relation connects it to any term, but it is
+a run-time error by design: it marks a fallback selected by this translation.
 \end{itemize}
 
-\paragraph{What is new.}
-The novelty is not that CoC contains an F$\omega$-extractable fragment:
+\paragraph{Artifact scope.}
+The contribution is not the observation that CoC contains an F$\omega$-extractable fragment:
 Paulin-Mohring established that lineage~\cite{paulinmohring1989fomega}.  Nor is
 the novelty verified erasure to executable code: MetaCoq/MetaRocq, CertiCoq,
 \OE{}uf, and Forster et al.'s verified extraction address that
 space~\cite{sozeau2020metacoq,anand2017certicoq,mullen2018oeuf,forster2024verified}.
-The novelty is the combination of three choices: (1)~an explicit polymorphic
+The artifact combines three choices: (1)~an explicit polymorphic
 blame target with F$\omega$-style type computation, $\dyn$, casts, and
 $\nu$-sealing; (2)~an optimistic extraction that preserves the
 F$\omega$-expressible skeleton and marks the rest with internal blame; and
-(3)~a Rocq mechanization proving well-typed extraction, source-reduction
-simulation, derivation independence, external-blame freedom, operational
-determinism, and type-level confluence.
+(3)~a Rocq mechanization proving target progress and preservation, well-typed
+extraction, source-reduction simulation, derivation independence,
+external-label non-generation, operational determinism, and type-level
+confluence.
 
 \paragraph{Contributions.}
 \begin{itemize}
@@ -255,21 +233,22 @@ determinism, and type-level confluence.
 (\S\ref{sec:target}): syntax, a small-step semantics proved \emph{deterministic},
 a kinding relation, type-level $\beta$/definitional equality with
 \emph{confluence} and \emph{Church--Rosser}, a typing conversion rule, a typing
-judgment, subtyping, a simulation relation, and the Blame Theorem.  We further
+judgment, subtyping, a syntactic simulation relation, and label-safety
+invariants.  We further
 develop the target's structural metatheory---term and type weakening, term and
 type substitution, inversion through conversion, and canonical forms---all in
 Rocq with no admitted lemmas or project-local axioms; the assumption set is
 audited separately (\S\ref{sec:mech}).  This is a
 target variant inspired by Blame for All~\cite{ahmed2011blame}, with $\dyn$
-restricted to kind $\kstar$ and with a permissive term typing judgment; we
-prove progress for this judgment, but full kind-regular progress/preservation
-remains future work (\S\ref{sec:limitations}).
+restricted to kind $\kstar$. Its typing constructors carry the kinding and
+ground-tag premises needed for regularity. We prove annotation regularity,
+progress, one-step preservation, and multi-step preservation.
 
 \item We define an \emph{optimistic, conversion-invariant} extraction from CoC
 to this target (\S\ref{sec:extraction}).  The design returns to
 Paulin-Mohring's CoC-to-F$\omega$ insight~\cite{paulinmohring1989fomega} but
-adds an explicit gradual boundary: the F$\omega$-expressible skeleton is
-preserved, while target-inexpressible type-level residue is represented through
+adds an explicit dynamic/blame boundary: the F$\omega$-expressible skeleton is
+preserved, while cases not represented statically by this translation use
 $\dyn$ and internal blame.  The classification of binders as type- or term-level
 uses a semantic, reduction-stable predicate ($\islarge$)---not a syntactic
 approximation---and types are normalized before translation, so the translation
@@ -278,57 +257,61 @@ derivations}, which required moving CoC's entire reduction, conversion, and
 typing infrastructure from \texttt{Prop} to \texttt{Type}.
 
 \item We prove the metatheory (\S\ref{sec:metatheory}): well-typedness
-preservation of the extraction; one-step and multi-step \emph{simulation}
-against the target's (syntactic) simulation relation; independence of the
-extraction from the choice of typing derivation; a Jack-of-All-Trades lemma
-relating any type instantiation to the $\dyn$-instantiation up to simulation;
-\emph{external blame freedom}; and an \emph{optimism} result showing the
-source-type skeleton fragment extracts without $\dyn$.
+preservation of the extraction; one-step and multi-step \emph{simulation} of
+CoC's canonical reduction relations by the target's syntactic relation;
+independence of the extraction from the choice of typing derivation; a
+syntactic lemma relating a concrete instantiation to the $\dyn$ instantiation;
+external-label non-generation for isolated extracted terms; and an
+\emph{optimism} result characterizing a source-type fragment whose extraction
+contains no $\dyn$.
 
 \item We build a REPL (\S\ref{sec:repl}) that type-checks CoC terms and prints
 their F$\omega$ + blame extractions, with a \emph{verified} de~Bruijn-to-named
-renderer whose name recovery is capture-free by construction.
+renderer whose name recovery is capture-free by construction and whose checked
+OCaml wrapper validates namespace and scope preconditions.
 
-\item We present eleven worked examples (\S\ref{sec:overview},
-\S\ref{sec:examples}) that exercise the design: they are the kind of programs
-one actually writes with dependent types, and they make visible what the
-extraction keeps, erases, and dynamizes.
+\item We present fourteen showcased command batches (\S\ref{sec:overview},
+\S\ref{sec:examples}) that make visible what the extraction keeps, erases, and
+dynamizes. Axioms provide only the inductive kit---type formers, constructors,
+and elimination/induction principles---and the deliberate value-as-type
+boundaries; all other functions are ordinary definitions built from the
+eliminators.
 \end{itemize}
 
-The target calculus, well-typedness of extraction, the source-reduction
-simulation theorem, and derivation independence all contain no admitted lemmas
-or project-local axioms; the sole assumption in the entire development is the
-standard-library \texttt{eq\_rect\_eq} (\S\ref{sec:mech}). In particular, the
-type-substitution/extraction commutation up to F$\omega$ definitional equality
-used by the application rule's conversion step is fully proved.
-We stress up front an
-honest scope limitation (\S\ref{sec:limitations}): the extraction is defined as
-a total mathematical function on derivations, but it invokes normalization and a
-type-checking decision procedure, so it is a metatheoretic object rather than an
-efficient compiler pass; and our simulation is stated with the target's
-simulation relation, whose bridge to full observational approximation we leave
-open. Our aim is to chart the design space of \emph{typed, verified} extraction,
-not to ship a production back end.
+The entire development contains no admitted lemmas or project-local axioms;
+the audited core theorem set uses only the standard-library
+\texttt{eq\_rect\_eq} (\S\ref{sec:mech}).
 
 \paragraph{Scope.}
 We study a single design point: verified, typed, optimistic extraction from a
-pure-PTS source to a polymorphic blame target.  We do not address proof erasure,
-inductive families, universe polymorphism, or compilation to executable code.
-\S\ref{sec:limitations} catalogues the specific gaps; each marks a possible
-extension, not a limitation of the results we do prove.
+pure-PTS source to a polymorphic blame target. Two boundaries deserve emphasis
+up front (\S\ref{sec:limitations} catalogues the rest). First, the extraction
+is defined as a total mathematical function on derivations, but it invokes
+normalization and a type-checking decision procedure, so it is a metatheoretic
+object rather than an efficient compiler pass. Second, our simulation is a
+syntactic bookkeeping relation, not contextual approximation. We also do not
+address proof erasure, inductive families, universe polymorphism, or verified
+production compilation; each marks a possible extension, not a limitation of
+the results we do prove. Our aim is to chart the design space of \emph{typed,
+verified} extraction, not to ship a production back end.
 
 %% ==========================================================================
 \section{Overview by Example}\label{sec:overview}
 %% ==========================================================================
 
-We begin with the phenomenology. Throughout, families and their eliminators are
-introduced as \texttt{Axiom}s---the honest way to model inductive families in a
-bare pure type system---and functions are ordinary CoC terms whose extraction is
-governed by our verified translation. Each \texttt{Extract} line below is
-output of our REPL (\S\ref{sec:repl}); type abstractions print as $\Lambda$,
-type applications as $[\cdot]$, casts as $\langle A \Rightarrow B\rangle^{\ell}$,
-and the dynamic type as \texttt{?}. We elide the pretty-printer's redundant
-parentheses for readability; nothing else is edited.
+We begin with the phenomenology. Throughout, axioms introduce only what native
+inductive definitions would provide---type formers, constructors, and
+elimination principles---the honest way to model inductive families in a bare
+pure type system. Every other function is an ordinary \texttt{Definition}
+built from the eliminators (the REPL expands definitions at use sites,
+\S\ref{sec:repl}), and its extraction is governed by our verified
+translation. Each output comment below is transcribed
+verbatim from the corresponding REPL golden file (\S\ref{sec:repl}). The
+printer renders extracted terms in Rocq-like concrete syntax: term and type
+abstractions both print as \texttt{fun} with consecutive binders grouped,
+quantifiers print as \texttt{forall}, type applications as $[\cdot]$, casts as
+\texttt{cast<A => B>\^{}$\ell$(e)}, and the dynamic type as \texttt{Dyn}
+(written $\dyn$ in the formal sections).
 
 \paragraph{Term-indexed dependencies disappear from target types.}
 A bounds-checked lookup indexes a length-indexed vector by a provably in-range
@@ -336,14 +319,24 @@ position:
 \begin{lstlisting}
 Axiom Vec : Set -> Nat -> Set.
 Axiom Fin : Nat -> Set.
-Axiom vnth : forall (A : Set) (n : Nat), Vec A n -> Fin n -> A.
 
-Extract fun (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n) => vnth A n xs i.
-(* ==>  LA:*. \n:Nat. \xs:Vec A. \i:Fin. (vnth [A] n xs i) *)
+Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n) : A :=
+  vrec A (fun (m : Nat) => Fin m -> A)
+    (fun (i0 : Fin NZ) => fin0 A i0)
+    (fun (m : Nat) (a : A) (rest : Fin m -> A) (j : Fin (NS m)) =>
+     fin_case m A a rest j)
+    n xs i.
+
+Extract vnth.
+(* ==>  fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) => vrec [A] [Fin -> A] (fun (x0 : Fin) => fin0 [A] x0) (fun (x0 : Nat) (x1 : A) (x2 : Fin -> A) (x3 : Fin) => fin_case x0 [A] x1 x2 x3) n xs i *)
 \end{lstlisting}
+\texttt{vnth} is defined by vector recursion at the motive
+$P\,m = \texttt{Fin}\,m \to A$, refuting the index at the empty vector
+(\texttt{fin0}) and case-splitting it at a cons (\texttt{fin\_case}).
 The length~$n$ is a term; it appears in the source types \texttt{Vec A n} and
 \texttt{Fin n} but is dropped from the extracted types \texttt{Vec A} and
-\texttt{Fin}. The term arguments \texttt{n} and \texttt{i} themselves remain
+\texttt{Fin}, while the implementation survives as an ordinary recursion.
+The term arguments \texttt{n} and \texttt{i} themselves remain
 because \texttt{vnth} uses them as ordinary data.  What the target no longer
 records is the dependent invariant that \texttt{i} is bounded by~$n$: the
 typing relationship is what disappears, not every runtime occurrence of the
@@ -357,7 +350,7 @@ eliminators such as \texttt{eq\_rect} remain as ordinary residual terms:
 \begin{lstlisting}
 Extract fun (A : Set) (x y : A) (h : Eq A x y) =>
   eq_rect A x (fun (z : A) => Eq A z x) (refl A x) y h.
-(* ==>  LA:*. \x:A. \y:A. \h:Eq A. (eq_rect [A] x [Eq A] (refl [A] x) y h) *)
+(* ==>  fun (A : *) (x y : A) (h : Eq A) => eq_rect [A] x [Eq A] (refl [A] x) y h *)
 \end{lstlisting}
 In a dependently typed language, \emph{transport} (\texttt{eq\_rect}) is how one
 crosses between two provably equal types; it is the static ancestor of a cast.
@@ -369,12 +362,14 @@ Type-safe \texttt{printf} indexes a format by the type of the variadic function
 it denotes; the number and types of arguments are computed from the format
 value. The dependency is entirely static:
 \begin{lstlisting}
-Extract sprintf (Str -> Nat -> Str) (fstr (Nat -> Str) (fint Str fstop)).
-(* ==>  (sprintf [Str -> Nat -> Str] (fstr [Nat -> Str] (fint [Str] fstop))) *)
+Check sprintf (Str -> Nat -> Str) (fstr (Nat -> Str) (fint Str fstop)).
+(* ==>  Inferred type: Str -> Nat -> Str *)
 \end{lstlisting}
 Here the computed arity \texttt{Str -> Nat -> Str} is a perfectly ordinary
-F$\omega$ arrow type, kept as a type argument; the dependent arity leaves no
-dynamic checks and is represented as an ordinary F$\omega$ type argument.
+F$\omega$ arrow type; the dependent arity leaves no dynamic checks.
+\texttt{sprintf} itself is a definition---an accumulator-style fold over the
+format at motive $P\,X = \texttt{Str} \to X$---and its extraction inlines
+that fold at an ordinary polymorphic target type.
 
 \paragraph{Where the dynamic type earns its keep.}
 The examples above stay within the target's static skeleton: their dependent
@@ -384,21 +379,21 @@ type}. A Tarski universe has codes \texttt{U} and a decoder \texttt{El : U ->
 Set}; the function \texttt{fun c => El c} maps data to types:
 \begin{lstlisting}
 Extract fun (c : U) => El c.
-(* ==>  \c:U. ((<? => U -> ?>^0+ (<? => ?>^0+ blame(0+))) c) *)
+(* ==>  fun (c : U) => cast<Dyn => U -> Dyn>^2+(blame(2+)) c *)
 \end{lstlisting}
 This is the boundary. \texttt{El} has no F$\omega$ image, so the extraction
-emits an internal blame (label~$0$), cast through the dynamic type~$\dyn$, and
-applies it to the code. This is not a bug; it is the honest image of ``a value
-in type position,'' and our blame-freedom theorem
-(\S\ref{sec:metatheory}) proves that no external label can fire---only the
-reserved internal labels, never a boundary the programmer wrote.
+emits an extraction-failure blame (label~$2$), cast through the dynamic type~$\dyn$, and
+applies it to the code. This is the translation's explicit fallback for ``a
+value in type position,'' and our external-label theorem
+(\S\ref{sec:metatheory}) proves that this isolated extracted term cannot reduce
+to an external label. It is not a theorem about arbitrary linking contexts.
 
 \medskip
-The lesson of these examples, and of the eleven in \S\ref{sec:examples}, is that a
-gradual target lets a \emph{single} translation be both faithful and total: it
-preserves the polymorphic skeleton, removes many dependent indices from target
-types, and localizes the irreducible residue of dependency to a well-understood,
-provably contained corner.
+The lesson of these examples, and of the fourteen showcased batches in
+\S\ref{sec:examples}, is that an explicit dynamic/blame target lets a single
+total mathematical translation preserve the polymorphic skeleton, remove many dependent indices from target
+types, and mark the residue of dependency syntactically with $\dyn$ and a
+reserved failure label.
 
 %% ==========================================================================
 \section{The Source: the Calculus of Constructions}\label{sec:source}
@@ -427,7 +422,7 @@ rule is unrestricted over the typable sorts: for all $s_1, s_2$,
 so products are impredicative in both $\Prop$ and $\Set$. Figure~\ref{fig:coc}
 gives the typing rules in full. Conversion is definitional: the rule
 \textsc{Conv} lets a term inhabit any type convertible ($\conv$, the
-symmetric-transitive closure of $\beta$-reduction) to its inferred one.
+reflexive-symmetric-transitive closure of $\beta$-reduction) to its inferred one.
 
 \begin{figure}
 \small
@@ -490,11 +485,9 @@ formalization of this F$\omega$-style blame variant; the full development lives 
 \texttt{BlameFOmega} directory. The type language has the essential F$\omega$ structure: it has
 type operators ($\Lambda$/juxtaposition), a kinding relation, a type-level
 $\beta$ rule with its definitional-equality closure, and a typing conversion
-rule (\S\ref{sec:limitations} details what is and is not yet mechanized about
-the term-level type system). We are precise about scope: the term typing
-judgment used by our extraction theorem does not yet embed kinding premises,
-so it is not kind-regular. We do prove progress for this judgment; a target
-subject-reduction theorem remains future work (\S\ref{sec:limitations}).
+rule. The term judgment embeds the kinding and ground-tag premises required by
+its annotations. We prove result-type regularity, annotation regularity,
+progress, and preservation for the full reduction relation.
 
 \paragraph{Kinds, types, terms.}
 \begin{align*}
@@ -518,21 +511,25 @@ $\dyn$ boundary; a blame term $\blame p$; and a
 \emph{type-sealing} binder $\nub{\alpha}{K}{A}{e}$ that introduces a fresh
 abstract type variable $\alpha$ of kind $K$ whose hidden implementation is $A$,
 used to model polymorphic instantiation dynamically (it is the reduct of a type
-application $\Lambda$-elimination). A blame label $p$ pairs an identifier with a
-polarity. Identifier~$0$ is reserved for \emph{internal} failures---both the
-extraction-internal casts and $\nu$-tampering---and identifier~$1$ for
-$\mathsf{is\_gnd}$-tampering; all identifiers $\ge 2$ are programmer-supplied
-(\emph{external}) boundaries. (The extraction and $\nu$-tamper labels share
-id~$0$; this is harmless for the external-blame theorem, which quantifies over
-$\ge 2$, but we note it explicitly.)
+application $\Lambda$-elimination). Unlike Blame for All's global store of
+type names, our $\nu$ is a \emph{scoped} binder, eliminated by commuting rules
+rather than extruded; a ground tag that mentions the sealed variable cannot
+outlive its binder and instead blames the reserved label~$0$
+(Figure~\ref{fig:target-redexes}). Sealed values therefore cannot escape
+their $\nu$-scope inside $\dyn$; \S\ref{sec:limitations} discusses this
+trade-off. A blame label $p$ pairs an identifier with a
+polarity. Identifier~$0$ is reserved for $\nu$-tampering, identifier~$1$ for
+$\mathsf{is\_gnd}$-tampering, and identifier~$2$---written $\lint$
+below---for extraction/coercion failure. Identifiers $\ge 3$ are external.
+Keeping the three internal classes distinct preserves their diagnostic origin.
 
 \paragraph{Executable compatibility.}
 Unlike Blame for All's System-F \emph{consistency} relation, our $\mathsf{compat}(A,B)$
 is an \emph{executable} judgment: every constructor corresponds directly to a
-cast-reduction rule, so a well-typed cast always has an operational step, with no
-catch-all ``stuck cast'' case (except for identity casts, which step without
-inspecting their annotation, each constructor decomposes the cast on a canonical
-head). This is one of the places where the F$\omega$ extension is not routine: in
+cast-reduction rule, so a well-typed cast always has an operational step and
+there is no catch-all ``stuck cast'' case. Except for identity casts, which
+step without inspecting their annotation, each constructor decomposes the cast
+on a canonical head. This is one of the places where the F$\omega$ extension is not routine: in
 System~F, Blame-for-All compatibility can be read as both consistency and a cast
 strategy, but once type-level functions and neutral type-family applications are
 present, castability must be made executable---every compatibility constructor
@@ -547,51 +544,250 @@ manufactures a cast the rest of the judgment already accepts; and
 $\mathsf{compat\_from\_dyn}$ licenses projecting a ground value back out of
 $\dyn$. The judgment is decidable ($\mathsf{compat\_dec}$), which is what makes
 $\coerce{\cdot}{\cdot}{\cdot}$ (\S\ref{sec:extraction}) a total function.
+Compatibility itself is syntactic and context-free, whereas typing also admits
+context-indexed definitional equality. In particular,
+$\mathsf{compat\_refl}$ accepts identical non-normal annotations because the
+identity step does not inspect them; we do not claim coherence of
+$\mathsf{compat}$ modulo definitional equality. Non-identity clients normalize
+annotations before selecting a compatibility derivation.
 
 \paragraph{Semantics, typing, and safety.}
-We define a small-step reduction $[e \reduces e']$ (with values, $\beta$/type-$\beta$
+We define a small-step reduction $e \reduces e'$ (with values, $\beta$/type-$\beta$
 reduction, cast reductions that split structural casts and fire blame on ground
 mismatch, and $\nu$-sealing), a kinding relation
 $\mathsf{wf\_typ}(\Delta, A, K)$, and a typing judgment
 $\hastype{\Delta}{e}{A}$ over contexts $\Delta$ binding term variables (at a
 type), type variables (at a kind), and type-definition bindings introduced by
 $\nu$-sealing. The dynamic type is inhabited by ground
-injections, and casts are well typed between compatible types. The typing judgment
-we use for the extraction theorem is deliberately permissive: it does not embed
-$\mathsf{wf\_typ}$ premises, so it certifies term-formation rather than full
-kind-regularity; strengthening it to a kind-regular target with a
-$\mathsf{typing\_regular}$ lemma is future work (\S\ref{sec:limitations}). We
+injections, and casts are well typed between compatible, well-kinded types. The
+rules for abstractions, type application, casts, ground wrappers/tests, blame,
+$\nu$, and conversion carry the premises needed for kind regularity. We
 port the subtyping and \emph{safety} apparatus of \cite{ahmed2011blame}: a
 predicate $\mathsf{safe}(p, e)$ ensures every cast in $e$ that could blame $p$
 carries the right positive/negative subtyping evidence, and safety is preserved
 by reduction. From this we obtain the central guarantee.
 
-\begin{theorem}[Blame Theorem, following Thm.~14 of \cite{ahmed2011blame}, mechanized]
+\begin{theorem}[External label-safety invariant; \texttt{blame\_theorem}, mechanized]
 \label{thm:blame}
-If $\mathrm{lbl\_id}(p) \ge 2$ and $\mathsf{safe}(p, e)$, then
-$\neg\,[e \reducesstar \blame p]$.
+If $\mathrm{lbl\_id}(p) \ge 3$ and $\mathsf{safe}(p, e)$, then
+$\neg\,(e \reducesstar \blame p)$.
 \end{theorem}
+This is the invariant theorem formalized by the artifact. It is inspired by
+the safety development in \emph{Blame for All}, but it is not presented as one
+of that paper's numbered contextual corollaries.
 
-\paragraph{Simulation.}
+Figure~\ref{fig:target-typing} gives the target typing rules used by the
+mechanization.  In the last rule, $\mathsf{defeq}_{\Delta}$ includes
+F$\omega$ type conversion and equations exposed by $\nu$ definition bindings.
+
+\begin{figure*}
+\small
+\begin{mathpar}
+\inferrule*[right=\textsc{T-Var}]
+  {\Delta(x)=A}{\hastype{\Delta}{x}{A}}
+
+\inferrule*[right=\textsc{T-Abs}]
+  {\mathsf{wf\_typ}(\Delta,A,\kstar) \\ \hastype{\Delta,x{:}A}{e}{B}}
+  {\hastype{\Delta}{\lambda x{:}A.e}{A\to B}}
+
+\inferrule*[right=\textsc{T-App}]
+  {\hastype{\Delta}{e_1}{A\to B} \\ \hastype{\Delta}{e_2}{A}}
+  {\hastype{\Delta}{e_1\ e_2}{B}}
+
+\inferrule*[right=\textsc{T-TAbs}]
+  {\hastype{\Delta,\alpha{:}K}{e}{A}}
+  {\hastype{\Delta}{\Lambda\alpha{:}K.e}{\forall\alpha{:}K.A}}
+
+\inferrule*[right=\textsc{T-TApp}]
+  {\hastype{\Delta}{e}{\forall\alpha{:}K.A} \\
+   \mathsf{wf\_typ}(\Delta,B,K)}
+  {\hastype{\Delta}{e[B]}{A[B/\alpha]}}
+
+\inferrule*[right=\textsc{T-Cast}]
+  {\hastype{\Delta}{e}{A} \\ \mathsf{compat}(A,B) \\
+   \mathsf{wf\_typ}(\Delta,A,\kstar) \\
+   \mathsf{wf\_typ}(\Delta,B,\kstar)}
+  {\hastype{\Delta}{\cast{e}{A}{B}{p}}{B}}
+
+\inferrule*[right=\textsc{T-Gnd}]
+  {\hastype{\Delta}{e}{G} \\ \mathsf{wf\_ground}(\Delta,G)}
+  {\hastype{\Delta}{\gnd{e}{G}}{\dyn}}
+
+\inferrule*[right=\textsc{T-IsGnd}]
+  {\hastype{\Delta}{e}{\dyn} \\ \mathsf{wf\_ground}(\Delta,G)}
+  {\hastype{\Delta}{\isgnd{e}{G}}{\dyn\to\dyn\to\dyn}}
+
+\inferrule*[right=\textsc{T-Blame}]
+  {\mathsf{wf\_typ}(\Delta,A,\kstar)}
+  {\hastype{\Delta}{\blame p}{A}}
+
+\inferrule*[right=\textsc{T-Nu}]
+  {\hastype{\Delta,\alpha{:}K=A}{e}{B} \\
+   \mathsf{wf\_typ}(\Delta,A,K)}
+  {\hastype{\Delta}{\nub{\alpha}{K}{A}{e}}{B[A/\alpha]}}
+
+\inferrule*[right=\textsc{T-Conv}]
+  {\hastype{\Delta}{e}{A} \\
+   \mathsf{defeq}_{\Delta}(A,B,\kstar) \\
+   \mathsf{wf\_typ}(\Delta,B,\kstar)}
+  {\hastype{\Delta}{e}{B}}
+\end{mathpar}
+\caption{Kind-regular target term typing (Rocq: \texttt{typing}).}
+\label{fig:target-typing}
+\Description{Typing rules for the target System F-omega blame calculus.}
+\end{figure*}
+
+Figure~\ref{fig:target-redexes} records the characteristic redexes. Evaluation
+contexts are represented in Rocq by explicit congruence and blame-propagation
+constructors; the figure omits those routine rules and abbreviates the side
+conditions of executable compatibility.
+
+\begin{figure*}
+\small
+\begin{mathpar}
+(\lambda x{:}A.e)\ v \reduces e[v/x]
+
+(\Lambda\alpha{:}K.v)[A] \reduces \nub{\alpha}{K}{A}{v}
+
+\cast{v}{A}{A}{p} \reduces v
+
+\cast{v}{A_1\to A_2}{B_1\to B_2}{p}
+ \reduces \lambda x{:}B_1.
+   \cast{v\,(\cast{x}{B_1}{A_1}{\bar p})}{A_2}{B_2}{p}
+
+\cast{v}{\forall\alpha{:}K.A}{\forall\alpha{:}K.B}{p}
+ \reduces \Lambda\alpha{:}K.\cast{v^\uparrow[\alpha]}{A}{B}{p}
+
+\cast{v}{A}{\forall\alpha{:}K.B}{p}
+ \reduces \Lambda\alpha{:}K.\cast{v^\uparrow}{A^\uparrow}{B}{p}
+
+\cast{v}{\forall\alpha{:}\kstar.A}{B}{p}
+ \reduces \cast{v[\dyn]}{A[\dyn/\alpha]}{B}{p}
+
+\cast{v}{A}{\dyn}{p} \reduces \gnd{\cast{v}{A}{G}{p}}{G}
+\quad(\mathsf{ground\_tag}(A,G))
+
+\cast{\gnd{v}{G}}{\dyn}{A}{p} \reduces \cast{v}{G}{A}{p}
+\quad(\mathsf{compat}(G,A))
+
+\cast{\gnd{v}{G}}{\dyn}{A}{p} \reduces \blame p
+\quad(\neg\mathsf{compat}(G,A))
+
+\isgnd{\gnd{v}{G}}{G} \reduces \lambda x{:}\dyn.\lambda y{:}\dyn.\,x
+\quad(\neg\mathsf{neutral}(G))
+
+\isgnd{\gnd{v}{H}}{G} \reduces \lambda x{:}\dyn.\lambda y{:}\dyn.\,y
+\quad(G \neq H,\ \neg\mathsf{neutral}(H))
+
+\isgnd{\gnd{v}{H}}{G} \reduces \blame 1
+\quad(\mathsf{neutral}(H))
+
+\nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces
+ \gnd{\nub{\alpha}{K}{A}{v}}{G[A/\alpha]}
+\quad(\alpha\notin G)
+
+\nub{\alpha}{K}{A}{\gnd{v}{G}} \reduces \blame 0
+\quad(\alpha\in G)
+\end{mathpar}
+\caption{Characteristic target redexes. Value, head-shape, ground-tag, and
+compatibility side conditions are as in \texttt{semantics.v}; in particular
+the injection rules require $A \neq \dyn$ and a non-$\forall$ head, so a
+dynamic value reveals its ground tag before any $\forall$-generalization
+fires. The $\mathsf{is\_gnd}$ test returns a Church boolean at $\dyn$; a
+neutral tag signals sealing tampering and blames the reserved label~$1$.}
+\label{fig:target-redexes}
+\Description{The characteristic reduction rules of the target calculus.}
+\end{figure*}
+
+\paragraph{Determinism.}
+The small-step relation is deterministic: we prove
+$\mathsf{step\_deterministic}$, that $e \reduces e_1$ and $e \reduces e_2$
+imply $e_1 = e_2$. The proof rests on facts we also mechanize: values,
+variables, and $\blame p$ are irreducible ($\mathsf{value\_not\_step}$,
+$\mathsf{var\_not\_step}$, $\mathsf{blame\_not\_step}$), and every type has at
+most one ground tag ($\mathsf{ground\_tag\_functional}$), which makes the
+ground-cast rules non-overlapping. Proving determinism flushed out one real
+overlap---a cast from $\dyn$ to a universal type could fire both
+$\mathsf{step\_generalize}$ and
+$\mathsf{step\_collapse}$/$\mathsf{step\_conflict}$---which we fixed by
+guarding $\mathsf{step\_generalize}$ with $A \neq \dyn$: a dynamic value
+reveals its ground tag first.
+
+\paragraph{Type-level equality and confluence.}
+The target has genuine F$\omega$ type-level computation: a type-level
+reduction $\mathsf{ty\_step}$ with the $\beta$ rule
+$(\Lambda\alpha{:}K.\,A)\,B \reduces A[B]$ and congruences, its
+definitional-equality closure $\mathsf{ty\_equiv}$, and a typing conversion
+rule $\mathsf{typing\_conv}$ (with a $\mathsf{wf\_typ}$ premise). We mechanize
+\emph{confluence} of $\mathsf{ty\_step}$ by the parallel-reduction (Takahashi)
+method---the full de~Bruijn substitution-lemma chain for $\mathsf{typ}$, a
+complete-development function, the triangle lemma, the diamond property, and
+Church--Rosser for $\mathsf{ty\_equiv}$---and derive the head-constructor
+inversions ($\mathsf{ty\_equiv}$ is injective on $\to$ and $\forall$ and keeps
+$\dyn$/$\to$/$\forall$/variables distinct). We also make the
+$\dyn$-instantiation rules kind-correct: since $\dyn$ lives only at kind
+$\kstar$, the reduction/subtyping/compatibility rules that substitute $\dyn$
+into a quantifier are restricted to $\forall\alpha{:}\kstar$.
+
+\paragraph{Structural metatheory.}
+On top of confluence we mechanize the structural typing lemmas: term and type
+weakening (with the two-namespace context-shift bookkeeping and
+$\mathsf{tlift}$-preservation of $\mathsf{compat}$ and $\mathsf{ty\_equiv}$),
+term substitution ($\mathsf{typing\_subst}$) and neutral type substitution
+($\mathsf{typing\_tsubst}$, which requires the substituted type to be
+$\mathsf{neutral}$, including $\mathsf{wf\_typ\_tsubst}$ and
+$\mathsf{compat\_tsubst}$), inversion through $\mathsf{typing\_conv}$
+(recovering a derivation's shape up to conversion for each term former), and
+canonical forms (a value at an arrow/$\forall$ type is a
+$\lambda$/$\Lambda$).
+
+\paragraph{Progress and preservation.}
+Building on the structural metatheory and on executable $\mathsf{compat}$, we
+prove $\mathsf{progress}$: every closed term well typed under the kind-regular
+judgment is a value, steps, or is $\blame p$ for some $p$. The cast case is
+exactly the case analysis on $\mathsf{compat}(A,B)$: every constructor of the
+executable judgment corresponds to a concrete reduction rule (ID, WRAP, the
+structural $\forall/\forall$ step $\mathsf{step\_all\_all}$, GENERALIZE,
+INSTANTIATE, GROUND, COLLAPSE/CONFLICT), so there is no leftover ``stuck
+cast'' shape to handle by fiat---progress falls directly out of
+$\mathsf{compat\_dec}$. The $\mathsf{is\_gnd}$/$\nu$-tamper detection is
+generalized from Blame-for-All's bare type-variable case to \emph{any} neutral
+ground tag $N$: a sealed variable can hide inside $N\,A$, not just a bare
+$\alpha$, so the tamper guards inspect $\mathsf{neutral}$ rather than
+pattern-matching on a variable head. We further prove one-step preservation
+($\mathsf{preservation}$) and multi-step preservation
+($\mathsf{preservation\_star}$) for the complete operational relation,
+including the two binder-commuting $\nu$ rules, together with result
+regularity ($\mathsf{typing\_regular}$) and regularity of all embedded
+annotations ($\mathsf{typing\_annotations\_regular}$). These results are
+collected as Theorem~\ref{thm:target-safety}.
+
+\paragraph{The target is not strongly normalizing.}
+The dynamic type permits a closed, well-typed self-application cycle. The file
+\texttt{nonnormalization.v} proves \texttt{well\_typed\_non\_normalizing} and
+the direct negation
+\texttt{typing\_does\_not\_imply\_strong\_normalization}. Target progress and
+preservation therefore establish type safety, not termination. Source CoC
+strong normalization remains essential to the definition of $\nf$ used by
+extraction (\S\ref{sec:extraction}).
+
+\paragraph{Syntactic simulation.}
 To state extraction correctness we use a \emph{syntactic simulation} relation
 $s \sepsim t$ (Rocq: \texttt{sim}), which relates terms differing by replacing a
 type argument with $\dyn$, by inserting or stripping casts, by unfolding
 $\beta$/type-$\beta$ redexes, and---critically---by the rule
 $\blame q \sepsim t$ for \emph{any} $t$ ($\mathsf{sim\_blame}$): a blame term
 is related by $\sepsim$ to every term. Its reflexive-transitive closure is $\sepsim^{*}$
-(\texttt{sim\_star}). We use $\sepsim$ as a \emph{syntactic simulation relation}
-to state extraction correctness. We define a contextual
-approximation (\texttt{approximates}) in the development, but the bridge
-$s \sepsim t \Rightarrow s$ approximates $t$ is
-\emph{not} mechanized and remains open---indeed, for the current untyped
+(\texttt{sim\_star}). We use $\sepsim$ only as a syntactic relation to state
+extraction correctness. The development does not define a typed grammar of
+program contexts or a contextual approximation theorem. Indeed, the current untyped
 $\sepsim$ (which includes rules such as
 $\mathsf{sim\_left\_tabs}\colon s \sepsim t \Rightarrow \Lambda K.\,s \sepsim t$)
-it is false without a typing restriction, since $\Lambda K.\,s$ and $s$ are
+is not a behavioral preorder, since $\Lambda K.\,s$ and $s$ are
 distinguished by the context $[\cdot]\,[\dyn]$. We therefore treat every
-correctness statement below as a statement about $\sepsim^{*}$, and discuss the
-gap to observational approximation in \S\ref{sec:limitations}. The key algebraic
-fact we reuse is Jack-of-All-Trades (\S\ref{sec:metatheory}): a type application
-at a concrete type is $\sepsim$-related to the same application at $\dyn$.
+correctness statement below as a statement about $\sepsim^{*}$. One algebraic
+lemma says that a type application at a concrete type is $\sepsim$-related to
+the same application at $\dyn$; no behavioral reading is attached to it.
 
 %% ==========================================================================
 \section{The Extraction}\label{sec:extraction}
@@ -666,7 +862,7 @@ The term translation $\ext$ recurses on a \emph{typing derivation}
 \emph{coercion} $\coerce{s}{A}{B}$ is the identity when $A = B$; otherwise, if
 the executable compatibility judgment $\mathsf{compat}(A,B)$ holds (decidable,
 \S\ref{sec:target}), a single direct cast; and otherwise reserved internal
-blame, an honest representation of a target-inexpressible coercion:
+blame, marking a coercion for which this compatibility relation has no case:
 \[
 \coerce{s}{A}{B} =
   \begin{cases}
@@ -680,8 +876,9 @@ is an inert, closed, well-typed inhabitant used where a source sort or product
 sits in term position.
 
 The interesting cases are \textsc{Var} and \textsc{App}. A variable whose type
-is large is a \emph{type variable used as a term}---the one construct with no
-sound F$\omega$ image---and extracts to $\coerce{(\blame \lint)}{\dyn}{\cdot}$:
+is large is a \emph{type variable used as a term}---a construct with no direct
+term-level image in this translation---and extracts to
+$\coerce{(\blame \lint)}{\dyn}{\cdot}$:
 an \emph{internal} blame. A small variable extracts to a coerced term variable.
 An application whose function domain is large is a type application ($\Lambda$
 elimination) and extracts to a \emph{bare} type application $e\,[A]$: its
@@ -729,8 +926,9 @@ derivation nodes.}
 
 \paragraph{Extraction does not commute with substitution syntactically.}
 The large \textsc{App} case rests on a subtle point: type extraction commutes
-with the source substitution of the application rule only \emph{up to}
-$\mathsf{ty\_equiv}$, never on the nose. Concretely, for $u : \Pi V.\,U_r$ with
+with the source substitution of the application rule in general only \emph{up
+to} $\mathsf{ty\_equiv}$, not uniformly on the nose. Concretely, for
+$u : \Pi V.\,U_r$ with
 $V$ large and argument $v : V$, the two sides
 \[
   \extt(V{:}\Gamma, U_r)\,[\,\extt(\Gamma, v)\,/\,0\,]
@@ -759,28 +957,39 @@ through the CoC kinding derivation rather than read it off the CoC type
 syntactically.
 
 \paragraph{Optimism, made precise.}
-Two design choices make the extraction \emph{optimistic}---as static as
-possible. First, term indices of type families are \emph{dropped}, not
+Two design choices motivate the name \emph{optimistic}. First, term indices of
+type families are \emph{dropped}, not
 dynamized: \texttt{Vec A n} extracts to the F$\omega$ type application
 $\extt(\Gamma,\texttt{Vec})\,\extt(\Gamma,\texttt{A})$, not to something
 mentioning $\dyn$. Second, the only sources of $\dyn$ in extracted \emph{types}
-are the genuinely irreducible ones in Figure~\ref{fig:extt} (a sort, a
+are the fallback cases in Figure~\ref{fig:extt} (a sort, a
 term-level variable, or a term-headed application appearing in type position).
-On well-typed closed terms these do not arise from the erasable idioms of
-\S\ref{sec:overview}; they arise exactly at the value-as-type boundary, where
-the term translation additionally emits an internal $\blame$. We quantify the
-optimism formally in Theorem~\ref{thm:dynfree}.
+The examples in \S\ref{sec:overview} show both erasable indices and a
+value-as-type boundary. We characterize exactly when this particular type
+translation emits no $\dyn$ in Theorem~\ref{thm:dynfree}; this is a syntactic
+characterization, not a semantic optimality claim.
 
 %% ==========================================================================
 \section{Metatheory}\label{sec:metatheory}
 %% ==========================================================================
 
-All results below are mechanized in Rocq and are admit-free (the only
-assumption anywhere is the standard-library \texttt{eq\_rect\_eq};
-\S\ref{sec:mech}). We name each
+All results below are mechanized in Rocq and are admit-free. The audited core
+set uses only the standard-library \texttt{eq\_rect\_eq}
+(\S\ref{sec:mech}). We name each
 Rocq theorem for cross-reference. Let $\ext(\Gamma \vdash t : T)$ denote the
 term extraction of a derivation of $\hastype{\Gamma}{t}{T}$, and
 $\extc(\Gamma)$ the extracted context.
+
+\begin{theorem}[Target regularity and safety; \texttt{typing\_regular},
+\texttt{typing\_annotations\_regular}, \texttt{progress},
+\texttt{preservation}]
+\label{thm:target-safety}
+Typing in a well-formed target context produces a kind-$\kstar$ result and
+well-formed annotations. If $\hastype{\emptyset}{e}{A}$, then $e$ is a value,
+$e=\blame p$, or $e\reduces e'$ for some $e'$. If
+$\hastype{\Delta}{e}{A}$ and $e\reduces e'$, then
+$\hastype{\Delta}{e'}{A}$; the result extends to $\reducesstar$.
+\end{theorem}
 
 \begin{theorem}[Well-typed extraction; \texttt{extract\_well\_typed}]
 \label{thm:welltyped-extraction}
@@ -789,10 +998,8 @@ For every derivation of $\hastype{\Gamma}{t}{T}$ with $\Gamma$ well-formed,
 \hastype{\extc(\Gamma)}{\ext(\Gamma \vdash t : T)}{\extt(\Gamma, T)}.
 \]
 \end{theorem}
-The extraction of a well-typed CoC term is well typed in the current permissive
-target typing judgment, at the extracted type. (This is \emph{well-typedness of
-the extraction}, not target subject reduction; and the target judgment does not
-embed full kinding premises, as discussed in \S\ref{sec:target}.) The proof is by induction on the derivation, using
+The extraction of a well-typed CoC term is well typed in the kind-regular
+target judgment, at the extracted type. The proof is by induction on the derivation, using
 conversion-invariance of $\extt$ to discharge the coercion cases and the typing
 of $\dyntoken$ and $\blame \lint$ at $\dyn$.
 
@@ -826,81 +1033,84 @@ Any two derivations $H_1, H_2$ of the same judgment $\hastype{\Gamma}{t}{T}$
 satisfy $\ext(\Gamma \vdash_{H_1} t : T) \sepsim^{*} \ext(\Gamma \vdash_{H_2} t :
 T)$.
 \end{theorem}
-Because $\ext$ recurses on derivations, this is what licenses talking about
-``the'' extraction of a term: different derivations agree up to simulation. It
+Because $\ext$ recurses on derivations, this licenses ``the extraction'' as
+shorthand only up to the syntactic simulation relation: different derivations
+are $\sepsim^{*}$-related. It
 follows from a conversion-strengthening lemma
 (\texttt{extract\_deriv\_indep\_conv}) applied to reflexivity.
 
-\begin{theorem}[External blame freedom; \texttt{extraction\_blame\_free}]
+\begin{theorem}[External-label non-generation; \texttt{extraction\_blame\_free}]
 \label{thm:blamefree}
 For every derivation of $\hastype{\Gamma}{t}{T}$ and every label $p$ with
-$\mathrm{lbl\_id}(p) \ge 2$,
+$\mathrm{lbl\_id}(p) \ge 3$,
 \[
-\neg\,\bigl[\ext(\Gamma \vdash t : T) \reducesstar \blame p\bigr].
+\neg\,\bigl(\ext(\Gamma \vdash t : T) \reducesstar \blame p\bigr).
 \]
 \end{theorem}
-No extracted term ever blames a programmer-supplied (external) boundary. The
+An extracted term reduced in isolation never reaches an external label. The
 proof combines a safety lemma (\texttt{extracted\_safe}: every cast the
 extraction introduces uses the internal label $\lint$, hence is safe for any
-external $p$) with the Blame Theorem (Theorem~\ref{thm:blame}). The reserved
-internal identifier~$0$ is deliberately \emph{not} covered. Two sources can emit
-it: the value-as-type residue the extraction inserts as $\blame\lint$
-(\S\ref{sec:extraction}), and---since $\mathsf{nu\_tamper\_label}$ shares
-id~$0$---a $\nu$-tamper in the raw target semantics, now generalized
-(\S\ref{sec:target}) to fire whenever a sealed variable would be exposed
-through \emph{any} neutral ground tag $N$, not only a bare type variable.  Both
-are internal target failures, never programmer boundaries; the theorem
-excludes exactly this reserved identifier.
+external $p$) with Theorem~\ref{thm:blame}. The reserved identifiers are
+excluded: 0 for $\nu$ tampering, 1 for $\mathsf{is\_gnd}$ tampering, and 2 for
+the extraction/coercion failure label $\lint$. Because the source calculus has
+no external cast labels and the theorem quantifies over no linking context,
+this is an external-label non-generation theorem, not an interoperability
+guarantee for arbitrary programmer boundaries.
 
-\begin{theorem}[Jack-of-All-Trades; \texttt{extraction\_simulates\_any\_instantiation}]
-\label{thm:jack}
-For any concrete type $C$ and a kind-$\kstar$ quantifier, instantiating an
-extracted polymorphic term at $\extt(\Gamma, C)$ is simulated by instantiating
+\begin{theorem}[Syntactic instantiation; \texttt{extraction\_instantiation\_sim}]
+\label{thm:instantiation}
+Let $H$ derive $\hastype{\Gamma}{M}{\Pi \srt.\,A}$ for a sort $\srt$, and let
+$C$ and $A$ be strongly normalizing (the witnesses used to form the extracted
+annotations). Then for every target type $B$ and label $p$, instantiating the
+extracted term at $\extt(\Gamma, C)$ is related by $\sepsim$ to instantiating
 it at $\dyn$:
 \[
-\cast{(\ext(M)\,[\extt(\Gamma,C)])}{\_}{B}{p}
-\;\sepsim\;
-\cast{(\ext(M)\,[\dyn])}{\_}{B}{p}.
+\begin{array}{c}
+\cast{(\ext(H)\,[\extt(\Gamma,C)])}{\extt(\srt{:}\Gamma,\,A)[\extt(\Gamma,C)/0]}{B}{p}\\[4pt]
+\sepsim\;\;
+\cast{(\ext(H)\,[\dyn])}{\extt(\srt{:}\Gamma,\,A)[\dyn/0]}{B}{p}.
+\end{array}
 \]
 \end{theorem}
-This is the extraction-level instance of the target's Jack-of-All-Trades
-simulation lemma (\texttt{jack\_of\_all\_trades}): the concrete instantiation is
-$\sepsim$-related to the $\dyn$ instantiation. It is a \emph{syntactic}
-simulation principle; turning it into an observational statement about
-parametric behavior would require the open $\sepsim$-to-approximation bridge
-(\S\ref{sec:limitations}).
+This is an extraction-level instance of
+\texttt{cast\_instantiation\_sim}: the concrete instantiation is
+$\sepsim$-related to the $\dyn$ instantiation. Its premises require only the
+normalization witnesses used to form the extracted annotations, not source
+typing of $C$ or contextual compatibility. It is therefore intentionally not
+called the Jack-of-All-Trades theorem.
 
 \begin{theorem}[Optimism / $\dyn$-freedom; \texttt{extract\_typ\_dyn\_free\_iff}]
 \label{thm:dynfree}
-On the source-type skeleton fragment $\mathsf{fo}$---the fragment whose
-surviving type-level structure is F$\omega$-expressible (variables, arrows, and
-type applications) and whose term-level family arguments occur only in positions
-erased by type extraction---type extraction avoids $\dyn$ \emph{if and only if}
-the normal form lies in $\mathsf{fo}$:
+For the recursively defined source predicate $\mathsf{fo}$ (Rocq:
+\texttt{fo\_typ\_L})---which rejects
+sorts and term-level variables in type position, requires a type-level head for
+applications, and recursively checks every component preserved by type
+extraction---the extracted type avoids $\dyn$ \emph{if and only if} the normal
+form satisfies $\mathsf{fo}$:
 \[
 \mathsf{typ\_dyn\_free}(\extt(\Gamma, T))
 \;\Longleftrightarrow\;
 \mathsf{fo}(\Gamma, \nf(T)).
 \]
 \end{theorem}
-This is an exact characterization: the fragment $\mathsf{fo}$ captures
-precisely the source types whose extraction is $\dyn$-free. Note that
+This is an exact characterization relative to the recursively defined
+predicate $\mathsf{fo}$; it is not a semantic maximality theorem. Note that
 $\mathsf{fo}$ includes many indexed-family uses such as \texttt{Vec A n},
 because the term index \texttt{n} is erased from the target type
 ($\extt(\Gamma,\texttt{Vec A n}) = \extt(\Gamma,\texttt{Vec})\,\extt(\Gamma,\texttt{A})$);
 it excludes term-headed type computation such as \texttt{El c}, where a term
 determines a type.
-On the fragment where F$\omega$ is genuinely as expressive as the source, the
-translation is not merely optimistic but $\dyn$-free: the target type is fully
-static. Outside the fragment $\dyn$ must appear, exactly as
-Figure~\ref{fig:extt} prescribes.
+For source types satisfying the predicate, the target type is $\dyn$-free. For
+source types outside it, the converse proves that the extracted type contains
+$\dyn$.
 
 \medskip
 Taken together: extraction produces well-typed target terms
 (\ref{thm:welltyped-extraction}), tracks computation up to $\sepsim^{*}$
-(\ref{thm:sim}), is canonical (\ref{thm:indep}), never blames the programmer
-(\ref{thm:blamefree}), relates any instantiation to the $\dyn$-instantiation by
-$\sepsim$ (\ref{thm:jack}), and is $\dyn$-free exactly on the source-type skeleton fragment
+(\ref{thm:sim}), is derivation-related up to syntactic simulation
+(\ref{thm:indep}), does not generate external labels under isolated reduction
+(\ref{thm:blamefree}), relates concrete and $\dyn$ instantiations syntactically
+(\ref{thm:instantiation}), and is $\dyn$-free exactly for the defined source-type predicate
 (\ref{thm:dynfree}).
 
 %% ==========================================================================
@@ -911,8 +1121,8 @@ The development is written in Rocq~9.0 and builds with \texttt{dune}, and is
 \emph{entirely admit-free}: the target calculus (\texttt{BlameFOmega}),
 well-typed extraction (\texttt{extract\_well\_typed}), the source-reduction
 simulation (\texttt{extract\_reduces\_once}/\texttt{extract\_reduces},
-Theorem~\ref{thm:sim}), and the derivation-independence and blame-freedom
-theorems all carry complete machine-checked proofs. The extraction
+Theorem~\ref{thm:sim}), and the derivation-independence and external-label
+non-generation theorems all carry complete machine-checked proofs. The extraction
 weakening/substitution commutation lemmas the simulation needs---%
 \texttt{term\_tlift\_extract\_sim}, \texttt{term\_tsubst\_extract\_sim},
 \texttt{extract\_weaken1}, \texttt{extract\_subst\_sim\_gen},
@@ -936,12 +1146,14 @@ structural substitution-commutation lemma
 (\texttt{extract\_typ\_L\_reduces\_nf\_equiv}, a single-step lemma chained over
 $W \to^{*} \nf\,W$); the single-step $\beta$ case defers to the raw lemma via
 $\mathsf{ty\_equiv\_beta}$. The repository includes
-\texttt{Extraction/Assumptions.v}, which audits the axiom footprint of every
-headline theorem; the only assumption that appears is the standard library's
+\texttt{Extraction/Assumptions.v}, which audits a listed set of headline
+theorems; the only assumption that appears in that set is the standard library's
 \texttt{eq\_rect\_eq} instance introduced by dependent \texttt{destruct} (the
 REPL name-recovery lemmas additionally use the standard primitive
 string/integer axioms, since they manipulate variable names; the core metatheory
-does not). The original Coq-in-Coq base itself remains zero-admit.
+does not). A source scan separately rejects proof-hole and axiom-declaration
+commands, and both checks run under \texttt{dune test}. The original
+Coq-in-Coq base itself remains zero-admit.
 
 \paragraph{Type-valued derivations.}
 The single most consequential engineering decision is that $\ext$ recurses on a
@@ -970,14 +1182,22 @@ $\islarge$ is stable under reduction (\texttt{is\_large\_stable}), and $\extt$ i
 invariant under reduction of both its type argument and its context
 (\texttt{extract\_typ\_L\_swap}, \texttt{extract\_ctx\_swap}).
 
+The OCaml extraction step warns that it accesses opaque proof bodies used by
+computational, \texttt{Type}-valued decision procedures. This does not change
+the kernel-checked theorem statements, but it means the generated REPL is not a
+separately verified compiler with a small transparent algorithmic trusted base.
+
 \paragraph{Proof effort.}
-The \texttt{BlameFOmega} target (syntax, semantics, kinding/typing, subtyping,
-safety, the Blame Theorem, and the simulation relation with Jack-of-All-Trades)
-is a self-contained mechanization of a polymorphic blame calculus. The
-\texttt{Extraction} layer (the translation and \S\ref{sec:metatheory}) is the
-largest single file, dominated by the substitution/weakening infrastructure
-underlying Theorem~\ref{thm:sim}. The CoC layer is Barras' development with the
-\texttt{Type}-valued adaptation.
+The development is about 27{,}500 lines of Rocq. The adapted Coq-in-Coq
+\texttt{CoC} layer is roughly 10{,}900 lines; the \texttt{BlameFOmega} target
+(syntax, semantics, kinding/typing, subtyping, safety, label-safety theorems,
+confluence, and syntactic simulation) is a self-contained mechanization of
+roughly 8{,}300 lines; and the \texttt{Extraction} layer---split into
+translation, typing, substitution-simulation, reduction-simulation, and
+related modules---is another roughly 8{,}300 lines, dominated by the
+substitution/weakening infrastructure underlying Theorem~\ref{thm:sim}. The
+unverified OCaml shell (REPL loop, Menhir parser, and string layout) is under
+600 lines.
 
 %% ==========================================================================
 \section{A REPL with Verified Name Recovery}\label{sec:repl}
@@ -985,10 +1205,22 @@ underlying Theorem~\ref{thm:sim}. The CoC layer is Barras' development with the
 
 To make the extraction inspectable we extract the type checker and the
 translation to OCaml (via Rocq's extraction) and wrap them in a REPL that reads
-CoC surface syntax and prints inferred types and F$\omega$ + blame extractions.
-All output in this paper is produced by it. The commands are \texttt{Axiom},
-\texttt{Infer}, \texttt{Check}, and \texttt{Extract}; \S\ref{sec:examples}
-lists complete input files.
+CoC surface syntax and prints inferred types and F$\omega$ + blame extractions
+in Rocq-like concrete syntax (\texttt{fun} and \texttt{forall} with grouped
+binders, \texttt{cast<A => B>\^{}$\ell$(e)} for casts, \texttt{Dyn} for
+$\dyn$). The paper's output comments are transcribed verbatim from the
+checked-in golden files, which \texttt{dune test} replays. The main commands
+are \texttt{Axiom}, \texttt{Definition}, \texttt{Check}, \texttt{Infer}, and
+\texttt{Extract}, plus context management (\texttt{Delete}, \texttt{List});
+\texttt{Check e.} without a type ascription behaves like \texttt{Infer}.
+\texttt{Definition} is handled in the unverified shell by let-expansion:
+later commands have their expressions wrapped in
+$(\lambda x{:}T.\,\cdot)\;e$ for each definition they (transitively) use, so
+the verified checker only ever sees the expanded term and definitional
+transparency is ordinary $\beta$-conversion. Because the bare PTS has no
+delta rule, a definition is \emph{opaque} at its use sites---which is exactly
+why the example files axiomatize eliminators and define everything else
+through them. \S\ref{sec:examples} lists complete input files.
 
 \paragraph{Verified de~Bruijn-to-named printing.}
 Metatheory uses de~Bruijn indices, but readable output needs names. Naively
@@ -998,7 +1230,9 @@ conversion. On the source side, \texttt{expression\_of\_term\_with\_hints}
 converts a de~Bruijn term to a named expression, reusing the programmer's
 original binder names as hints; on the target side,
 \texttt{fterm\_expression\_of} does the same for F$\omega$ + blame across its two
-namespaces (type and term variables). Both are proved to produce output
+namespaces. Its source-binder hint stream is separate from names generated
+inside type annotations, so an annotation cannot consume the next term-binder
+name. Both conversions are proved to produce output
 \emph{equivalent} to the de~Bruijn input (an inductive equivalence relation
 carried in the function's result type), and the shared name chooser
 \texttt{pick\_name} accepts a hint only when it is fresh for the current context,
@@ -1006,29 +1240,39 @@ so recovered names are \emph{capture-free by construction}---the freshness proof
 is part of \texttt{pick\_name}'s type. We further prove the hinted conversion is
 alpha-equivalent to the fresh-name conversion (\texttt{..\_alpha}), and that a
 named expression determines its de~Bruijn preimage uniquely
-(\texttt{..\_unique}). The REPL's printer is thus a thin unverified shell around
-verified conversions.
+(\texttt{..\_unique}). The extracted
+\texttt{fterm\_expression\_of\_checked} wrapper decides namespace uniqueness and
+de~Bruijn scope before invoking the proof-carrying conversion; it returns
+\texttt{None} if either check fails. Only final string layout remains in the
+unverified OCaml shell.
 
 %% ==========================================================================
 \section{Worked Examples}\label{sec:examples}
 %% ==========================================================================
 
-Table~\ref{tab:examples} summarizes the eleven examples shipped with the
-development. Each is a self-contained \texttt{.v} file that type-checks and runs
-through the REPL; together they span the idioms one actually writes with
-dependent types, and they make the extraction's behavior concrete.
+Table~\ref{tab:examples} summarizes the fourteen showcase files shipped with
+the development (three additional files test naming and error paths). Each is
+a self-contained command batch processed by the REPL. Axioms introduce only
+the inductive kit---type formers, constructors, and elimination/induction
+principles---plus the value-as-type boundaries (\texttt{El}, \texttt{eval})
+that would require large elimination, which the bare PTS lacks; every other
+operation, from \texttt{vnth} through matrix multiplication and
+\texttt{sprintf} to the proof steps of Newman's lemma, is an ordinary
+\texttt{Definition} built from the eliminators.
 
 \begin{table}
 \small
-\caption{The eleven examples. ``Erased'' names the dependency the extraction
+\caption{The fourteen showcased examples. ``Erased'' names the dependency the extraction
 removes; ``$\dyn$/blame'' marks examples that also exhibit the value-as-type
 boundary.}
 \label{tab:examples}
-\Description{A table of eleven example files and the dependent programming idiom each demonstrates.}
+\Description{A table of fourteen example files and the dependent programming idiom each demonstrates.}
 \begin{tabular}{@{}llc@{}}
 \toprule
 File & What it demonstrates & $\dyn$/blame \\
 \midrule
+\texttt{newman.v}   & Newman's lemma over axiomatized inductive predicates & \\
+\texttt{vectors.v}  & length-indexed vector signatures and clients & \\
 \texttt{fin.v}      & bounds-checked indexing; length index erased & \checkmark \\
 \texttt{equality.v} & equality indices erased from types; proof terms remain & \\
 \texttt{sigma.v}    & dependent pairs; existential over a size & \\
@@ -1037,53 +1281,94 @@ File & What it demonstrates & $\dyn$/blame \\
 \texttt{units.v}    & units of measure; dimension index erased & \checkmark \\
 \texttt{avl.v}      & height-indexed balanced trees & \\
 \texttt{session.v}  & session-typed protocols; typestate & \\
-\texttt{stlc.v}     & intrinsically typed interpreter & \\
+\texttt{stlc.v}     & intrinsically typed interpreter signature & \\
 \texttt{universe.v} & Tarski universe; a hand-built dynamic type & \checkmark \\
 \texttt{functor.v}  & higher-kinded: functors, tagless-final, monads & \\
+\texttt{tagless.v}  & computed return types via type-level codes; $\dyn$-free & \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-We highlight three that best illustrate the design.
+We highlight four that best illustrate the design.
 
-\paragraph{An intrinsically typed interpreter (\texttt{stlc.v}).}
+\paragraph{The computed return type that needs no $\dyn$ (\texttt{tagless.v}).}
+The CIC program one most expects to force the dynamic type is an
+intrinsically typed interpreter whose \emph{result type is computed from a
+run-time tag}:
+\begin{lstlisting}
+Fixpoint eval {t} (e : expr t)
+  : match t with TNat => nat | TBool => bool end := ...
+\end{lstlisting}
+\texttt{tagless.v} expresses this program in bare CoC---no inductives, no
+universes, no large elimination---by Church-encoding the object types
+\emph{one level up}, as type-level booleans of kind $\kstar \karr \kstar
+\karr \kstar$ (\texttt{TNat} $= \lambda a\,b{:}\Set.\,a$), so that CIC's
+large elimination becomes type-level \emph{application}
+$t\;\mathrm{CNat}\;\mathrm{CBool}$, discharged by ordinary
+$\beta$-conversion. The entire file---Church naturals and booleans, the
+indexed expression family, and \texttt{eval}---extracts \emph{without a
+single $\dyn$, cast, or blame}:
+\[
+\texttt{eval} : \forall t{:}\kstar{\karr}\kstar{\karr}\kstar.\;\;
+\mathrm{expr}\;t \to t\;\mathrm{CNat}\;\mathrm{CBool},
+\]
+with the motive surviving as a genuine F$\omega$ type-level function. This
+is the sharpest illustration of what the higher-kinded target buys: the
+example lands squarely in Theorem~\ref{thm:dynfree}'s $\dyn$-free fragment.
+By contrast, the term-level-code presentation (\texttt{stlc.v}'s
+\texttt{El}, next) collapses every computed type into one \emph{rigid}
+abstract target type---also $\dyn$-free, but only because the bare-PTS
+source cannot even write the program that consumes the computed result.
+Forcing $\dyn$ as a computed \emph{return} type requires large elimination
+in the source (\S\ref{sec:limitations}).
+
+\paragraph{An intrinsically typed interpreter signature (\texttt{stlc.v}).}
 Object types \texttt{Ty}, contexts \texttt{Ctx}, and well-typed variables
 \texttt{Var G t} index the term family \texttt{Tm G t}, so only well-typed object
-programs are representable and the evaluator is total by construction. The
-identity term and the interpreter extract with all typing scaffolding removed:
+programs inhabit the interface. The file axiomatizes \texttt{El}, \texttt{Env},
+and \texttt{eval}; it does not implement or run an evaluator. The identity term
+and assumed interpreter application extract with indices removed:
 \begin{lstlisting}
 Extract fun (t : Ty) => tlam emp t t (tvar (snoc emp t) t (vz emp t)).
-(* ==>  \t:Ty. (tlam emp t t (tvar (snoc emp t) t (vz emp t))) *)
+(* ==>  fun (t : Ty) => tlam emp t t (tvar (snoc emp t) t (vz emp t)) *)
 
 Extract fun (G : Ctx) (t : Ty) (e : Tm G t) (env : Env G) => eval G t e env.
-(* ==>  \G:Ctx. \t:Ty. \e:Tm. \env:Env. (eval G t e env) *)
+(* ==>  fun (G : Ctx) (t : Ty) (e : Tm) (env : Env) => eval G t e env *)
 \end{lstlisting}
-\texttt{Tm G t}, \texttt{Env G}, and \texttt{El t} lose their indices; the
-interpreter becomes an ordinary evaluator, certified (Theorem~\ref{thm:sim}) to
-simulate the dependently typed original.
+\texttt{Tm G t}, \texttt{Env G}, and \texttt{El t} lose their indices in the
+target signature. Since \texttt{eval} is an object-language axiom, the residual
+application is symbolic and exercises no evaluator reduction.
 
 \paragraph{Units of measure (\texttt{units.v}).}
-A quantity \texttt{Qty d} carries a dimension \texttt{d} drawn from an abelian
-group; multiplication multiplies dimensions and addition demands equal ones, so
-``metres $+$ seconds'' is a type error. Speed extracts with the dimension gone:
+A quantity \texttt{Qty d} carries a dimension \texttt{d}, a formal expression
+over a group signature; multiplication multiplies dimensions and addition
+demands equal ones, so ``metres $+$ seconds'' is a type error. The operations
+are definitions over the family's constructor/eliminator kit
+(\texttt{qty}/\texttt{qty\_rec}) with a placeholder numeric carrier:
 \begin{lstlisting}
-Extract fun (len time : Dim) (d : Qty len) (t : Qty time) =>
+Definition speed (len time : Dim) (d : Qty len) (t : Qty time)
+  : Qty (dmul len (dinv time)) :=
   qmul len (dinv time) d (qinv time t).
-(* ==>  \len:Dim. \time:Dim. \d:Qty. \t:Qty. (qmul len (dinv time) d (qinv time t)) *)
 \end{lstlisting}
-And the family \texttt{Qty} itself, viewed as data (\texttt{fun d => Qty d}),
-hits the boundary---emitting $\dyn$ and an internal blame---because it maps a
-value to a type.
+Extraction expands the definitions and erases the dimension index from every
+target type: each quantity appears at the plain type \texttt{Qty}. And the
+family \texttt{Qty} itself, viewed as data (\texttt{fun d => Qty d}), hits the
+boundary---emitting $\dyn$ and an internal blame---because it maps a value to
+a type.
 
 \paragraph{A hand-built dynamic type (\texttt{universe.v}).}
-This example meets the target head on. A universe \texttt{U} of type codes with a
-decoder \texttt{El : U -> Set} lets one build \texttt{Dyn}, a dependent pair of a
-code and a value it decodes to---literally a dynamically typed value expressed
-inside CoC. Codes are ordinary data and extract cleanly; the decoder used as a
-function to types is the irreducible residue, extracting to internal blame
-through $\dyn$ (\S\ref{sec:overview}). It pinpoints where source and target part
-ways and connects the source-level notion of a ``dynamic value'' to the target's
-$\dyn$.
+This example meets the target head on. A universe \texttt{U} of type codes
+with a decoder \texttt{El : U -> Set} lets one build \texttt{Dynamic}, a
+dependent pair of a code and a value it decodes to---literally a dynamically
+typed value expressed inside CoC. Codes are ordinary data and extract
+cleanly; the decoder used as a function to types is the irreducible residue,
+extracting to internal blame through $\dyn$ (\S\ref{sec:overview}). The file
+also extracts a bare type as \emph{data} (\texttt{Extract U -> U.}), which
+produces the extraction's inert placeholder
+\texttt{gnd(fun (\_ : Dyn) => \_ : Dyn -> Dyn)}---the one way a
+\emph{non-blame} value of type $\dyn$ arises in extracted code. It pinpoints
+where source and target part ways and connects the source-level notion of a
+``dynamic value'' to the target's $\dyn$.
 
 %% ==========================================================================
 \section{Discussion and Limitations}\label{sec:limitations}
@@ -1095,21 +1380,21 @@ We are deliberately precise about what is and is not established.
 This development is not a replacement for Rocq's production extractor, nor is it
 a proof-erasing compiler.  The current translation treats proof terms as ordinary
 small terms; what it erases are many dependent indices from target types.  The
-target typing judgment used by the extraction theorem is not yet a full
-kind-regular subject-reduction theorem for the blame calculus.  The simulation
-relation used for extraction correctness is syntactic: turning it into a typed
-contextual approximation theorem remains open.  These restrictions are
+target is an explicit cast calculus; we do not define a gradual surface
+language, cast insertion, a precision relation, or a gradual guarantee. The
+simulation relation used for extraction correctness is syntactic, and no typed
+contextual approximation theorem is claimed. These restrictions are
 deliberate.  They isolate the central question studied here: how much of a CoC
 program's polymorphic skeleton can be preserved in an F$\omega$-style target, and
 where must the remaining dependency become dynamic?
 
 \paragraph{Internal blame is reachable by design.}
-Theorem~\ref{thm:blamefree} excludes external labels ($\ge 2$) only. The
-internal label $\lint$ (identifier $0$) is reachable: a program that exercises a
+Theorem~\ref{thm:blamefree} excludes external labels ($\ge 3$) only. The
+extraction-failure label $\lint$ (identifier $2$) is reachable: a term that exercises a
 value-as-type at run time (\S\ref{sec:overview}, \texttt{universe.v}) reduces to
-$\blame \lint$. This is intentional---it is the honest image of an untranslatable
-construct---and it is exactly why simulation uses $\mathsf{sim\_blame}$: internal
-blame approximates any behavior, so it is sound as a placeholder.
+$\blame \lint$. This is intentional: it marks a construct for which this
+translation has no target coercion. The syntactic relation can continue a proof through this point using
+$\mathsf{sim\_blame}$; that rule has no contextual or behavioral soundness claim.
 
 \paragraph{The extraction is metatheoretic, not a compiler.}
 $\ext$ invokes $\nf$ (normalization) and \texttt{is\_large\_dec} (type-checking)
@@ -1120,117 +1405,59 @@ computable, conversion-invariant extraction---perhaps by carrying classification
 evidence in a bidirectional elaboration rather than recomputing it---is future
 work.
 
-\paragraph{Simulation is syntactic; the bridge to approximation is open.}
-Our correctness statements (Theorems~\ref{thm:sim}, \ref{thm:jack}) are in terms
-of the syntactic simulation $\sepsim$. We define a contextual approximation
-(\texttt{approximates}) in the development, but the containment
-$s \sepsim t \Rightarrow s$ approximates $t$ is \emph{not} proved, and for the
-current untyped $\sepsim$ it is in fact false: the rule $\mathsf{sim\_left\_tabs}$
+Rocq extraction of the REPL currently accesses opaque bodies of computational
+proofs, producing an explicit warning. The logical development remains
+kernel-checked, but the executable path is not a separately verified compiler
+with a transparent algorithmic trusted base.
+
+\paragraph{Simulation is syntactic, not contextual approximation.}
+Our correctness statements (Theorems~\ref{thm:sim}, \ref{thm:instantiation}) are in terms
+of the syntactic simulation $\sepsim$. The development does not define typed
+program contexts or export a contextual approximation claim. A behavioral
+reading of the current untyped $\sepsim$ is false: the rule $\mathsf{sim\_left\_tabs}$
 relates $\Lambda K.\,s$ to $s$, yet the context $[\cdot]\,[\dyn]$ distinguishes
 them (one type-$\beta$-reduces, the other is stuck). A sound bridge would need a
-\emph{typed} restriction of $\sepsim$ together with a CIU- or
-logical-relations argument. We have since mechanized a target progress
-theorem (\S\ref{sec:limitations}), one of the building blocks such an
-argument needs, together with the operational determinism already discussed
-below; context compatibility of $\sepsim$ under a typed restriction remains
-open. We regard $\sepsim$ as a faithful book-keeping device for how source
-reduction is mirrored, and closing the gap to observational
-approximation---which also requires the target-soundness work
-below---as the main open problem.
+\emph{new typed relation}, an explicit observation policy including blame,
+typed program contexts, and a CIU- or logical-relations adequacy argument.
+Progress, preservation, and determinism are available infrastructure, but they
+do not make the existing relation context compatible.
 
-\paragraph{Operational determinism (mechanized).}
-The small-step relation is deterministic: we prove
-$\mathsf{step\_deterministic}$, that $[e \reduces e_1]$ and $[e \reduces e_2]$
-imply $e_1 = e_2$. The proof rests on three facts we also mechanize: values,
-variables, and $\blame$ are irreducible; and distinct ground types are
-incompatible ($\mathsf{ground\_compat\_eq}$), which together with a witness
-lemma ($\mathsf{compat\_ground\_r\_forces\_arrow}$) makes the ground-cast rules
-non-overlapping. This flushed out one real overlap---a cast from $\dyn$ to a
-universal type could fire both $\mathsf{step\_generalize}$ and
-$\mathsf{step\_collapse}$/$\mathsf{step\_conflict}$---which we fixed by guarding
-$\mathsf{step\_generalize}$ with $A \neq \dyn$ (dynamic values reveal their
-ground tag first).
+\paragraph{Compatibility is syntactic.}
+Although target typing is kind regular, $\mathsf{compat}$ itself is a
+context-free executable relation and is not closed under
+$\mathsf{defeq}$. Identity compatibility admits identical non-normal
+annotations because the ID step does not inspect them. Operationally this
+means \emph{blame is not stable under definitional equality}: a value
+injected at a neutral tag and projected at a syntactically distinct but
+$\mathsf{ty\_equiv}$-equal neutral type takes the CONFLICT step and blames,
+even though both annotations are well kinded and definitionally equal. The
+artifact does not prove a coherence theorem for choosing compatible
+representatives modulo definitional equality; non-identity clients (including
+the extraction, which normalizes every annotation it constructs) normalize
+annotations first.
 
-\paragraph{Type-level equality and confluence (mechanized).}
-The target has genuine F$\omega$ type-level computation: a type-level reduction
-$\mathsf{ty\_step}$ with the $\beta$ rule $(\Lambda\alpha{:}K.\,A)\,B \reduces
-A[B]$ and congruences, its definitional-equality closure $\mathsf{ty\_equiv}$,
-and a typing conversion rule $\mathsf{typing\_conv}$ (with a $\mathsf{wf\_typ}$
-premise). We mechanize \textbf{confluence} of $\mathsf{ty\_step}$ by the
-parallel-reduction (Takahashi) method---the full de~Bruijn substitution-lemma
-chain for $\mathsf{typ}$, a complete-development function, the triangle lemma,
-the diamond property, and \textbf{Church--Rosser} for $\mathsf{ty\_equiv}$---and
-derive the head-constructor inversions ($\mathsf{ty\_equiv}$ is injective on
-$\to$ and $\forall$ and keeps $\dyn$/$\to$/$\forall$/variables distinct). We
-also make the $\dyn$-instantiation rules kind-correct: since $\dyn$ lives only at
-kind $\kstar$, the reduction/subtyping/compatibility rules that substitute
-$\dyn$ into a quantifier are restricted to $\forall\alpha{:}\kstar$.
+\paragraph{Scoped $\nu$ deviates semantically from Blame for All.}
+Blame for All eliminates polymorphic instantiation into a global store of
+type names, so a $\dyn$ value tagged with a sealed name flows freely and
+blame arises only at a later incompatible projection, attributed to that
+projection's label. Our $\nu$ is a scoped binder with no store: when a
+sealed value would escape its $\nu$-scope inside a $\dyn$ tag, the
+$\nu$-elimination rule blames the reserved label~$0$ instead
+(\S\ref{sec:target}). Consequently a program as innocent as
+$(\Lambda\alpha{:}\kstar.\,\lambda x{:}\alpha.\,\cast{x}{\alpha}{\dyn}{\ell})\,[B]\ v$
+reduces to $\blame 0$: injecting a sealed value into $\dyn$ and returning it
+is dynamically rejected here, although Blame for All accepts it. This is a
+deliberate trade---it keeps typing store-free, values simple, and progress
+easy---but it means label~$0$ is reachable from non-tampering code, and the
+scoped design enforces a strictly stricter dynamic discipline than the
+store-based original.
 
-\paragraph{Target structural metatheory (mechanized).}
-On top of confluence we mechanize the structural typing lemmas: \textbf{term
-weakening} and \textbf{type weakening} (with the two-namespace context-shift
-bookkeeping and $\mathsf{tlift}$-preservation of $\mathsf{compat}$ and
-$\mathsf{ty\_equiv}$), \textbf{term substitution} ($\mathsf{typing\_subst}$)
-and \textbf{neutral type substitution} ($\mathsf{typing\_tsubst}$, which
-requires the substituted type to be $\mathsf{neutral}$, including
-$\mathsf{wf\_typ\_tsubst}$ and $\mathsf{compat\_tsubst}$),
-\textbf{inversion through} $\mathsf{typing\_conv}$
-(recovering a derivation's shape up to conversion for each term former), and
-\textbf{canonical forms} (a value at an arrow/$\forall$ type is a
-$\lambda$/$\Lambda$). All of these are admit-free.
-
-\paragraph{Target progress (mechanized).}
-Building on the structural metatheory above and on executable
-$\mathsf{compat}$, we prove $\mathsf{progress}$: every closed term well typed
-under the permissive judgment is a value, steps, or is $\blame p$ for some $p$.
-The cast case is exactly the case analysis on $\mathsf{compat}(A,B)$ sketched
-above: every constructor of the executable judgment corresponds to a concrete
-reduction rule (ID, WRAP, the structural $\forall/\forall$ step
-$\mathsf{step\_all\_all}$, GENERALIZE, INSTANTIATE, GROUND, COLLAPSE/CONFLICT),
-so there is no leftover ``stuck cast'' shape to handle by fiat---progress falls
-directly out of $\mathsf{compat\_dec}$. The two remaining new lemmas are:
-head-distinctness for $\mathsf{ty\_equiv}$ extended to $\mathsf{tvar}$ and
-$\Lambda$ heads (ruling out a value at a variable or type-abstraction type by
-canonical forms), and $\mathsf{is\_gnd}$/$\nu$-tamper detection generalized from
-the bare type-variable case to \emph{any} neutral ground tag $N$
-(\S\ref{sec:target}): a sealed variable can now hide inside $N\,A$, not just a
-bare $\alpha$, so the tamper guards inspect $\mathsf{neutral}$ rather than
-pattern-matching on $\mathsf{tvar}$.
-
-\paragraph{Kind-regular target typing is future work.}
-The typing judgment used by Theorem~\ref{thm:welltyped-extraction} is permissive:
-it does not embed $\mathsf{wf\_typ}$ (and $\mathsf{wf\_ground}$) premises at every
-constructor, so it certifies term formation rather than full kind-regularity. The
-\emph{extraction side} of the eventual kind-regular judgment is, however, already
-mechanized: both premises the large-\textsc{App} conversion needs are proved---
-kind regularity of type extraction (\texttt{extract\_typ\_wf\_sort}, that
-$\extt(\Gamma,T)$ is well kinded at $\kstar$) and the conversion lemma
-(\texttt{extract\_typ\_tsubst\_coc\_equiv}). Getting kind regularity right was
-subtle: the naive kind index ($\extt(\Gamma,T)$ has kind $\extk(U)$ for $T$'s CoC
-type $U$) is \emph{false} (for an application whose codomain mentions its bound
-variable, $\extk$ does not commute with the source substitution), so the proof
-threads the target kind through the CoC \emph{kinding} derivation, restricted to
-genuinely type-level subterms. What remains is to \emph{rewire} the target term
-typing judgment to embed these kinding premises (and a kind-aware
-$\mathsf{wf\_ground}$ over neutral ground tags).
-
-\paragraph{Target preservation is future work.}
-We prove progress for the current judgment (Theorem via \texttt{progress}), but a
-target subject-reduction theorem should be proved only \emph{after} the
-kind-regular judgment above is introduced---preservation of a non-kind-regular
-judgment is not the meaningful final theorem. The structural metatheory it will
-build on is already in place and admit-free (term/type weakening, term
-substitution, neutral type substitution, inversion through conversion, canonical
-forms, and the $\mathsf{ty\_equiv}$/$\mathsf{typing\_conv}$ equational theory).
-None of this affects the current blame-safety results, which are stated for the
-raw syntactic safety predicates rather than for a kind-regular target typing
-theorem.
-
-\paragraph{$\dyn$-freedom is fragment-restricted.}
-Theorem~\ref{thm:dynfree} gives an exact iff characterization for the
-source-type skeleton fragment $\mathsf{fo}$. Full CoC types outside this
-fragment can extract to types containing $\dyn$; whether a larger $\dyn$-free
-fragment exists (e.g.\ admitting higher kinds) is open.
+\paragraph{$\dyn$-freedom is syntactically characterized.}
+Theorem~\ref{thm:dynfree} gives an exact iff characterization for the current
+extractor: a source type's normal form satisfies $\mathsf{fo}$ exactly when its
+translation is $\dyn$-free. This does not establish semantic maximality. A
+translation that accepts additional source forms without $\dyn$ would have to
+change the target representation or the extraction itself.
 
 \paragraph{Inductive families are axiomatized.}
 The bare PTS has no inductive types, so our examples model families and their
@@ -1238,7 +1465,15 @@ eliminators as \texttt{Axiom}s. This is standard for a PTS presentation and does
 not affect the metatheory (axioms are just context bindings), but extending the
 source to the Calculus of Inductive Constructions---with native inductives and
 their large eliminations---would let programs that \emph{compute} types from data
-appear, stressing the value-as-type boundary in richer ways.
+appear, stressing the value-as-type boundary in richer ways. The quintessential
+case is an interpreter typed
+\texttt{match t with TNat => nat | TBool => bool}: its bare-CoC encodings
+either stay fully static (\texttt{tagless.v}, type-level codes) or collapse to
+a rigid abstract type (\texttt{stlc.v}'s \texttt{El}); only a source with
+large elimination produces the surviving term-headed type computation that
+lands in the translation's $\dyn$ fallback as a computed \emph{return} type.
+In today's examples, $\dyn$ in extracted types comes from types-as-data---%
+functions whose result \emph{sort} is \Set---not from computed result types.
 
 %% ==========================================================================
 \section{Related Work}\label{sec:related}
@@ -1300,17 +1535,31 @@ run-time cast failures to boundaries. Ahmed et al.'s \emph{Blame for All}
 \cite{ahmed2011blame} adds polymorphism, with the Jack-of-All-Trades principle
 and dynamic sealing. We adapt its $\nu$-style sealing and
 blame-safety structure to an F$\omega$-style target.  Two caveats are important.
-First, the original Blame-for-All artifact reports that the published proof of
-the Jack-of-All-Trades Principle is wrong, so we treat our Jack theorem only as
-the mechanized syntactic simulation lemma that the code actually proves.  Second,
+First, the published proof of the Jack-of-All-Trades Principle is invalid, as
+documented by the authors' erratum~\cite{ahmed2011blameerratum}; our artifact
+proves only the separately named syntactic instantiation lemma. Second,
 where Blame for All's ground predicate for System~F is restricted to a bare
 type-variable tag, we generalize to \emph{neutral} F$\omega$ proper types
 ($N ::= \alpha \mid N\,A$, \S\ref{sec:target}), so a type-family application at
-the boundary is also directly ground; kind-regularity of the target typing
-judgment remains future work (\S\ref{sec:limitations}).
-Abstracting Gradual Typing \cite{garcia2016abstracting} and gradual type theory
+the boundary is also directly ground. Gradual System~F
+\cite{labrada2018gradualsystemf} and the systems studied by Igarashi et
+al.~\cite{igarashi2017polymorphic} provide major polymorphic-gradual baselines,
+including precision and graduality criteria that our explicit target does not
+claim. Abstracting Gradual Typing \cite{garcia2016abstracting} and gradual type theory
 \cite{new2019gradual,new2018gradualdt} give systematic accounts of gradual
 languages and their metatheory.
+
+\paragraph{Dependent interoperability.}
+A related line studies safe interoperation between dependently typed and
+simply typed components within one host language. Osera, Sj{\"o}berg, and
+Zdancewic introduce dependent interoperability~\cite{osera2012dependent}, and
+Dagand, Tabareau, and Tanter derive verified marshalling between indexed and
+simple types from partial type equivalences, with dynamic checks at the
+boundary~\cite{dagand2018interop}. Those systems connect two typing
+disciplines inside a dependent host; we instead translate \emph{out of} the
+dependent language altogether, into a standalone polymorphic blame calculus
+with its own mechanized metatheory, and prove properties of the translation
+rather than of a boundary combinator library.
 
 \paragraph{Gradual dependent types.}
 A line of work gradualizes dependent types directly: approximate normalization
@@ -1318,37 +1567,44 @@ A line of work gradualizes dependent types directly: approximate normalization
 dependent theory with a dynamic type internally, and Tanter and Tabareau bring
 gradual certified programming to Coq \cite{tanter2015gradualcertified}. These
 make the \emph{source} gradual. We instead keep the source fully static (CoC) and
-make the \emph{target} gradual, using $\dyn$ solely to absorb the dependency that
-the polymorphic target cannot represent---a translation, not a language design.
+use an explicit dynamic/blame \emph{target}, with $\dyn$ absorbing dependency
+that the polymorphic target cannot represent---a translation, not a gradual
+surface-language design.
 Cayenne \cite{augustsson1998cayenne} compiled a dependently typed language by
-erasing to an untyped core; intrinsically typed interpreters (our
-\texttt{stlc.v}) are folklore in Agda \cite{norell2008agda} and Idris.  Our
-contribution is not the source programs but the verified image of such programs
-in a typed gradual calculus.
+erasing to an untyped core; intrinsically typed interpreter interfaces (as
+axiomatized in our \texttt{stlc.v}) are folklore in Agda
+\cite{norell2008agda} and Idris. Our contribution is the extraction metatheory,
+not an implementation of those examples.
 
 %% ==========================================================================
 \section{Conclusion}\label{sec:conclusion}
 %% ==========================================================================
 
 We have shown that extraction from a dependently typed language need not throw
-away all types: with a gradual target, a single verified translation preserves
+away all types: with an explicit dynamic/blame target, a single verified translation preserves
 the parametric-polymorphic skeleton of CoC programs, removes many dependent
-indices from target types, and confines target-inexpressible type-level residue---most visibly values used as
-types---to $\dyn$ and, when forced operationally, to reserved internal blame.  In this sense the work returns to Paulin-Mohring's
-CoC-to-F$\omega$ vision~\cite{paulinmohring1989fomega}, but with a gradual
-target and a mechanized blame-safety story.  The whole pipeline, including a
+indices from target types, and represents the translation's fallback cases---most visibly values used as
+types---with $\dyn$ and, when forced operationally, reserved internal blame.  In this sense the work returns to Paulin-Mohring's
+CoC-to-F$\omega$ vision~\cite{paulinmohring1989fomega}, but with a dynamic/blame
+target and mechanized external-label safety.  The whole pipeline, including a
 machine-checked F$\omega$-style polymorphic blame calculus, is formalized in
-Rocq, with the target and all of the extraction's metatheorems---well-typed
-extraction, simulation, and derivation independence---fully admit-free
+Rocq, with target progress/preservation and the extraction metatheorems---well-typed
+extraction, syntactic simulation, and derivation independence---fully admit-free
 (\S\ref{sec:mech}); a REPL with verified name
 recovery makes its behavior
-inspectable on realistic examples. The current extractor does not implement Coq-style proof
+inspectable on signature-level examples. The current extractor does not implement Coq-style proof
 erasure; proof terms remain ordinary residual terms. The results chart a design
-point between fully typed and fully untyped extraction; the natural next steps
-are closing the extraction weakening/substitution commutation gap, a
-kind-regular target type-safety theorem, the bridge from simulation to
-observational approximation, a proof-erasing optimization pass, and an extension
-to inductive families and their large eliminations.
+point between fully typed and fully untyped extraction. Natural next steps are a
+new typed logical relation and contextual-observation theorem, a transparent
+algorithmic executable path, a proof-erasing optimization pass, and an
+extension to inductive families and their large eliminations.
+
+\section*{Data-Availability Statement}
+The complete Rocq development, the extracted REPL, and the fourteen example
+batches (with their checked-in golden output files) accompany this paper as an
+artifact. The development builds with Rocq~9.0 and Dune; \texttt{dune test}
+replays every golden output, and the assumption audit of \S\ref{sec:mech}
+re-checks that the headline theorems depend only on \texttt{eq\_rect\_eq}.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

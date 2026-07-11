@@ -194,6 +194,7 @@ Inductive typing: context -> term -> typ -> Prop :=
     [g |- gnd e G : dyn]
   | typing_is_gnd: forall g e G,
     [g |- e : dyn] ->
+    wf_ground g G ->
     [g |- is_gnd e G : arrow dyn (arrow dyn dyn)]
   | typing_blame: forall g p A,
     wf_typ g A KStar ->
@@ -213,3 +214,25 @@ Inductive typing: context -> term -> typ -> Prop :=
 where "[ g |- e : t ]" := (typing g e t): type_scope.
 
 Hint Constructors typing: blame.
+
+(** Every type annotation occurring in a term is well formed in the context
+    at that syntactic position.  This is stronger than result-type regularity:
+    in particular it records the annotations inspected by [gnd]/[is_gnd],
+    even though those annotations do not occur in the result type. *)
+Fixpoint term_annotations_wf (g : context) (e : term) : Prop :=
+  match e with
+  | var _ => True
+  | abs A e1 =>
+      wf_typ g A KStar /\ term_annotations_wf (has_type A :: g) e1
+  | app e1 e2 => term_annotations_wf g e1 /\ term_annotations_wf g e2
+  | tabs K e1 => term_annotations_wf (has_kind K :: g) e1
+  | tapp e1 A =>
+      term_annotations_wf g e1 /\ exists K, wf_typ g A K
+  | cast e1 A B _ =>
+      term_annotations_wf g e1 /\ wf_typ g A KStar /\ wf_typ g B KStar
+  | gnd e1 G => term_annotations_wf g e1 /\ wf_ground g G
+  | is_gnd e1 G => term_annotations_wf g e1 /\ wf_ground g G
+  | blame _ => True
+  | nu K A e1 =>
+      wf_typ g A K /\ term_annotations_wf (has_def K A :: g) e1
+  end.

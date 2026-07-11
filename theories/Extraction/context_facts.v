@@ -60,19 +60,20 @@ Qed.
 
 (** [coerce]'s casts use the internal label, so it stays safe for any external label. *)
 Lemma safe_coerce_external : forall p s A B,
-  syntax.lbl_id p >= 2 ->
+  syntax.external_label p ->
   safety.safe_pos_neg p s ->
   safety.safe_pos_neg p (coerce s A B).
 Proof.
   intros p s A B Hge Hs. unfold coerce.
+  unfold syntax.external_label, syntax.first_external_label_id in Hge.
   destruct (syntax.typ_eq_dec A B) as [_ | _].
   - exact Hs.
   - destruct (infrastructure.compat_dec A B) as [_ | _].
     + apply safety.spn_cast_other.
-      * unfold internal_label. simpl. lia.
+      * unfold internal_label, syntax.extraction_failure_label. simpl. lia.
       * exact Hs.
     + apply safety.spn_blame. intro Heq. rewrite <- Heq in Hge.
-      unfold internal_label in Hge. simpl in Hge. lia.
+      unfold internal_label, syntax.extraction_failure_label in Hge. simpl in Hge. lia.
 Qed.
 
 
@@ -657,9 +658,8 @@ Qed.
 (** Context lookup in the TYPE namespace: a large (kind-level) source binding
     maps to a [has_kind] entry at the compressed type-index, carrying the
     extracted kind of that binding.  This is the kind-namespace analogue of
-    [extract_ctx_lookup_term]; it is the first building block for a future
-    kind-regularity proof of the extraction (that [extract_typ] emits well-kinded
-    target types).  See the note in the module header / README limitation #5. *)
+    [extract_ctx_lookup_term] and is used by the proved kind-regularity theorem
+    [extract_typ_wf_sort]. *)
 Lemma extract_ctx_lookup_kind : forall e v u,
   nth_error e v = Some u ->
   is_large (skipn (S v) e) u ->

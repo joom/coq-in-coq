@@ -775,10 +775,10 @@ Proof.
 
   - (* step_is_gnd_congr *)
     pose proof (typing_regular g _ Aout Hwf Hty) as HwfAout.
-    apply typing_is_gnd_inv2 in Hty. destruct Hty as [Hconv Hty1].
+    apply typing_is_gnd_inv2 in Hty. destruct Hty as [Hconv [Hty1 Hground]].
     assert (Hty1' : typing g e2 dyn) by (apply (IHHstep g dyn); [exact Hwf | exact Hty1]).
     assert (Hisgnd' : typing g (is_gnd e2 G) (arrow dyn (arrow dyn dyn)))
-      by (apply typing_is_gnd; exact Hty1').
+      by (apply typing_is_gnd; [exact Hty1' | exact Hground]).
     eapply apply_ty_conv_to; eauto.
 
   - (* step_app_blame_l *)

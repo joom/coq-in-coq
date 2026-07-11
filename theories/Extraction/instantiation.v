@@ -26,7 +26,10 @@ From Extraction Require Import reduction_simulation.
 From Extraction Require Import optimism.
 
 
-Theorem extraction_simulates_any_instantiation :
+(** Syntactic specialization of [cast_instantiation_sim] to extracted type
+    annotations.  [C] and [A] need only normalize; this statement deliberately
+    makes no source-typing or contextual-approximation claim. *)
+Theorem extraction_instantiation_sim :
   forall e M s A B (H: has_type e M (terms.prod (sort_term s) A)) C p
     (snC: strongly_normalizing C) (snA: strongly_normalizing A),
   simulation.sim
@@ -39,5 +42,5 @@ Theorem extraction_simulates_any_instantiation :
        (infrastructure.tsubst syntax.dyn 0
           (extract_typ (sort_term s :: e) A snA)) B p).
 Proof.
-  intros. apply simulation.jack_of_all_trades.
+  intros. apply simulation.cast_instantiation_sim.
 Qed.

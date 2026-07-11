@@ -1,14 +1,23 @@
 Str admitted.
+sempty admitted.
+smark admitted.
+str_rec admitted.
+append is defined.
 Nat admitted.
+NZ admitted.
+NS admitted.
+Nat_rec admitted.
+show_nat is defined.
 Fmt admitted.
 fstop admitted.
 flit admitted.
 fint admitted.
 fstr admitted.
-sprintf admitted.
+Fmt_rec admitted.
+sprintf is defined.
 Inferred type: Nat -> Str
-Extracted: (sprintf [Nat -> Str] ((fint [Str] fstop)))
+Extracted: (fun (x0 : Str -> Str -> Str) => (fun (x1 : Nat -> Str) => (fun (x2 : forall (x0 : *), Fmt x0 -> x0) => x2 [Nat -> Str] (fint [Str] fstop)) (fun (x0 : *) (x2 : Fmt x0) => Fmt_rec [fun (x1 : *) => Str -> x1] (fun (x3 : Str) => x3) (fun (x1 : *) (x3 : Str) (x4 : Str -> x1) (x5 : Str) => x4 (x0 x5 x3)) (fun (x1 : *) (x3 : Str -> x1) (x4 : Str) (x5 : Nat) => x3 (x0 x4 (x1 x5))) (fun (x1 : *) (x3 : Str -> x1) (x4 x5 : Str) => x3 (x0 x4 x5)) [x0] x2 sempty)) (fun (x1 : Nat) => Nat_rec [Str] sempty (fun (x2 : Nat) (x3 : Str) => smark x3) x1)) (fun (x0 x1 : Str) => str_rec [Str] x0 (fun (x2 x3 : Str) => smark x3) x1)
 Inferred type: Str -> Nat -> Str
-Extracted: (sprintf [Str -> Nat -> Str] ((fstr [Nat -> Str] ((fint [Str] fstop)))))
-Extracted: λsep:Str. (sprintf [Nat -> Str -> Str] ((fint [Str -> Str] ((flit [Str -> Str] sep ((fstr [Str] fstop)))))))
-Extracted: λlabel:Str. λcolon:Str. (sprintf [Nat -> Str] ((flit [Nat -> Str] label ((flit [Nat -> Str] colon ((fint [Str] fstop)))))))
+Extracted: (fun (x0 : Str -> Str -> Str) => (fun (x1 : Nat -> Str) => (fun (x2 : forall (x0 : *), Fmt x0 -> x0) => x2 [Str -> Nat -> Str] (fstr [Nat -> Str] (fint [Str] fstop))) (fun (x0 : *) (x2 : Fmt x0) => Fmt_rec [fun (x1 : *) => Str -> x1] (fun (x3 : Str) => x3) (fun (x1 : *) (x3 : Str) (x4 : Str -> x1) (x5 : Str) => x4 (x0 x5 x3)) (fun (x1 : *) (x3 : Str -> x1) (x4 : Str) (x5 : Nat) => x3 (x0 x4 (x1 x5))) (fun (x1 : *) (x3 : Str -> x1) (x4 x5 : Str) => x3 (x0 x4 x5)) [x0] x2 sempty)) (fun (x1 : Nat) => Nat_rec [Str] sempty (fun (x2 : Nat) (x3 : Str) => smark x3) x1)) (fun (x0 x1 : Str) => str_rec [Str] x0 (fun (x2 x3 : Str) => smark x3) x1)
+Extracted: (fun (x0 : Str -> Str -> Str) => (fun (x1 : Nat -> Str) => (fun (x2 : forall (x0 : *), Fmt x0 -> x0) (x3 : Str) => x2 [Nat -> Str -> Str] (fint [Str -> Str] (flit [Str -> Str] x3 (fstr [Str] fstop)))) (fun (x0 : *) (x2 : Fmt x0) => Fmt_rec [fun (x1 : *) => Str -> x1] (fun (x3 : Str) => x3) (fun (x1 : *) (x3 : Str) (x4 : Str -> x1) (x5 : Str) => x4 (x0 x5 x3)) (fun (x1 : *) (x3 : Str -> x1) (x4 : Str) (x5 : Nat) => x3 (x0 x4 (x1 x5))) (fun (x1 : *) (x3 : Str -> x1) (x4 x5 : Str) => x3 (x0 x4 x5)) [x0] x2 sempty)) (fun (x1 : Nat) => Nat_rec [Str] sempty (fun (x2 : Nat) (x3 : Str) => smark x3) x1)) (fun (x0 x1 : Str) => str_rec [Str] x0 (fun (x2 x3 : Str) => smark x3) x1)
+Extracted: (fun (x0 : Str -> Str -> Str) => (fun (x1 : Nat -> Str) => (fun (x2 : forall (x0 : *), Fmt x0 -> x0) (x3 x4 : Str) => x2 [Nat -> Str] (flit [Nat -> Str] x3 (flit [Nat -> Str] x4 (fint [Str] fstop)))) (fun (x0 : *) (x2 : Fmt x0) => Fmt_rec [fun (x1 : *) => Str -> x1] (fun (x3 : Str) => x3) (fun (x1 : *) (x3 : Str) (x4 : Str -> x1) (x5 : Str) => x4 (x0 x5 x3)) (fun (x1 : *) (x3 : Str -> x1) (x4 : Str) (x5 : Nat) => x3 (x0 x4 (x1 x5))) (fun (x1 : *) (x3 : Str -> x1) (x4 x5 : Str) => x3 (x0 x4 x5)) [x0] x2 sempty)) (fun (x1 : Nat) => Nat_rec [Str] sempty (fun (x2 : Nat) (x3 : Str) => smark x3) x1)) (fun (x0 x1 : Str) => str_rec [Str] x0 (fun (x2 x3 : Str) => smark x3) x1)

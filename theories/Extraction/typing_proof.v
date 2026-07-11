@@ -27,9 +27,9 @@ From Extraction Require Import type_extraction_facts.
     file).  See [well_typed.v]. *)
 
 
-(** ** Blame freedom for [extract] *)
+(** ** External-label non-generation for [extract] *)
 Lemma extracted_safe : forall e t T (H: has_type e t T) p,
-  syntax.lbl_id p >= 2 -> safety.safe_pos_neg p (extract e t T H).
+  syntax.external_label p -> safety.safe_pos_neg p (extract e t T H).
 Proof.
   fix IH 4.
   intros e t T H p Hge.
@@ -40,7 +40,8 @@ Proof.
   - apply safe_dyn_token.
   - destruct (is_large_dec e0 T0); (apply safe_coerce_external; [exact Hge |]).
     + apply safety.spn_blame. intro Heq. rewrite <- Heq in Hge.
-      unfold internal_label in Hge. simpl in Hge. lia.
+      unfold syntax.external_label, syntax.first_external_label_id in Hge.
+      unfold internal_label, syntax.extraction_failure_label in Hge. simpl in Hge. lia.
     + apply safety.spn_var.
   - destruct (is_large_dec e0 T0).
     + apply safety.spn_tabs. exact (IH _ _ _ HM p Hge).
@@ -53,10 +54,12 @@ Proof.
   - apply safe_coerce_external; [exact Hge | exact (IH _ _ _ Htu p Hge)].
 Qed.
 
-(** The extraction never reduces to blame on an external label (its own casts use the internal label). *)
+(** An extracted term reduced in isolation never reaches an external label.
+    This theorem quantifies over no linking context; it is external-label
+    non-generation, not an interoperability theorem for arbitrary boundaries. *)
 Theorem extraction_blame_free :
   forall e t T (H: has_type e t T),
-  forall p, syntax.lbl_id p >= 2 ->
+  forall p, syntax.external_label p ->
   ~ semantics.star (extract e t T H) (syntax.blame p).
 Proof.
   intros e t T H p Hge.

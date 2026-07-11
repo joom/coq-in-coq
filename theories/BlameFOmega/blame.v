@@ -1,9 +1,9 @@
-(** * BlameFOmega.blame: The Blame Theorem.
+(** * BlameFOmega.blame: Label-safety preservation.
 
     Proves that [safe_pos_neg p] is preserved by one-step and multi-step
-    reduction, and derives the Blame Theorem (Theorem 14) and its corollary
-    (Corollary 15): a term whose casts carry positive/negative subtyping
-    evidence never reduces to [blame p]. *)
+    reduction.  Consequently, a term satisfying the syntactic safety
+    invariant never reduces to [blame p].  This is the mechanized invariant
+    theorem; it is not attributed a theorem number from Ahmed et al. *)
 
 From Stdlib Require Import Arith.
 From Stdlib Require Import Lia.
@@ -19,10 +19,11 @@ From BlameFOmega Require Import safety.
 (** One-step preservation of [safe_pos_neg]: if [s] is safe and steps to [s'], so is [s']. *)
 Lemma blame_preservation:
   forall s s' p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_pos_neg p s -> [s ~> s'] -> safe_pos_neg p s'.
 Proof.
   intros s s' p Hid Hsafe Hstep.
+  unfold external_label, first_external_label_id in Hid.
   revert Hsafe. induction Hstep; intros Hsafe; inversion Hsafe; subst; clear Hsafe.
   (* Contradictions *)
   all: try solve [exfalso; match goal with
@@ -309,7 +310,7 @@ Qed.
 (** Multi-step preservation of [safe_pos_neg]. *)
 Lemma blame_preservation_star:
   forall s s' p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_pos_neg p s -> [s ~>* s'] -> safe_pos_neg p s'.
 Proof.
   intros s s' p Hid Hsafe Hstar. induction Hstar; eauto.
@@ -321,7 +322,7 @@ Qed.
 (** A single step from a safe term never produces [blame p]. *)
 Lemma blame_progress:
   forall s p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_pos_neg p s -> forall s', [s ~> s'] -> s' <> blame p.
 Proof.
   intros s p Hid Hsafe s' Hstep.
@@ -329,12 +330,12 @@ Proof.
   exact (blame_preservation _ _ _ Hid Hsafe Hstep).
 Qed.
 
-(** ** Blame Theorem *)
+(** ** Label-safety theorem *)
 
-(** Theorem 14: a [safe_pos_neg p] term never reduces to [blame p]. *)
+(** A [safe_pos_neg p] term never reduces to [blame p]. *)
 Theorem blame_theorem:
   forall s p,
-  lbl_id p >= 2 ->
+  external_label p ->
   safe_pos_neg p s ->
   ~ [s ~>* blame p].
 Proof.
@@ -342,13 +343,17 @@ Proof.
   apply (safe_pos_neg_not_blame _ _ (blame_preservation_star _ _ _ Hid Hsafe Hstar) eq_refl).
 Qed.
 
-(** Corollary 15: if casts carry positive subtyping evidence, positive blame cannot fire. *)
+(** A direct positive cast cannot raise its positive label when its operand is
+    already safe for that label.  Unlike the previous statement, [A] and [B]
+    are the annotations on the cast whose safety is being established. *)
 Corollary blame_theorem_pos:
   forall t A B p,
-  lbl_id p >= 2 ->
-  safe_pos_neg p t ->
+  external_label p ->
   pos_subtype A B ->
-  ~ [t ~>* blame p].
+  safe_pos_neg p t ->
+  ~ [cast t A B p ~>* blame p].
 Proof.
-  intros. exact (blame_theorem t p H H0).
+  intros t A B p Hexternal Hsub Hsafe.
+  apply blame_theorem; [exact Hexternal |].
+  apply spn_cast_pos; assumption.
 Qed.

@@ -1,19 +1,17 @@
-(* An intrinsically-typed interpreter for the simply-typed lambda calculus,
-   inside the Calculus of Constructions.
+(* Signatures for an intrinsically typed simply typed lambda calculus inside
+   the Calculus of Constructions.
 
    Object types [Ty], contexts [Ctx], and de Bruijn variables [Var G t] (a
    proof that a variable of type [t] occurs in context [G]) index the term
    type [Tm G t].  Because a term CARRIES its typing derivation in its type,
-   only well-typed object programs exist -- there is no separate type checker,
-   and the evaluator [eval] is total by construction (no "stuck" or "type
-   error" case is even expressible).  This is the canonical demonstration that
-   dependent types can make an interpreter correct by construction.
+   only well-typed object programs can inhabit the signature.  The declarations
+   below, including [El], [Env], and [eval], are axioms: this file does not
+   implement an evaluator or prove its totality.
 
    Extraction erases the context and type indices.  [Tm G t] becomes the plain
    type [Tm], [El t] (the meaning of an object type) becomes [El], environments
-   become [Env], and [eval] becomes an ordinary recursive evaluator.  All the
-   type-safety scaffolding evaporates, and the verified extraction certifies
-   the residual interpreter simulates the dependently-typed original. *)
+   become [Env], and [eval] receives an unindexed target signature.  The file
+   demonstrates index removal and name recovery, not evaluator execution. *)
 
 
 (* object-language types *)
@@ -68,9 +66,13 @@ Extract fun (t u : Ty) =>
         (tvar (snoc (snoc emp (arr t u)) t) t (vz (snoc emp (arr t u)) t)))).
 
 
-(* the interpreter.  [El] gives the meaning of an object type, [Env] an
-   environment matching a context, and [eval] runs a term.  Extraction erases
-   G and t, leaving eval : Tm -> Env -> El -- a plain evaluator. *)
+(* Assumed semantic interface.  [El] assigns a host type to an object type,
+   [Env] assigns an environment type to a context, and [eval] is an assumed
+   interpreter.  These three CANNOT be defined in the bare PTS: [El] computes
+   a type from data (large elimination over [Ty]), and [eval]'s result type
+   goes through [El] -- this is precisely the value-as-type boundary, so they
+   stay abstract deliberately.  Extraction erases G and t from eval's target
+   signature. *)
 
 Axiom El : Ty -> Set.
 Axiom Env : Ctx -> Set.

@@ -81,8 +81,18 @@ Definition nu_tamper_label : label := mk_label 0 true.
 (** The is_gnd-tamper label: raised when a sealed ground type is inspected. *)
 Definition is_tamper_label : label := mk_label 1 true.
 
-(** External labels are user-assigned labels with id >= 2, distinct from internal ones. *)
-Definition external_label (p: label): Prop := lbl_id p >= 2.
+(** Extraction/coercion failure has its own diagnostic identity.  It is
+    declared in the target syntax so the external-label namespace cannot
+    accidentally overlap with labels chosen by the extraction layer. *)
+Definition extraction_failure_label : label := mk_label 2 true.
+
+(** First id available to clients of the calculus. *)
+Definition first_external_label_id : nat := 3.
+
+(** External labels are user-assigned labels, disjoint from every reserved
+    internal label above. *)
+Definition external_label (p: label): Prop :=
+  lbl_id p >= first_external_label_id.
 
 (** ** Neutral types
 
@@ -176,11 +186,13 @@ Qed.
 
 (** ** Cast forms
 
-    Cast annotations are weak-head canonical: [dyn], an [arrow], a [∀], or a
-    neutral type.  A *reducible* type application ([tyapp (tyabs ..) ..]) is
-    not a cast form, so [typing_cast] forces it to be normalized (connected to
-    the term's actual type by [ty_equiv]) before it can annotate a cast — this
-    is what removes the "unreduced [tyapp] as cast annotation" stuck case. *)
+    These are the canonical heads inspected by non-identity cast reductions:
+    [dyn], an [arrow], a [forall], or a neutral type.  [compat_refl]
+    deliberately also admits identical non-canonical annotations because
+    identity casts reduce without inspecting them.  Typing therefore does not
+    imply that every cast annotation is normalized; clients that need
+    canonical annotations must normalize non-identity casts before building
+    them. *)
 Inductive cast_form: typ -> Prop :=
   | cf_dyn: cast_form dyn
   | cf_arrow: forall A B, cast_form (arrow A B)

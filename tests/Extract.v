@@ -48,5 +48,5 @@ Extraction
 Extraction "core.ml" is_free_var empty_state interpret_ast
   synthesis infer translation.extract
   collect_binder_names
-  BlameFOmega.expressions.fterm_expression_of BlameFOmega.expressions.ftyp_expression_of
+  BlameFOmega.expressions.fterm_expression_of_checked
   BlameFOmega.expressions.fterm_expr BlameFOmega.expressions.ftyp_expr.

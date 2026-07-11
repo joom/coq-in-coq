@@ -126,13 +126,14 @@ Qed.
 
 Lemma typing_is_gnd_inv2 : forall g e G C,
   typing g (is_gnd e G) C ->
-  ty_conv_to g (arrow dyn (arrow dyn dyn)) C /\ typing g e dyn.
+  ty_conv_to g (arrow dyn (arrow dyn dyn)) C /\
+  typing g e dyn /\ wf_ground g G.
 Proof.
   intros g e G C H. remember (is_gnd e G) as tm eqn:Htm.
   induction H; try discriminate.
-  - injection Htm as -> ->. split; [left; reflexivity | assumption].
-  - destruct (IHtyping Htm) as [Hconv Hty].
-    split; [eapply ty_conv_to_conv; eauto | assumption].
+  - injection Htm as -> ->. split; [left; reflexivity | split; assumption].
+  - destruct (IHtyping Htm) as [Hconv [Hty Hground]].
+    split; [eapply ty_conv_to_conv; eauto | split; assumption].
 Qed.
 
 (** ** Canonical forms
@@ -181,6 +182,7 @@ Proof.
   - apply typing_gnd; eauto.
     inversion H0; subst; constructor; [auto | apply wf_typ_kind_to_def; auto].
   - apply typing_is_gnd; eauto.
+    inversion H0; subst; constructor; [auto | apply wf_typ_kind_to_def; auto].
   - apply typing_blame. apply wf_typ_kind_to_def; auto.
   - apply typing_nu.
     + apply (IHtyping (has_def K0 A0 :: G1)). reflexivity.

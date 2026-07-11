@@ -10,7 +10,7 @@
     [name_unique], [pick_name], [find_free_var]) is shared with the CoC
     development and imported from [CoC.names] / [CoC.list_utils]. *)
 
-From Stdlib Require Import List Lia.
+From Stdlib Require Import Arith Compare_dec List Lia.
 From CoC Require Import list_utils ml_types names.
 From BlameFOmega Require Import syntax.
 
@@ -143,10 +143,11 @@ Inductive fterm_expr_equiv :
 (** ** Conversion: de Bruijn → named, reusing hints
 
     [ftyp_expression_of] / [fterm_expression_of] convert a well-scoped de Bruijn
-    type/term into named form, threading source-provided display hints down the
-    binder spine.  As on the CoC side, [pick_name] guarantees each chosen name is
-    fresh for its context, so the result is capture-free; the equivalence proof is
-    carried in the result type. *)
+    type/term into named form. [fterm_expression_of] keeps source binder hints
+    separate from hints used inside type annotations, so an annotation cannot
+    consume a later term-level name. As on the CoC side, [pick_name] guarantees
+    each chosen name is fresh for its namespace, so the result is capture-free;
+    the equivalence proof is carried in the result type. *)
 
 Definition ftyp_expression_of :
   forall (t : typ) (tl : partial_names) (hints : list name),
@@ -193,86 +194,234 @@ Proof.
     apply ftyp_eqv_dyn.
 Defined.
 
+(** ** Decidable conversion preconditions
+
+    Proof arguments to the converters disappear during OCaml extraction. The
+    decidable predicates below let [fterm_expression_of_checked] validate the
+    preconditions at runtime, so an out-of-scope term or duplicate namespace is
+    reported as [None] rather than entering a branch justified by an erased
+    proof. *)
+
+Lemma name_unique_NoDup : forall l, name_unique l -> NoDup l.
+Proof.
+  induction l as [|x l IH]; intro Huniq.
+  - constructor.
+  - constructor.
+    + intro Hin. apply In_nth_error in Hin. destruct Hin as [n Hn].
+      specialize (Huniq 0 (S n) x eq_refl Hn). discriminate.
+    + apply IH. unfold name_unique in *. intros m n y Hm Hn.
+      assert (S m = S n) by (eapply Huniq; simpl; eauto). lia.
+Qed.
+
+Lemma NoDup_name_unique : forall l, NoDup l -> name_unique l.
+Proof.
+  intros l H. induction H.
+  - unfold name_unique. intros m n x Hm. destruct m; discriminate.
+  - apply free_var_extension; assumption.
+Qed.
+
+Fixpoint names_NoDup_dec (l : list name) : {NoDup l} + {~ NoDup l}.
+Proof.
+  destruct l as [|x l].
+  - left. constructor.
+  - destruct (in_dec name_dec x l) as [Hin | Hfresh].
+    + right. intro H. inversion H. contradiction.
+    + destruct (names_NoDup_dec l) as [Htail | Htail].
+      * left. constructor; assumption.
+      * right. intro H. inversion H. contradiction.
+Defined.
+
+Definition name_unique_dec : forall l, {name_unique l} + {~ name_unique l}.
+Proof.
+  intro l. destruct (names_NoDup_dec l) as [H | H].
+  - left. apply NoDup_name_unique. exact H.
+  - right. intro Huniq. apply H. apply name_unique_NoDup. exact Huniq.
+Defined.
+
+Fixpoint free_db_below_typ_dec (bound : nat) (t : typ) :
+  {free_db_below_typ bound t} + {~ free_db_below_typ bound t}.
+Proof.
+  destruct t; simpl.
+  - apply lt_dec.
+  - destruct (free_db_below_typ_dec bound t1) as [H1 | H1];
+      destruct (free_db_below_typ_dec bound t2) as [H2 | H2];
+      [left | right | right | right]; tauto.
+  - apply free_db_below_typ_dec.
+  - apply free_db_below_typ_dec.
+  - destruct (free_db_below_typ_dec bound t1) as [H1 | H1];
+      destruct (free_db_below_typ_dec bound t2) as [H2 | H2];
+      [left | right | right | right]; tauto.
+  - left. exact I.
+Defined.
+
+Fixpoint free_db_below_term_dec (tbound vbound : nat) (e : syntax.term) :
+  {free_db_below_term tbound vbound e} +
+  {~ free_db_below_term tbound vbound e}.
+Proof.
+  destruct e as [n | A body | e1 e2 | K body | body A
+    | body A B p | body G | body G | p | K A body]; simpl.
+  - apply lt_dec.
+  - destruct (free_db_below_typ_dec tbound A) as [Ht | Ht];
+      destruct (free_db_below_term_dec tbound (S vbound) body) as [He | He];
+      [left | right | right | right]; tauto.
+  - destruct (free_db_below_term_dec tbound vbound e1) as [H1 | H1];
+      destruct (free_db_below_term_dec tbound vbound e2) as [H2 | H2];
+      [left | right | right | right]; tauto.
+  - apply free_db_below_term_dec.
+  - destruct (free_db_below_term_dec tbound vbound body) as [He | He];
+      destruct (free_db_below_typ_dec tbound A) as [Ht | Ht];
+      [left | right | right | right]; tauto.
+  - destruct (free_db_below_term_dec tbound vbound body) as [He | He];
+      destruct (free_db_below_typ_dec tbound A) as [HA | HA];
+      destruct (free_db_below_typ_dec tbound B) as [HB | HB];
+      try (left; tauto); right; tauto.
+  - destruct (free_db_below_term_dec tbound vbound body) as [He | He];
+      destruct (free_db_below_typ_dec tbound G) as [Ht | Ht];
+      [left | right | right | right]; tauto.
+  - destruct (free_db_below_term_dec tbound vbound body) as [He | He];
+      destruct (free_db_below_typ_dec tbound G) as [Ht | Ht];
+      [left | right | right | right]; tauto.
+  - left. exact I.
+  - destruct (free_db_below_typ_dec tbound A) as [Ht | Ht];
+      destruct (free_db_below_term_dec (S tbound) vbound body) as [He | He];
+      [left | right | right | right]; tauto.
+Defined.
 
 Definition fterm_expression_of :
-  forall (e : syntax.term) (tl vl : partial_names) (hints : list name),
+  forall (e : syntax.term) (tl vl : partial_names)
+    (binder_hints type_hints : list name),
   name_unique tl -> name_unique vl ->
   free_db_below_term (length tl) (length vl) e ->
-  {p : fterm_expr * list name | fterm_expr_equiv tl vl e (fst p)}.
+  {p : fterm_expr * (list name * list name) |
+    fterm_expr_equiv tl vl e (fst p)}.
 Proof.
   fix go 1.
   intros e; destruct e as [n | ty body | e1 e2 | K body | body ty
     | body A B p | body G | body G | p | K A body];
-    intros tl vl hints Htuniq Hvuniq Hfree; simpl in Hfree.
+    intros tl vl binder_hints type_hints Htuniq Hvuniq Hfree;
+    simpl in Hfree.
 
   - (* var *)
     destruct (nth_error vl n) as [x|] eqn:Hn.
-    + exists (fterm_var x, hints). simpl.
+    + exists (fterm_var x, (binder_hints, type_hints)). simpl.
       apply fterm_eqv_var. apply name_unique_first; auto.
     + exfalso. apply nth_error_None in Hn. lia.
 
   - (* abs *)
     destruct Hfree as [Ht He].
-    destruct (ftyp_expression_of ty tl hints Htuniq Ht) as [[te hints1] pt]; simpl in pt.
-    destruct (pick_name hints1 vl) as [[x Hx] hints2].
-    destruct (go body tl (x :: vl) hints2 Htuniq (free_var_extension vl Hvuniq x Hx) He) as [[ee hints3] pe]; simpl in pe.
-    exists (fterm_abs x te ee, hints3). simpl.
+    destruct (ftyp_expression_of ty tl type_hints Htuniq Ht)
+      as [[te type_hints1] pt]; simpl in pt.
+    destruct (pick_name binder_hints vl) as [[x Hx] binder_hints1].
+    destruct (go body tl (x :: vl) binder_hints1 type_hints1 Htuniq
+      (free_var_extension vl Hvuniq x Hx) He)
+      as [[ee [binder_hints2 type_hints2]] pe]; simpl in pe.
+    exists (fterm_abs x te ee, (binder_hints2, type_hints2)). simpl.
     apply fterm_eqv_abs; auto.
 
   - (* app *)
     destruct Hfree as [H1 H2].
-    destruct (go e1 tl vl hints Htuniq Hvuniq H1) as [[ee1 hints1] p1]; simpl in p1.
-    destruct (go e2 tl vl hints1 Htuniq Hvuniq H2) as [[ee2 hints2] p2]; simpl in p2.
-    exists (fterm_app ee1 ee2, hints2). simpl.
+    destruct (go e1 tl vl binder_hints type_hints Htuniq Hvuniq H1)
+      as [[ee1 [binder_hints1 type_hints1]] p1]; simpl in p1.
+    destruct (go e2 tl vl binder_hints1 type_hints1 Htuniq Hvuniq H2)
+      as [[ee2 [binder_hints2 type_hints2]] p2]; simpl in p2.
+    exists (fterm_app ee1 ee2, (binder_hints2, type_hints2)). simpl.
     apply fterm_eqv_app; auto.
 
   - (* tabs *)
-    destruct (pick_name hints tl) as [[x Hx] hints'].
-    destruct (go body (x :: tl) vl hints' (free_var_extension tl Htuniq x Hx) Hvuniq Hfree) as [[ee hints2] pe]; simpl in pe.
-    exists (fterm_tabs x K ee, hints2). simpl.
+    destruct (pick_name binder_hints tl) as [[x Hx] binder_hints1].
+    destruct (go body (x :: tl) vl binder_hints1 type_hints
+      (free_var_extension tl Htuniq x Hx) Hvuniq Hfree)
+      as [[ee [binder_hints2 type_hints2]] pe]; simpl in pe.
+    exists (fterm_tabs x K ee, (binder_hints2, type_hints2)). simpl.
     apply fterm_eqv_tabs; auto.
 
   - (* tapp *)
     destruct Hfree as [He Ht].
-    destruct (go body tl vl hints Htuniq Hvuniq He) as [[ee hints1] pe]; simpl in pe.
-    destruct (ftyp_expression_of ty tl hints1 Htuniq Ht) as [[te hints2] pt]; simpl in pt.
-    exists (fterm_tapp ee te, hints2). simpl.
+    destruct (go body tl vl binder_hints type_hints Htuniq Hvuniq He)
+      as [[ee [binder_hints1 type_hints1]] pe]; simpl in pe.
+    destruct (ftyp_expression_of ty tl type_hints1 Htuniq Ht)
+      as [[te type_hints2] pt]; simpl in pt.
+    exists (fterm_tapp ee te, (binder_hints1, type_hints2)). simpl.
     apply fterm_eqv_tapp; auto.
 
   - (* cast *)
     destruct Hfree as [He [HA HB]].
-    destruct (go body tl vl hints Htuniq Hvuniq He) as [[ee hints1] pe]; simpl in pe.
-    destruct (ftyp_expression_of A tl hints1 Htuniq HA) as [[eA hints2] pA]; simpl in pA.
-    destruct (ftyp_expression_of B tl hints2 Htuniq HB) as [[eB hints3] pB]; simpl in pB.
-    exists (fterm_cast ee eA eB p, hints3). simpl.
+    destruct (go body tl vl binder_hints type_hints Htuniq Hvuniq He)
+      as [[ee [binder_hints1 type_hints1]] pe]; simpl in pe.
+    destruct (ftyp_expression_of A tl type_hints1 Htuniq HA)
+      as [[eA type_hints2] pA]; simpl in pA.
+    destruct (ftyp_expression_of B tl type_hints2 Htuniq HB)
+      as [[eB type_hints3] pB]; simpl in pB.
+    exists (fterm_cast ee eA eB p, (binder_hints1, type_hints3)). simpl.
     apply fterm_eqv_cast; auto.
 
   - (* gnd *)
     destruct Hfree as [He HG].
-    destruct (go body tl vl hints Htuniq Hvuniq He) as [[ee hints1] pe]; simpl in pe.
-    destruct (ftyp_expression_of G tl hints1 Htuniq HG) as [[eG hints2] pG]; simpl in pG.
-    exists (fterm_gnd ee eG, hints2). simpl.
+    destruct (go body tl vl binder_hints type_hints Htuniq Hvuniq He)
+      as [[ee [binder_hints1 type_hints1]] pe]; simpl in pe.
+    destruct (ftyp_expression_of G tl type_hints1 Htuniq HG)
+      as [[eG type_hints2] pG]; simpl in pG.
+    exists (fterm_gnd ee eG, (binder_hints1, type_hints2)). simpl.
     apply fterm_eqv_gnd; auto.
 
   - (* is_gnd *)
     destruct Hfree as [He HG].
-    destruct (go body tl vl hints Htuniq Hvuniq He) as [[ee hints1] pe]; simpl in pe.
-    destruct (ftyp_expression_of G tl hints1 Htuniq HG) as [[eG hints2] pG]; simpl in pG.
-    exists (fterm_is_gnd ee eG, hints2). simpl.
+    destruct (go body tl vl binder_hints type_hints Htuniq Hvuniq He)
+      as [[ee [binder_hints1 type_hints1]] pe]; simpl in pe.
+    destruct (ftyp_expression_of G tl type_hints1 Htuniq HG)
+      as [[eG type_hints2] pG]; simpl in pG.
+    exists (fterm_is_gnd ee eG, (binder_hints1, type_hints2)). simpl.
     apply fterm_eqv_is_gnd; auto.
 
   - (* blame *)
-    exists (fterm_blame p, hints). simpl.
+    exists (fterm_blame p, (binder_hints, type_hints)). simpl.
     apply fterm_eqv_blame.
 
   - (* nu *)
     destruct Hfree as [HA He].
-    destruct (ftyp_expression_of A tl hints Htuniq HA) as [[eA hints1] pA]; simpl in pA.
-    destruct (pick_name hints1 tl) as [[x Hx] hints2].
-    destruct (go body (x :: tl) vl hints2 (free_var_extension tl Htuniq x Hx) Hvuniq He) as [[ee hints3] pe]; simpl in pe.
-    exists (fterm_nu x K eA ee, hints3). simpl.
+    destruct (ftyp_expression_of A tl type_hints Htuniq HA)
+      as [[eA type_hints1] pA]; simpl in pA.
+    destruct (pick_name type_hints1 tl) as [[x Hx] type_hints2].
+    destruct (go body (x :: tl) vl binder_hints type_hints2
+      (free_var_extension tl Htuniq x Hx) Hvuniq He)
+      as [[ee [binder_hints1 type_hints3]] pe]; simpl in pe.
+    exists (fterm_nu x K eA ee, (binder_hints1, type_hints3)). simpl.
     apply fterm_eqv_nu; auto.
 Defined.
+
+Definition fterm_expression_of_checked
+  (e : syntax.term) (tl vl : partial_names)
+  (binder_hints type_hints : list name) :
+  option (fterm_expr * (list name * list name)) :=
+  match name_unique_dec tl with
+  | left Htl =>
+      match name_unique_dec vl with
+      | left Hvl =>
+          match free_db_below_term_dec (length tl) (length vl) e with
+          | left Hscope =>
+              Some (proj1_sig
+                (fterm_expression_of e tl vl binder_hints type_hints
+                  Htl Hvl Hscope))
+          | right _ => None
+          end
+      | right _ => None
+      end
+  | right _ => None
+  end.
+
+Lemma fterm_expression_of_checked_correct : forall e tl vl bh th p,
+  fterm_expression_of_checked e tl vl bh th = Some p ->
+  fterm_expr_equiv tl vl e (fst p).
+Proof.
+  intros e tl vl bh th p H.
+  unfold fterm_expression_of_checked in H.
+  destruct (name_unique_dec tl); [|discriminate].
+  destruct (name_unique_dec vl); [|discriminate].
+  destruct (free_db_below_term_dec (length tl) (length vl) e);
+    [|discriminate].
+  destruct (fterm_expression_of e tl vl bh th n n0 f) as [q Hq].
+  simpl in H. injection H as <-. exact Hq.
+Qed.
 
 
 (** ** Correctness: well-scopedness
@@ -349,4 +498,35 @@ Proof.
   - (* nu *) f_equal;
       [ apply (ftyp_expr_equiv_unique tl A eA H _ H1)
       | apply IHfterm_expr_equiv; auto ].
+Qed.
+
+(** ** Alpha-equivalence of rendered expressions
+
+    Two named expressions are alpha-equivalent when they decode to the same
+    de Bruijn object under the same namespace.  This formulation covers both
+    term and type binders and avoids a second, error-prone renaming relation. *)
+Definition ftyp_alpha (tl : partial_names) (a b : ftyp_expr) : Prop :=
+  exists t, ftyp_expr_equiv tl t a /\ ftyp_expr_equiv tl t b.
+
+Definition fterm_alpha (tl vl : partial_names) (a b : fterm_expr) : Prop :=
+  exists e, fterm_expr_equiv tl vl e a /\ fterm_expr_equiv tl vl e b.
+
+Theorem ftyp_expression_of_hints_alpha : forall t tl h1 h2 Hu Hf,
+  ftyp_alpha tl
+    (fst (proj1_sig (ftyp_expression_of t tl h1 Hu Hf)))
+    (fst (proj1_sig (ftyp_expression_of t tl h2 Hu Hf))).
+Proof.
+  intros. exists t. split; apply (proj2_sig (ftyp_expression_of _ _ _ _ _)).
+Qed.
+
+Theorem fterm_expression_of_hints_alpha : forall e tl vl bh1 th1 bh2 th2
+  Htu Hvu Hf,
+  fterm_alpha tl vl
+    (fst (proj1_sig
+      (fterm_expression_of e tl vl bh1 th1 Htu Hvu Hf)))
+    (fst (proj1_sig
+      (fterm_expression_of e tl vl bh2 th2 Htu Hvu Hf))).
+Proof.
+  intros. exists e. split;
+    apply (proj2_sig (fterm_expression_of _ _ _ _ _ _ _ _)).
 Qed.
