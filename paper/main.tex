@@ -84,7 +84,10 @@
 \begin{abstract}
 Program extraction turns a dependently typed development into executable code,
 but standard extraction erases dependent structure into ML-like programs whose
-types cannot express the original invariants. We ask a complementary question:
+types cannot express the original invariants---and, where the erased structure
+exceeds ML polymorphism, the extractor bridges the gap with unchecked casts
+(\texttt{Obj.magic}), so a well-typed call from client code can crash the
+extracted program with no catchable error. We ask a complementary question:
 how much of a dependently typed program's structure can be preserved if we
 extract into a \emph{typed} target, and can the translation be proved correct?
 
@@ -149,6 +152,30 @@ Tabareau~\cite{forster2024verified} verifies extraction from Coq to OCaml and
 so addresses the second concession; our work is complementary and addresses
 the first, studying extraction into a typed target that makes the lost
 dependency explicit.
+
+The first concession is sharper than ``the target types say less.''  Wherever
+the dependent structure exceeds what ML polymorphism can express, Rocq's
+extractor bridges the gap with \texttt{Obj.magic}, OCaml's unchecked cast.
+This is not a corner case: we ported the eighteen showcased example programs
+of \S\ref{sec:examples} to idiomatic CIC and ran Rocq~9.0's stock extractor,
+and seven of the eighteen---bounds-checked indexing, heterogeneous lists,
+type-safe \texttt{printf}, higher-kinded typeclass records, an intrinsically
+typed interpreter, its computed-return-type variant, and a Tarski
+universe---extract with \texttt{Obj.magic} casts or \texttt{Obj.t}-typed
+interfaces (Table~\ref{tab:examples}).  The consequence is a runtime-safety
+problem, not a cosmetic one.  The erased indices are exactly what made the
+source code safe, so the extracted module has \emph{well-typed} OCaml calls
+that violate the erased invariants; because the extractor hid the invariant
+behind an unchecked cast, such a call is undefined behavior.  Calling the
+extracted bounds-checked lookup out of bounds---a call OCaml's type checker
+accepts---raises no exception; it segfaults (\S\ref{sec:examples}).  The
+failure cannot be caught at runtime, and nothing attributes it to the
+boundary that was violated.  A blame calculus replaces exactly this failure
+mode: the boundary becomes a \emph{typed} cast whose failure is
+$\blame{\ell}$---an ordinary, observable outcome licensed by target progress
+and preservation (\S\ref{sec:target}) and attributed by its label to the
+boundary that was crossed.  Runtime safety at the boundary becomes a theorem
+of the target language rather than a discipline demanded of every client.
 
 The idea of extracting a non-dependent polymorphic program from a CoC
 development goes back to Paulin-Mohring's extraction of F$\omega$ programs from
@@ -1351,36 +1378,97 @@ to the proof steps of Newman's lemma, is an ordinary \texttt{Definition}.
 
 \begin{table}
 \small
-\caption{The eighteen showcased examples. ``Erased'' names the dependency the extraction
-removes; ``$\dyn$/blame'' marks examples that also exhibit the value-as-type
-boundary.}
+\caption{The eighteen showcased examples. ``$\dyn$/blame'' marks examples that
+exhibit the value-as-type boundary under our extraction.
+``\texttt{Obj.magic}'' marks examples whose idiomatic-CIC port extracts with
+unchecked casts or \texttt{Obj.t}-typed interfaces under Rocq~9.0's stock
+OCaml extraction (see the experiment below).}
 \label{tab:examples}
-\Description{A table of eighteen example files and the dependent programming idiom each demonstrates.}
-\begin{tabular}{@{}llc@{}}
+\Description{A table of eighteen example files, the dependent programming idiom each demonstrates, whether it exhibits the dynamic-type boundary, and whether stock extraction of its CIC port is unsafe.}
+\begin{tabular}{@{}llcc@{}}
 \toprule
-File & What it demonstrates & $\dyn$/blame \\
+File & What it demonstrates & $\dyn$/blame & \texttt{Obj.magic} \\
 \midrule
-\texttt{newman.v}   & Newman's lemma over axiomatized inductive predicates & \\
-\texttt{vectors.v}  & length-indexed vector signatures and clients & \\
-\texttt{fin.v}      & bounds-checked indexing; length index erased & \checkmark \\
-\texttt{equality.v} & equality indices erased from types; proof terms remain & \\
-\texttt{sigma.v}    & dependent pairs; existential over a size & \\
-\texttt{printf.v}   & type-safe \texttt{printf}; dependent arity & \\
-\texttt{matrix.v}   & dimension-indexed matrices; shape safety & \checkmark \\
-\texttt{units.v}    & units of measure; dimension index erased & \checkmark \\
-\texttt{avl.v}      & height-indexed balanced trees & \\
-\texttt{session.v}  & session-typed protocols; typestate & \\
-\texttt{stlc.v}     & intrinsically typed interpreter signature & \\
-\texttt{universe.v} & Tarski universe; a hand-built dynamic type & \checkmark \\
-\texttt{functor.v}  & higher-kinded: functors, tagless-final, monads & \\
-\texttt{tagless.v}  & computed return types via type-level codes; $\dyn$-free & \\
-\texttt{lists.v}    & polymorphic list library; fully static baseline & \\
-\texttt{scoped.v}   & intrinsically well-scoped terms; capture-avoiding renaming & \checkmark \\
-\texttt{hlist.v}    & heterogeneous lists indexed by a type-level list of types & \checkmark \\
-\texttt{ordered.v}  & provably-sorted lists over the \texttt{Le} inductive predicate & \checkmark \\
+\texttt{newman.v}   & Newman's lemma over axiomatized inductive predicates & & \\
+\texttt{vectors.v}  & length-indexed vector signatures and clients & & \\
+\texttt{fin.v}      & bounds-checked indexing; length index erased & \checkmark & \checkmark \\
+\texttt{equality.v} & equality indices erased from types; proof terms remain & & \\
+\texttt{sigma.v}    & dependent pairs; existential over a size & & \\
+\texttt{printf.v}   & type-safe \texttt{printf}; dependent arity & & \checkmark \\
+\texttt{matrix.v}   & dimension-indexed matrices; shape safety & \checkmark & \\
+\texttt{units.v}    & units of measure; dimension index erased & \checkmark & \\
+\texttt{avl.v}      & height-indexed balanced trees & & \\
+\texttt{session.v}  & session-typed protocols; typestate & & \\
+\texttt{stlc.v}     & intrinsically typed interpreter signature & & \checkmark \\
+\texttt{universe.v} & Tarski universe; a hand-built dynamic type & \checkmark & \checkmark \\
+\texttt{functor.v}  & higher-kinded: functors, tagless-final, monads & & \checkmark \\
+\texttt{tagless.v}  & computed return types via type-level codes; $\dyn$-free & & \checkmark \\
+\texttt{lists.v}    & polymorphic list library; fully static baseline & & \\
+\texttt{scoped.v}   & intrinsically well-scoped terms; capture-avoiding renaming & \checkmark & \\
+\texttt{hlist.v}    & heterogeneous lists indexed by a type-level list of types & \checkmark & \checkmark \\
+\texttt{ordered.v}  & provably-sorted lists over the \texttt{Le} inductive predicate & \checkmark & \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\paragraph{Baseline: stock extraction of the same idioms is unsafe, not just
+untyped.}
+To calibrate what the blame target buys, we ported each showcased file to
+idiomatic CIC and ran Rocq~9.0's stock OCaml extractor on the ports
+(\texttt{paper/stock-extraction/} in the artifact reproduces the experiment).
+The ports are the programs a Rocq user would actually write: the REPL's
+\texttt{Inductive} encodings become real \texttt{Inductive} declarations, and
+the kit that the bare PTS had to axiomatize becomes genuine
+definitions---one-step inversions (\texttt{fin0}, \texttt{fin\_case},
+heterogeneous-list projections) become dependent \texttt{match}es, value-to-type
+decoders (\texttt{El}) become \texttt{Fixpoint}s by large elimination,
+\texttt{stlc.v}'s axiomatized evaluator is implemented, and \texttt{tagless.v}
+is ported as the \texttt{match}-computed-return-type CIC program it emulates.
+The result (Table~\ref{tab:examples}, last column): seven of the eighteen
+extract with \texttt{Obj.magic} casts in their bodies (\texttt{fin},
+\texttt{hlist}, \texttt{printf}, \texttt{functor}, \texttt{stlc},
+\texttt{tagless}) or with \texttt{Obj.t} in their interfaces
+(\texttt{universe}, whose decoded payload is exposed at type \texttt{Obj.t},
+pushing the unchecked cast onto every client).  The eleven clean files are
+exactly those whose dependency erases into ML polymorphism or \texttt{Prop}.
+The two columns of Table~\ref{tab:examples} measure different boundaries and
+disagree in both directions: \texttt{matrix.v} is clean under stock
+extraction but checked under $\dyn$/blame only because the file deliberately
+extracts the type family itself as data, while \texttt{tagless.v} is
+$\dyn$-free under our extraction (its computed return type is a genuine
+F$\omega$ type-level application, \S\ref{sec:examples}) yet its CIC port is
+among the heaviest \texttt{Obj.magic} users under stock extraction.
+
+The unsafe seven are not merely inelegant.  The erased index is what made the
+source safe, so the extracted module admits well-typed OCaml calls that
+violate it, and \texttt{Obj.magic} turns the violation into undefined
+behavior.  Concretely, the port of \texttt{fin.v} extracts the empty-index
+eliminator and lookup as
+\begin{lstlisting}[language={}]
+let fin0 _ = Obj.magic Tt
+let rec nth _ = function
+  | Nil -> fin0
+  | Cons (m, a, v) -> (fun i -> fin_case m a (nth m v) i)
+\end{lstlisting}
+with type \texttt{nat -> 'a1 t -> fin -> 'a1}: the bound linking the vector
+and the index is gone from the OCaml type, so the out-of-bounds call is
+well typed.  The client
+\begin{lstlisting}[language={}]
+let f : int -> int = nth O Nil (F1 O) in f 3
+\end{lstlisting}
+compiles without warning and dies with SIGSEGV: \texttt{nth} reaches
+\texttt{fin0}, whose \texttt{Obj.magic Tt} materializes a unit value at type
+\texttt{int -> int}, and applying it crashes the process.  No OCaml exception
+is raised, so the failure cannot be caught, and nothing identifies the
+violated boundary.  In the blame target the corresponding boundary is a typed
+cast: a well-typed client linked against an extracted term forms a well-typed
+target program, and target progress and preservation
+(\S\ref{sec:metatheory}) confine every failure to an explicit, observable
+$\blame{\ell}$ term whose label names the boundary.  Blame is a defined
+outcome of the operational semantics---runtime-safe in the sense of the
+progress theorem---where \texttt{Obj.magic} is a promise nobody checked.
+(Which label can arise where is a separate question; our external-label
+theorem covers isolated extracted terms only, \S\ref{sec:limitations}.)
 
 We highlight four that best illustrate the design.
 
@@ -1698,6 +1786,9 @@ batches (with their checked-in golden output files) accompany this paper as an
 artifact. The development builds with Rocq~9.0 and Dune; \texttt{dune test}
 replays every golden output, and the assumption audit of \S\ref{sec:mech}
 re-checks that the headline theorems depend only on \texttt{eq\_rect\_eq}.
+The stock-extraction baseline of \S\ref{sec:examples} (the idiomatic-CIC
+ports, the \texttt{Obj.magic} counts, and the segfaulting client) is
+reproduced by \texttt{paper/stock-extraction/run.sh}.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

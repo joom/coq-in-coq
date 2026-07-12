@@ -7,11 +7,12 @@
 %%  SPEAKER NOTES / SCRIPT
 %%    Every frame carries a \note{...} with a spoken script and a rough time
 %%    budget. The slides total ~16 content frames ≈ 22 min at the noted pace.
-%%    To rehearse with the script on a second screen:
-%%        uncomment  \setbeameroption{show notes on second screen=right}
-%%    To print a notes-only handout:
-%%        uncomment  \setbeameroption{show only notes}
-%%    Leave both commented for the clean presentation PDF.
+%%    <click> markers in the script sit exactly where the next overlay must be
+%%    revealed; every frame's marker count matches its overlay count.
+%%    DEFAULT BUILD: notes on the right half of a double-width page
+%%    (show notes on second screen=right) — rehearsal-ready out of the box.
+%%    For the clean presentation PDF: comment out that \setbeameroption line.
+%%    For a notes-only handout: use \setbeameroption{show only notes} instead.
 %%
 %%  Color system (cued verbally in the legend frame):
 %%    srcBlue   — the source language (CoC)
@@ -31,9 +32,11 @@
 \usepackage{xcolor}
 \usepackage{pgfpages}
 
-%% --- speaker notes: uncomment ONE to rehearse / print the script -----------
-% \setbeameroption{show notes on second screen=right}
+%% --- speaker notes (default ON; comment out for the clean deck) -------------
+\setbeameroption{show notes on second screen=right}
 % \setbeameroption{show only notes}
+\setbeamertemplate{note page}[plain]
+\setbeamerfont{note page}{size=\footnotesize}
 
 %% --- palette ----------------------------------------------------------------
 \definecolor{srcBlue}{HTML}{2A6099}
@@ -78,6 +81,8 @@
 \newcommand{\src}[1]{\textcolor{srcBlue}{#1}}
 \newcommand{\tgt}[1]{\textcolor{tgtTeal}{#1}}
 \newcommand{\mech}[1]{\textcolor{okGreen}{\texttt{#1}}}
+%% click cue for speaker notes: marks the exact point to advance an overlay
+\newcommand{\click}{{\color{accentOrange}\textbf{\textless click\textgreater}}~}
 
 %% --- listings: CoC source vs. REPL output -----------------------------------
 \lstdefinelanguage{coc}{
@@ -167,8 +172,8 @@
   This makes \alert{two concessions}:
   \begin{enumerate}
     \item<3-> The target types \alert<3>{cannot express the source's dependent
-      invariants} --- a verified program becomes an untyped-ish ML term whose
-      safety is no longer in its type.
+      invariants} --- where polymorphism runs out, the extractor inserts
+      \alert<3>{\texttt{Obj.magic}}, an unchecked cast.
     \item<4-> The extractor joins the \alert<4>{trusted computing base} --- its
       correctness is argued informally.
   \end{enumerate}
@@ -181,17 +186,78 @@
     \textbf{[1:00 — 2:30]}\\
     Here's the setting. In Rocq, Agda, Lean, Idris we prove properties of code.
     But to run it we extract to OCaml, Haskell, Scheme --- and extraction erases
-    the static parts.\\[1ex]
-    \emph{(click)} That costs us two things.\\
-    \emph{(click)} First: the target's types can't say what the source's types
+    the static parts. But this \click costs us two things.\\
+    \click First: the target's types can't say what the source's types
     said. Your ``\texttt{Vec} of length \texttt{n}'' becomes just a list --- the
-    proof that made it safe is gone from the type.\\
-    \emph{(click)} Second: the extractor itself is trusted --- usually justified
+    proof that made it safe is gone from the type. And it's worse than that:
+    where ML polymorphism can't bridge the gap, the extractor inserts
+    \texttt{Obj.magic} --- an \emph{unchecked} cast. Next slide shows what that
+    costs.\\
+    \click Second: the extractor itself is trusted --- usually justified
     only on paper.\\
-    \emph{(click)} There's great recent work --- Forster, Sozeau, Tabareau ---
+    \click There's great recent work --- Forster, Sozeau, Tabareau ---
     on the \emph{second} problem: a verified extractor, but to an untyped target.
     This talk is about the \emph{first} problem: can we extract into a
     \emph{typed} target and keep the structure? Pause here.
+  }
+\end{frame}
+
+\begin{frame}[fragile,shrink]{Not just untyped --- \alert{unsafe}}
+  Bounds-checked lookup, \src{\texttt{nth : Vec A n -> Fin n -> A}}.
+  Its empty-vector branch is \emph{impossible} (no index inhabits
+  \src{\texttt{Fin 0}}), discharged by the refuter
+  \src{\texttt{fin0 : forall C, Fin 0 -> C}} --- ex falso: promise \emph{any}
+  type.
+
+  \pause
+  Rocq 9.0 extraction erases the indices --- the bound \emph{and} the
+  impossibility:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+val nth  : nat -> 'a1 t -> fin -> 'a1   (* nothing ties the fin to the t   *)
+val fin0 : fin -> 'a1                   (* "impossible" -- now callable... *)
+let fin0 _ = Obj.magic Tt               (* ...returns unit, cast to ANY type *)
+\end{lstlisting}
+
+  \pause
+  So this \emph{well-typed} OCaml client looks up index 0 of an \emph{empty}
+  vector, reaches \texttt{fin0}, and gets a unit value posing as a function:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+let f : int -> int = nth O Nil (F1 O) in f 3
+\end{lstlisting}
+
+  \pause
+  \alert{Segmentation fault.} No exception, nothing to catch, nothing names
+  the violated boundary.
+
+  \smallskip
+  \onslide<5->{7 of our 18 example idioms extract with \texttt{Obj.magic} /
+  \texttt{Obj.t} interfaces. \\
+  In this talk that failure becomes $\blame{p}$: \emph{typed}, observable,
+  attributable --- and ``the worst case is blame'' is a
+  \textcolor{okGreen}{theorem} (progress $+$ preservation).}
+  \note{%
+    \textbf{[2:00 — 3:00]}\\
+    Here's the concrete version of concession one: a bounds-checked vector
+    lookup. In the source, looking up an \emph{empty} vector is impossible ---
+    \texttt{Fin 0} has no inhabitants --- so that branch is discharged by
+    \texttt{fin0}, the ex-falso refuter: give it the impossible index and it
+    may promise any type, because it can never actually be called. Now
+    \click extract. The index types erase, and with them go both
+    the bound tying the index to the vector \emph{and} the emptiness of
+    \texttt{Fin 0}. So \texttt{fin0} becomes a perfectly callable function
+    \texttt{fin -> 'a1} --- and its body is \texttt{Obj.magic} applied to a
+    unit value: ``trust me, this is whatever type you wanted.''\\
+    \click So this client type-checks: look up index zero in an
+    \emph{empty} vector, at type \texttt{int -> int}. OCaml is fine with it;
+    \texttt{nth} hits \texttt{fin0}; the client gets a unit value posing as a
+    function, and applies it. What happens? \click A segfault. Not an
+    exception --- a segfault. You cannot catch it, and nothing tells you which
+    boundary was violated.\\
+    \click And this isn't rare: seven of our eighteen example idioms hit
+    it. The pitch of this talk: make that boundary a \emph{typed} cast, so a
+    failure is \emph{blame} --- an ordinary observable outcome with a label
+    that names the boundary --- and make ``worst case is blame'' a
+    machine-checked theorem of the target language.
   }
 \end{frame}
 
@@ -218,14 +284,14 @@
   \note{%
     \textbf{[2:30 — 4:00]}\\
     So the question, stated plainly: how much structure survives if the target
-    is \emph{typed}, and can we \emph{prove} the translation right?\\[1ex]
-    \emph{(click)} Source: the Calculus of Constructions --- full dependent
+    is \emph{typed}, and can we \emph{prove} the translation right? Here's the
+    setup. \click Source: the Calculus of Constructions --- full dependent
     types, as a pure type system, built on Barras' classic Coq-in-Coq.\\
-    \emph{(click)} Target: System~F$\omega$ --- higher-kinded polymorphism ---
+    \click Target: System~F$\omega$ --- higher-kinded polymorphism ---
     plus a dynamic type ``Dyn'', casts, and blame. That's a \emph{polymorphic
     blame calculus}, in the Ahmed--Findler--Siek--Wadler line, but I lift it to
     higher kinds.\\
-    \emph{(click)} And the lineage: Paulin-Mohring did CoC-to-F$\omega$ back in
+    \click And the lineage: Paulin-Mohring did CoC-to-F$\omega$ back in
     '89. We revisit that design point, but add an explicit dynamic/blame
     boundary for the parts F$\omega$ can't reach.
   }
@@ -264,15 +330,15 @@
     type-level functions, higher-kinded families. CoC gives \emph{more} --- types
     can mention \emph{terms}. So a translation has to decide what to do with that
     extra dependency.\\[1ex]
-    Three cases --- I'll show one example of each next.\\
-    \emph{(click)} Preserve: anything that's really type structure stays type
-    structure.\\
-    \emph{(click)} Erase: an index like the \emph{length} of a vector is dropped
-    \emph{from the type} --- \texttt{Vec A n} becomes \texttt{Vec A}. The value
-    \texttt{n} may still be around as data; it's the \emph{invariant} that leaves.\\
-    \emph{(click)} Dynamize: the hard residue --- a \emph{value used as a type},
+    Three cases --- I'll show one example of each next. First,
+    \click preserve: anything that's really type structure stays type
+    structure. Second, \click erase: an index like the \emph{length} of a
+    vector is dropped \emph{from the type} --- \texttt{Vec A n} becomes
+    \texttt{Vec A}. The value \texttt{n} may still be around as data; it's the
+    \emph{invariant} that leaves. And third, \click dynamize: the hard residue
+    --- a \emph{value used as a type},
     like a decoder \texttt{El : U -> Set} --- goes through Dyn with blame.\\
-    \emph{(click)} The word ``optimistic'' is the design principle: we never
+    \click The word ``optimistic'' is the design principle: we never
     dynamize defensively. We use Dyn \emph{only} where F$\omega$ genuinely can't
     express the thing.
   }
@@ -308,9 +374,8 @@ fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) =>
     Concrete example of \emph{erase}. \texttt{vnth} looks up the \texttt{i}-th
     element of a length-\texttt{n} vector, with \texttt{i} provably in range ---
     a \texttt{Fin n}. It's just a definition built from the recursor; nothing
-    exotic.\\[1ex]
-    \emph{(click)} Here's the extraction. Look at the types in the shaded box:\\
-    \emph{(click)} \texttt{Vec A n} became \texttt{Vec A}; \texttt{Fin n} became
+    exotic. Here's \click the extraction. Look at the types in the shaded box:
+    \click \texttt{Vec A n} became \texttt{Vec A}; \texttt{Fin n} became
     \texttt{Fin}. The dependent index \texttt{n} dropped out of the \emph{types}.
     But the \emph{code} is intact --- same recursion --- and \texttt{n} and
     \texttt{i} are still there as ordinary arguments. What we lost is exactly the
@@ -345,14 +410,13 @@ fun (c : U) =>
     Now \emph{dynamize} --- the interesting case. A Tarski universe: \texttt{U}
     is a type of \emph{codes}, and \texttt{El} decodes a code into an actual
     type. So \texttt{El} sends \emph{data} to \emph{types}. F$\omega$ has nothing
-    like that.\\[1ex]
-    \emph{(click)} The extraction of \texttt{fun c => El c} is this.\\
-    \emph{(click)} Since \texttt{El} has no F$\omega$ counterpart, we don't fudge
-    it --- we plant a \emph{blame}, cast through Dyn. It's a marked, honest
+    like that. The extraction of \texttt{fun c => El c} is
+    \click this. \click Since \texttt{El} has no F$\omega$ counterpart, we don't
+    fudge it --- we plant a \emph{blame}, cast through Dyn. It's a marked, honest
     failure: ``this used a value as a type; I can't express it.'' The label
     \texttt{2+} names \emph{which} kind of failure --- I'll unpack labels in two
     slides.\\
-    \emph{(click)} And crucially, we \emph{prove} that a term we extract, run on
+    \click And crucially, we \emph{prove} that a term we extract, run on
     its own, only ever trips these \emph{internal} markers --- never an external,
     user-level blame. So the fallback is contained.
   }
@@ -384,13 +448,13 @@ fun (t : (* => (* => *)))
     \textbf{[9:00 — 10:30] --- optional; skip if behind schedule.}\\
     A ``gotcha'' slide. The program everyone expects to \emph{force} a dynamic
     type is the tagless interpreter: its \emph{return type} is computed by a
-    \texttt{match} on a run-time tag --- \texttt{nat} or \texttt{bool}.\\[1ex]
-    \emph{(click)} But if you Church-encode the codes one kind \emph{up}, the
+    \texttt{match} on a run-time tag --- \texttt{nat} or \texttt{bool}.\\
+    \click But if you Church-encode the codes one kind \emph{up}, the
     \texttt{match} becomes ordinary type-level \emph{application}, and F$\omega$
     eats it for free.\\
-    \emph{(click)} The whole interpreter extracts with \emph{no} Dyn, \emph{no}
+    \click The whole interpreter extracts with \emph{no} Dyn, \emph{no}
     casts, \emph{no} blame --- it lands in the static fragment.\\
-    \emph{(click)} You only truly force Dyn as a computed \emph{return} type when
+    \click You only truly force Dyn as a computed \emph{return} type when
     the source has \emph{large elimination} --- which bare CoC lacks. So the
     boundary is sharper than folklore suggests. If I'm short on time I'll just
     say this sentence and move on.
@@ -422,16 +486,17 @@ fun (t : (* => (* => *)))
   \end{itemize}
   \note{%
     \textbf{[10:30 — 12:00]}\\
-    The target in one slide. \emph{(click through the grammar.)}\\
-    Kinds are the usual F$\omega$ kinds. Types are F$\omega$ --- variables,
-    arrows, $\forall$, type-level $\Lambda$, application --- plus \emph{Dyn}.
-    Terms are F$\omega$ terms plus four gradual-typing gadgets: a \emph{cast}
+    The target in one slide, revealed line by line.\\
+    Kinds are the usual F$\omega$ kinds. \click Types are F$\omega$ ---
+    variables, arrows, $\forall$, type-level $\Lambda$, application --- plus
+    \emph{Dyn}. \click Terms are F$\omega$ terms plus four gradual-typing
+    gadgets: a \emph{cast}
     from A to B with a label; a \emph{ground injection} and \emph{ground test}
     that mediate Dyn; a \emph{blame}; and a $\nu$ binder that seals a type ---
     I'll come back to that.\\[1ex]
-    \emph{(click)} Two design points worth flagging: Dyn lives only at kind
+    Two design points worth flagging. \click Dyn lives only at kind
     star --- there's no \(\mathrm{Dyn}_K\) for every kind.\\
-    \emph{(click)} And ``ground types'' --- the shapes Dyn can hold --- now
+    \click And ``ground types'' --- the shapes Dyn can hold --- now
     include \emph{neutral} types, a variable applied to arguments. That's the
     lift from System~F to F$\omega$: once type \emph{applications} can sit at the
     Dyn boundary, the tags have to cover them. Don't dwell; it motivates the
@@ -482,14 +547,14 @@ fun (t : (* => (* => *)))
     minus, says whose fault: plus blames the value flowing through the cast,
     minus blames the surrounding context. (That's the Wadler--Findler
     convention; a function cast flips the sign on its argument.)\\[1ex]
-    \emph{(click)} Now the numbers. Most ids name real, programmer-level
+    \click Now the numbers. Most ids name real, programmer-level
     boundaries. But three small ids are reserved for our own machinery:\\
     0 --- a sealed type variable trying to escape its scope through Dyn;\\
     1 --- the ground test peeking at a sealed value;\\
     2 --- the big one from the El slide: the extraction hit something with no
     F$\omega$ image.\\
     Anything 3 or above is \emph{external} --- a boundary a client set up.\\
-    \emph{(click)} And that split is the whole point: we prove an extracted term,
+    \click And that split is the whole point: we prove an extracted term,
     run in isolation, can only ever blame 0, 1, or 2 --- its own plumbing ---
     never an external label. The extraction never frames an outside party.
   }
@@ -528,15 +593,15 @@ fun (t : (* => (* => *)))
     every constructor of our \texttt{compat} relation corresponds to a concrete
     reduction rule. Identity casts, function WRAP, the $\forall$ steps, and the
     Dyn injection/projection rules.\\
-    \emph{(click)} The Dyn mechanics: casting \emph{to} Dyn injects the value at
+    \click The Dyn mechanics: casting \emph{to} Dyn injects the value at
     a ground tag; casting \emph{from} Dyn checks the tag --- collapses if it
     matches, \emph{blames} if it doesn't. That blame-on-mismatch is where runtime
     failures come from.\\
-    \emph{(click)} The payoff: there's no catch-all ``stuck cast'' case. Every
+    \click The payoff: there's no catch-all ``stuck cast'' case. Every
     well-typed cast has a step, so \emph{progress} is basically the decision
     procedure for \texttt{compat}; and the same decidability makes the
     extraction's coercion a \emph{total} function.\\
-    \emph{(click)} Honest caveat: \texttt{compat} is syntactic --- it doesn't see
+    \click Honest caveat: \texttt{compat} is syntactic --- it doesn't see
     through definitional equality. That matters in a minute.
   }
 \end{frame}
@@ -558,11 +623,11 @@ fun (t : (* => (* => *)))
     \textbf{[15:30 — 16:30]}\\
     The target is a real, self-standing calculus, and we mechanized its
     metatheory --- all admit-free. Determinism --- and proving it actually caught
-    a genuine bug: two rules overlapped, fixed by a side condition. Type-level
-    confluence and Church--Rosser, because we have honest F$\omega$ type
-    computation. Progress and preservation for the \emph{whole} reduction
-    relation.\\[1ex]
-    \emph{(click to the last one)} And one deliberate non-result: it's \emph{not}
+    a genuine bug: two rules overlapped, fixed by a side condition.
+    \click Type-level confluence and Church--Rosser, because we have honest
+    F$\omega$ type computation. \click Progress and preservation for the
+    \emph{whole} reduction relation, with kind regularity of every annotation.\\
+    \click And one deliberate non-result: it's \emph{not}
     strongly normalizing --- there's a closed, well-typed loop. That's fine:
     type \emph{safety} doesn't require termination. (Source CoC \emph{is}
     normalizing --- we use that separately.) Keep this slide brisk.
@@ -597,15 +662,17 @@ fun (t : (* => (* => *)))
     whose domain is type-level becomes a kind arrow; a term-level domain is
     dropped --- that's how \texttt{Set -> Nat -> Set} becomes just star-to-star,
     the kind of a vector family.\\
-    On types: the key move is \emph{normalize first}, then translate; sorts,
-    term variables, and term-headed applications are what turn into Dyn.\\
-    On terms: the extraction recurses on the \emph{typing derivation}, not the
+    \click On types: the key move is \emph{normalize first}, then translate;
+    sorts, term variables, and term-headed applications are what turn into
+    Dyn.\\
+    \click On terms: the extraction recurses on the \emph{typing derivation},
+    not the
     raw term --- it needs the typing information to classify binders. (Aside if
     asked: this forced \texttt{has\_type} to live in \texttt{Type}, not
     \texttt{Prop} --- and dragged the whole reduction/conversion layer into
     \texttt{Type} with it, since Rocq forbids eliminating \texttt{Prop} into
     \texttt{Type}.)\\[1ex]
-    \emph{(click)} And the invariant that makes the whole thing well defined:
+    \click And the invariant that makes the whole thing well defined:
     every time we ask ``is this type-level or term-level?'' we use a
     \emph{semantic}, reduction-stable test --- ``does it have sort Kind?'' ---
     which is preserved by reduction. That's why the translation respects
@@ -639,12 +706,12 @@ fun (t : (* => (* => *)))
     My favorite subtlety. When the extraction hits a \emph{type} application, it
     just emits a bare type application in the target --- no cast, no coercion.
     You'd want to justify that with a lemma: ``extraction commutes with
-    substitution.''\\[1ex]
-    \emph{(click)} But phrased with plain \emph{equality}, that lemma is
+    substitution.'' Here are the two sides.\\
+    \click But phrased with plain \emph{equality}, that lemma is
     \emph{false}. The two sides differ two ways: plugging a large argument
     creates a target $\beta$-redex on one side, and normalizing annotations
     drifts them on the other.\\
-    \emph{(click)} The fix: they're equal \emph{up to F$\omega$ definitional
+    \click The fix: they're equal \emph{up to F$\omega$ definitional
     equality}. So the extraction leans on the target's \emph{conversion} rule to
     absorb the mismatch --- and that's the real reason the target has to carry a
     conversion rule at all. This is the kind of thing that only shows up when you
@@ -670,14 +737,16 @@ fun (t : (* => (* => *)))
   \note{%
     \textbf{[19:30 — 21:00]}\\
     The payoff theorems --- all in Rocq, and the audited set rests on a single
-    standard axiom, \texttt{eq\_rect\_eq}.\\
+    standard axiom, \texttt{eq\_rect\_eq}. They appear one per click.\\
     One: extraction is \emph{well-typed} --- a well-typed source term extracts to
     a well-typed target term at the extracted type.\\
-    Two: \emph{simulation} --- source reduction is tracked by the extraction.\\
-    Three: it doesn't depend on which typing derivation you picked.\\
-    Four: the safety result from the labels slide --- no external blame in
-    isolation.\\
-    Five: ``optimism'' made precise --- an \emph{exact} characterization of which
+    \click Two: \emph{simulation} --- source reduction is tracked by the
+    extraction.\\
+    \click Three: it doesn't depend on which typing derivation you picked.\\
+    \click Four: the safety result from the labels slide --- no external blame
+    in isolation.\\
+    \click Five: ``optimism'' made precise --- an \emph{exact} characterization
+    of which
     source types come out Dyn-free. Read two or three of these out loud, don't
     grind through all five.
   }
@@ -708,13 +777,14 @@ fun (t : (* => (* => *)))
     bookkeeping, not a behavioral, contextual approximation --- it deliberately
     contains rules that would be false as observational principles. Building the
     typed logical-relations bridge is open work, and I'd rather say that plainly.\\
-    \emph{(click)} Internal blame is \emph{reachable} --- if you actually run a
+    \click Internal blame is \emph{reachable} --- if you actually run a
     value-as-type, you get an internal blame. That's the honest fallback, by
-    design.\\
-    \emph{(click)} And it's not proof-erasing, Dyn is only at kind star, and
+    design --- and unlike an \texttt{Obj.magic} failure, it's a defined,
+    catchable outcome.\\
+    \click And it's not proof-erasing, Dyn is only at kind star, and
     inductives are axiomatized since the source is a bare PTS --- all natural
     next steps.\\
-    \emph{(click)} None of this weakens the theorems; it scopes them.
+    \click None of this weakens the theorems; it scopes them.
   }
 \end{frame}
 
@@ -744,10 +814,10 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
     Quick, because it's fun: we extract the type checker \emph{and} the
     translation to OCaml and wrap them in a REPL, so you can type a definition
     and see its extraction. Here's \texttt{vmap}.\\
-    \emph{(click)} Even the pretty-printing is verified --- turning de~Bruijn
+    \click Even the pretty-printing is verified --- turning de~Bruijn
     indices back into readable names is proved equivalence-preserving and
     capture-free, which is usually the sketchy unverified part.\\
-    \emph{(click)} There are eighteen worked examples checked by \texttt{dune
+    \click There are eighteen worked examples checked by \texttt{dune
     test}; the only unverified bit is final string layout. Live demo available if
     there's interest in Q\&A.
   }
@@ -778,19 +848,20 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
     \textbf{[23:00 — 24:30] --- the encoding story; land the tension.}\\
     A bonus the REPL gives us: an \texttt{Inductive} command that's pure sugar
     for the impredicative Böhm--Berarducci encoding --- and it handles
-    \emph{indexed} families, because the motive is parameterized by the index.
-    So Vec, Fin, Leibniz equality (whose recursor is literally transport), the
+    \emph{indexed} families. \click Because the motive is parameterized by the
+    index,
+    Vec, Fin, Leibniz equality (whose recursor is literally transport), the
     format family, the $\le$ predicate --- all become plain lambda-terms that
     \emph{compute} under \texttt{Compute}. Böhm--Berarducci in '85;
     Pfenning--Paulin encoded these in CoC in '90.\\[1ex]
-    \emph{(click)} Now the honest ceiling, and it's intrinsic, not a bug. The
+    \click Now the honest ceiling, and it's intrinsic, not a bug. The
     generated recursor's motive depends on the \emph{indices} but not the
     \emph{value} --- it's a fold, not dependent induction, and Geuvers proved in
     2001 that induction simply isn't derivable from these encodings. So large
     elimination and dependent projections are out.\\
-    \emph{(click)} Second, one-step inversion isn't a fold either, so those stay
+    \click Second, one-step inversion isn't a fold either, so those stay
     axiomatic.\\
-    \emph{(click)} And the alternatives: Scott and Parigot give you O(1)
+    \click And the alternatives: Scott and Parigot give you O(1)
     inversion, but their types are recursive, so they don't even typecheck in a
     normalizing system without mu-types; Mendler handles more functors but hits
     the same wall; and if you really want dependent elimination with computation,
@@ -806,7 +877,9 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
       erases many indices from target types.
     \item<2-> The genuine residue --- \textcolor{dynOrange}{values used as types}
       --- is marked \emph{explicitly} with $\dyn$ and reserved
-      \textcolor{blameRed}{internal blame}.
+      \textcolor{blameRed}{internal blame}: a typed, observable, attributable
+      outcome where stock extraction leaves \texttt{Obj.magic} and undefined
+      behavior.
     \item<3-> The whole pipeline is \textcolor{okGreen}{\textbf{mechanized,
       admit-free}}: an F$\omega$-style polymorphic blame calculus with
       progress / preservation / determinism / confluence, plus the extraction
@@ -825,11 +898,15 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
     One: extraction into a \emph{typed} target is viable --- a single verified
     translation keeps the polymorphic skeleton and drops dependent indices from
     types.\\
-    Two: the genuine residue of dependency --- values used as types --- is marked
-    \emph{explicitly}, with Dyn and reserved internal blame, never silently.\\
-    Three: it's all machine-checked and admit-free --- the target calculus and
+    \click Two: the genuine residue of dependency --- values used as types ---
+    is marked
+    \emph{explicitly}, with Dyn and reserved internal blame: a typed, observable,
+    attributable outcome, where stock extraction would leave an
+    \texttt{Obj.magic} and undefined behavior.\\
+    \click Three: it's all machine-checked and admit-free --- the target
+    calculus and
     the extraction metatheory.\\
-    \emph{(click)} And where it's going: a real contextual/logical-relations
+    \click And where it's going: a real contextual/logical-relations
     story, an algorithmic extractor, proof erasure, and inductive families.
     Hand off to the thank-you slide.
   }
