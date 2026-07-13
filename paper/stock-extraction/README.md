@@ -26,14 +26,21 @@ Result with Rocq 9.0:
 |---|---|
 | `fin`, `hlist`, `printf`, `functor`, `stlc`, `tagless`, `universe` | `newman`, `lists`, `inductive`, `vectors`, `avl`, `equality`, `sigma`, `ordered`, `units`, `session`, `scoped`, `matrix` |
 
-`driver.ml` is the runtime-safety demo: a **well-typed** OCaml client of
-`ex_fin.ml` that calls the bounds-checked lookup `nth` on an empty vector.
-The length index was erased, so OCaml's types cannot reject the call; `nth`
-hits `fin0 = Obj.magic Tt`, the client applies the result as a function, and
-the process dies with SIGSEGV — no OCaml exception is raised, so the failure
-is not catchable, and nothing attributes it to the boundary that was
-violated. This is the failure mode that the paper's typed target replaces
-with `blame`.
+Two **well-typed** OCaml clients demonstrate the runtime-safety failure:
+
+- `driver_printf.ml` (the accidental one): `ex_printf.ml`'s `sprintf`
+  extracts at `'a1 fmt -> 'a1`, with `'a1` unconstrained by the format's
+  constructors — the format value no longer determines the function type.
+  So a format and its call site can drift apart by one argument (the exact
+  everyday bug type-safe printf exists to rule out), OCaml accepts the
+  mismatch, and applying the result segfaults.
+- `driver.ml`: calls `ex_fin.ml`'s bounds-checked lookup `nth` on an empty
+  vector. The length index was erased, so OCaml cannot reject the call;
+  `nth` hits `fin0 = Obj.magic Tt` and applying the result segfaults.
+
+In both cases no OCaml exception is raised, so the failure is not catchable,
+and nothing attributes it to the boundary that was violated. This is the
+failure mode that the paper's typed target replaces with `blame`.
 
 These files are *not* part of the mechanization; they are an experiment about
 Rocq's extractor, checked by `run.sh` only.

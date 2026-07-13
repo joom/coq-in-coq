@@ -49,8 +49,6 @@ Makefile.coq
 Makefile.coq.conf
 CoqMakefile
 CoqMakefile.conf
-*.ml
-!tests/top.ml
 *.mli
 main
 .vscode/

@@ -8,9 +8,11 @@
 # extraction into ex_<name>.ml; we then count unsafe casts (Obj.magic) and
 # unsafe interface types (Obj.t) in each result.
 #
-# Finally, driver.ml is a well-typed OCaml client of ex_fin.ml that calls the
-# bounds-checked lookup out of bounds (the length index was erased, so OCaml
-# cannot reject the call) and segfaults.
+# Finally, two well-typed OCaml clients segfault against the extracted code:
+# driver_printf.ml uses ex_printf.ml's sprintf with a format whose call site
+# drifted by one argument (the format no longer determines the type, so OCaml
+# cannot reject the call), and driver.ml calls ex_fin.ml's bounds-checked
+# lookup out of bounds (the length index was erased).
 #
 # Usage: ./run.sh          (requires rocq >= 9.0 and ocamlopt)
 set -uo pipefail
@@ -45,7 +47,14 @@ for f in ex_*.mli; do
 done
 
 echo
-echo "== segfault demo: well-typed OCaml client, out-of-bounds nth =="
+echo "== segfault demo 1: format/call-site arity drift through sprintf =="
+ocamlopt ex_printf.mli ex_printf.ml driver_printf.ml -o driver_printf
+./driver_printf
+status=$?
+echo "driver_printf exit status: $status  (139 = SIGSEGV)"
+
+echo
+echo "== segfault demo 2: well-typed OCaml client, out-of-bounds nth =="
 ocamlopt ex_fin.mli ex_fin.ml driver.ml -o driver
 ./driver
 status=$?

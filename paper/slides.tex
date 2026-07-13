@@ -2,11 +2,16 @@
 
 %% ---------------------------------------------------------------------------
 %%  Extracting Blame — talk slides  (target: 20–25 min + Q&A)
-%%  Theme: Metropolis (mtheme). Build: make slides  (XeLaTeX + Fira preferred)
+%%  Theme: Metropolis (mtheme). Build: make slides  (LuaLaTeX; do NOT use
+%%  XeLaTeX — it leaks overlay transparency across the pgfpages notes layout,
+%%  making base-layer slide text nearly invisible)
 %%
 %%  SPEAKER NOTES / SCRIPT
 %%    Every frame carries a \note{...} with a spoken script and a rough time
-%%    budget. The slides total ~16 content frames ≈ 22 min at the noted pace.
+%%    budget. The slides total ~21 content frames ≈ 24 min at the noted pace;
+%%    slides are kept light (short colorful phrases), the script carries the
+%%    prose — including the color cues (blue source / teal target / orange
+%%    Dyn / red blame / green theorem), explained at first use.
 %%    <click> markers in the script sit exactly where the next overlay must be
 %%    revealed; every frame's marker count matches its overlay count.
 %%    DEFAULT BUILD: notes on the right half of a double-width page
@@ -23,7 +28,8 @@
 %% ---------------------------------------------------------------------------
 
 \usetheme[progressbar=frametitle]{metropolis}
-\metroset{block=fill, numbering=fraction}
+\metroset{block=fill, numbering=fraction, sectionpage=none}
+%% \section commands below feed PDF bookmarks only; no section slides are shown.
 
 \usepackage{amssymb}
 \usepackage{mathpartir}
@@ -31,6 +37,7 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{pgfpages}
+\usepackage{fontawesome5}
 
 %% --- speaker notes (default ON; comment out for the clean deck) -------------
 \setbeameroption{show notes on second screen=right}
@@ -117,7 +124,16 @@
 \title{Extracting Blame}
 \subtitle{Verified Optimistic Extraction from CoC to System~F$\omega$ + Blame}
 \author{Joomy Korkut}
-\institute{Bloomberg}
+\institute{Bloomberg\\[2.2ex]
+  {\footnotesize
+   {\color{accentOrange}\faEnvelope}\hspace{0.5em}%
+   {\color{black!65}\texttt{jkorkut@bloomberg.net}}%
+   \hspace{1.6em}%
+   {\color{accentOrange}\faTwitter}\hspace{0.5em}%
+   {\color{black!65}\texttt{@joomy}}%
+   \hspace{1.6em}%
+   {\color{accentOrange}\faMastodon}\hspace{0.5em}%
+   {\color{black!65}\texttt{@joomy@functional.cafe}}}}
 \date{}
 
 \begin{document}
@@ -125,42 +141,27 @@
 \maketitle
 \note{%
   \textbf{[0:00 — 0:30]}\\
-  Hi, I'm Joomy. This talk is about extracting programs from proofs --- but,
-  unlike usual extraction, \emph{keeping the types}.\\[1ex]
-  One-line pitch: dependently typed languages let you \emph{prove} things about
-  code; but to \emph{run} that code you extract it, and today extraction throws
-  all the rich types away. I'll show a \emph{verified} translation from the
-  Calculus of Constructions into a \emph{typed} target --- System~F$\omega$ plus
-  a dynamic type and blame --- that keeps as much type structure as it can, and
-  marks the rest explicitly. All of it is mechanized in Rocq, with no admits.
+  Hi everyone! I'm Joomy, a researcher at Bloomberg's CTO Infrastructure and
+  Security Research team. Today I'm going to talk about extracting programs
+  from proofs --- and specifically, about what happens where the target's
+  type system runs out.\\[1ex]
+  In dependently typed languages, we can prove things about our code; to
+  \emph{run} that code, we extract it. And to be fair, extraction to OCaml
+  does give us typed code. But wherever the dependent structure exceeds what
+  OCaml's types can say, the extractor reaches for \texttt{Obj.magic}, an
+  unchecked escape hatch --- and that escape hatch is exactly where the
+  safety we proved leaks out. I'll show you a \emph{verified} translation
+  from the Calculus of Constructions into a target that can carry more of
+  the type structure --- System~F$\omega$ plus a dynamic type and blame ---
+  where the remaining gap is an explicit, typed boundary instead of an
+  unchecked cast. And all of it is mechanized in Rocq, with no admits.
 }
 
 %% ==========================================================================
 \section{Motivation}
 %% ==========================================================================
 
-\begin{frame}{A quick color key}
-  \begin{center}
-  \large
-  \src{source: CoC} \qquad \tgt{target: F$\omega$ + blame} \\[2.2ex]
-  ${\dyn}$ \quad \textcolor{dynOrange}{the dynamic type --- the boundary} \\[1.4ex]
-  $\blame{p}$ \quad \textcolor{blameRed}{a run-time cast failure} \\[1.4ex]
-  \mech{theorem\_name} \quad \textcolor{okGreen}{mechanized in Rocq, admit-free}
-  \end{center}
-  \note{%
-    \textbf{[0:30 — 1:00]}\\
-    One slide of color key so the rest reads easily --- I'll cue these as we go,
-    you don't need to memorize them:\\
-    blue is the \emph{source}, CoC; teal is the \emph{target}, F$\omega$ + blame;
-    orange is \emph{Dyn}, the dynamic type --- our boundary; red is \emph{blame},
-    a run-time cast failure; and green is a \emph{theorem name} that's mechanized
-    and admit-free in Rocq.\\
-    Say: ``Whenever you see green, it's a real machine-checked theorem, not a
-    claim.''
-  }
-\end{frame}
-
-\begin{frame}{Extraction throws the types away}
+\begin{frame}{Extraction runs out of types}
   Dependently typed languages (Rocq, Agda, Lean, Idris) let us \emph{prove}
   properties of code. To \emph{run} it, extraction erases the static parts:
   \[
@@ -171,93 +172,101 @@
   \medskip
   This makes \alert{two concessions}:
   \begin{enumerate}
-    \item<3-> The target types \alert<3>{cannot express the source's dependent
-      invariants} --- where polymorphism runs out, the extractor inserts
-      \alert<3>{\texttt{Obj.magic}}, an unchecked cast.
-    \item<4-> The extractor joins the \alert<4>{trusted computing base} --- its
-      correctness is argued informally.
+    \item<3-> Dependent invariants \alert<3>{exceed the target's types} ---
+      the gap is bridged by \alert<3>{\texttt{Obj.magic}}.
+    \item<4-> The extractor is \alert<4>{trusted}, not verified.
   \end{enumerate}
 
   \onslide<5->{%
   \medskip
-  Forster, Sozeau \& Tabareau (PLDI~'24) tackle \#2: verified extraction to
-  OCaml. \quad\textbf{We tackle \#1.}}
+  Forster--Sozeau--Tabareau (PLDI~'24) fix \#2. \quad\textbf{We tackle \#1.}}
   \note{%
-    \textbf{[1:00 — 2:30]}\\
-    Here's the setting. In Rocq, Agda, Lean, Idris we prove properties of code.
-    But to run it we extract to OCaml, Haskell, Scheme --- and extraction erases
-    the static parts. But this \click costs us two things.\\
-    \click First: the target's types can't say what the source's types
-    said. Your ``\texttt{Vec} of length \texttt{n}'' becomes just a list --- the
-    proof that made it safe is gone from the type. And it's worse than that:
-    where ML polymorphism can't bridge the gap, the extractor inserts
-    \texttt{Obj.magic} --- an \emph{unchecked} cast. Next slide shows what that
-    costs.\\
-    \click Second: the extractor itself is trusted --- usually justified
-    only on paper.\\
-    \click There's great recent work --- Forster, Sozeau, Tabareau ---
-    on the \emph{second} problem: a verified extractor, but to an untyped target.
+    \textbf{[0:30 — 2:00]}\\
+    Let's start with the setting. In Rocq, Agda, Lean, or Idris, we prove
+    properties of our code. But to run that code, we extract it to OCaml,
+    Haskell, or Scheme --- and extraction erases all the static parts. Now,
+    this \click costs us two things.\\
+    \click First, the target's types can't say what the source's types said.
+    Your ``vector of length \texttt{n}'' becomes just a list --- the proof
+    that made it safe is gone from the type. And actually, it's worse than
+    that: where ML polymorphism can't bridge the gap, the extractor inserts
+    \texttt{Obj.magic}, an \emph{unchecked} cast. I'll show you what that
+    costs on the next slide.\\
+    \click And second, the extractor itself joins the trusted computing
+    base --- its correctness is usually argued on paper, not proved.\\
+    \click There is great recent work by Forster, Sozeau, and Tabareau on the
+    \emph{second} problem: a verified extractor --- but to an untyped target.
     This talk is about the \emph{first} problem: can we extract into a
-    \emph{typed} target and keep the structure? Pause here.
+    \emph{typed} target and keep the structure?
   }
 \end{frame}
 
-\begin{frame}[fragile,shrink]{Not just untyped --- \alert{unsafe}}
-  Bounds-checked lookup, \src{\texttt{nth : Vec A n -> Fin n -> A}}.
-  Its empty-vector branch is \emph{impossible} (no index inhabits
-  \src{\texttt{Fin 0}}), discharged by the refuter
-  \src{\texttt{fin0 : forall C, Fin 0 -> C}} --- ex falso: promise \emph{any}
-  type.
+\begin{frame}[fragile]{Not just untyped --- \alert{unsafe}}
+  Type-safe \texttt{printf}: the format \emph{value} determines the type.\\
+  \src{\texttt{sprintf : Fmt A -> A}}, \quad
+  \src{\texttt{fint : Fmt A -> Fmt (Nat -> A)}}.\\[0.4ex]
+  Wrong arity $=$ type error.
 
+  \bigskip
   \pause
-  Rocq 9.0 extraction erases the indices --- the bound \emph{and} the
-  impossibility:
+  Rocq 9.0 extraction severs the link:
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
-val nth  : nat -> 'a1 t -> fin -> 'a1   (* nothing ties the fin to the t   *)
-val fin0 : fin -> 'a1                   (* "impossible" -- now callable... *)
-let fin0 _ = Obj.magic Tt               (* ...returns unit, cast to ANY type *)
+type 'x fmt = Fstop | Flit of str * 'x fmt
+            | Fint of __ fmt | Fstr of __ fmt   (* 'x: unconstrained *)
+val sprintf : 'a1 fmt -> 'a1                    (* 'a1: anything     *)
 \end{lstlisting}
-
-  \pause
-  So this \emph{well-typed} OCaml client looks up index 0 of an \emph{empty}
-  vector, reaches \texttt{fin0}, and gets a unit value posing as a function:
-\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
-let f : int -> int = nth O Nil (F1 O) in f 3
-\end{lstlisting}
-
-  \pause
-  \alert{Segmentation fault.} No exception, nothing to catch, nothing names
-  the violated boundary.
-
-  \smallskip
-  \onslide<5->{7 of our 18 example idioms extract with \texttt{Obj.magic} /
-  \texttt{Obj.t} interfaces. \\
-  In this talk that failure becomes $\blame{p}$: \emph{typed}, observable,
-  attributable --- and ``the worst case is blame'' is a
-  \textcolor{okGreen}{theorem} (progress $+$ preservation).}
   \note{%
-    \textbf{[2:00 — 3:00]}\\
-    Here's the concrete version of concession one: a bounds-checked vector
-    lookup. In the source, looking up an \emph{empty} vector is impossible ---
-    \texttt{Fin 0} has no inhabitants --- so that branch is discharged by
-    \texttt{fin0}, the ex-falso refuter: give it the impossible index and it
-    may promise any type, because it can never actually be called. Now
-    \click extract. The index types erase, and with them go both
-    the bound tying the index to the vector \emph{and} the emptiness of
-    \texttt{Fin 0}. So \texttt{fin0} becomes a perfectly callable function
-    \texttt{fin -> 'a1} --- and its body is \texttt{Obj.magic} applied to a
-    unit value: ``trust me, this is whatever type you wanted.''\\
-    \click So this client type-checks: look up index zero in an
-    \emph{empty} vector, at type \texttt{int -> int}. OCaml is fine with it;
-    \texttt{nth} hits \texttt{fin0}; the client gets a unit value posing as a
-    function, and applies it. What happens? \click A segfault. Not an
-    exception --- a segfault. You cannot catch it, and nothing tells you which
-    boundary was violated.\\
-    \click And this isn't rare: seven of our eighteen example idioms hit
-    it. The pitch of this talk: make that boundary a \emph{typed} cast, so a
-    failure is \emph{blame} --- an ordinary observable outcome with a label
-    that names the boundary --- and make ``worst case is blame'' a
-    machine-checked theorem of the target language.
+    \textbf{[2:00 — 2:45]}\\
+    Let me show you the concrete version of that first concession --- and
+    this is an accident anyone can have, not an attack. Here is type-safe
+    printf --- source code, which I'll always show in blue. The format
+    \emph{value} determines the type of the function it denotes: a format
+    with one percent-d gives you a one-argument function, and using a format
+    at the wrong arity is a \emph{type error}. That is the whole point of
+    this example. Now, \click let's extract it. The format type's parameter
+    is no longer constrained by its constructors --- look at \texttt{Fint}:
+    it takes any format and returns any format. So \texttt{sprintf} comes out
+    at ``for any \texttt{a}, \texttt{fmt} to \texttt{a}'': the format no
+    longer determines the type --- the \emph{caller} does. The invariant is
+    gone, and an \texttt{Obj.magic} inside \texttt{sprintf} vouches for
+    whatever the caller assumed.
+  }
+\end{frame}
+
+\begin{frame}[fragile]{An honest refactoring, a segfault}
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+(* the format says "%d"; this call site believes "%d%s" *)
+let report : nat -> str -> str = sprintf (Fint Fstop)
+let _ = report O Sempty
+\end{lstlisting}
+
+  \pause
+  \bigskip
+  \alert{Segmentation fault.} Not catchable. Names nobody.
+
+  \bigskip
+  \onslide<3->{7 of our 18 example idioms extract with \texttt{Obj.magic} /
+  \texttt{Obj.t}.\\[0.8ex]
+  This talk: failure $=$ $\blame{p}$ --- \emph{typed}, observable,
+  attributable.\\[0.4ex]
+  ``The worst case is blame'' is a \textcolor{okGreen}{theorem}.}
+  \note{%
+    \textbf{[2:45 — 3:30]}\\
+    So now this happens. The format says percent-d; the call site believes it
+    says percent-d percent-s --- someone added an argument in one place and
+    not the other. An honest, everyday refactoring drift --- the exact bug
+    type-safe printf exists to rule out. And OCaml accepts it, because
+    \texttt{sprintf} returns whatever type you like. What happens when we run
+    it? \click A segmentation fault. Not an exception --- a segfault. You
+    cannot catch it, and nothing tells you which boundary was violated.\\
+    \click And this is not rare: seven of our eighteen example idioms hit
+    this. So here is the pitch of this talk: let's make that boundary a
+    \emph{typed} cast, so that a failure is \emph{blame} --- an ordinary,
+    observable outcome with a label that names the boundary --- and let's
+    make ``the worst case is blame'' a machine-checked theorem of the target
+    language. And by the way: whenever you see green in these slides, like
+    this ``theorem'' here, it is a real machine-checked theorem in Rocq, not
+    just a claim.
   }
 \end{frame}
 
@@ -265,35 +274,38 @@ let f : int -> int = nth O Nil (F1 O) in f 3
   \begin{center}
     \large
     How much of a dependently typed program's structure can we
-    \alert{preserve} when we extract into a \alert{typed} target ---\\[0.5ex]
+    \alert{preserve} when we extract into a richer-typed target ---\\[0.5ex]
+    can the fallback where its types run out be \alert{safe} ---\\[0.5ex]
     and can the translation be \alert{proved correct}?
   \end{center}
 
   \pause
   \medskip
   \begin{itemize}
-    \item \textbf{Source:} \src{the Calculus of Constructions}, a pure type
-      system --- mechanized on Barras' \emph{Coq-in-Coq}.
-    \item<3-> \textbf{Target:} \tgt{System~F$\omega$} $+$ a dynamic type $\dyn$
-      $+$ casts $+$ \textcolor{blameRed}{blame} --- a \emph{polymorphic blame
-      calculus} (Ahmed--Findler--Siek--Wadler), lifted to higher kinds.
-    \item<4-> \textbf{Lineage:} Paulin-Mohring (POPL~'89) extracted F$\omega$
-      programs from CoC proofs; we return to that point with an explicit
-      \emph{dynamic/blame} boundary.
+    \item \textbf{Source:} \src{the Calculus of Constructions} --- a pure
+      type system (Barras' \emph{Coq-in-Coq}).
+    \item<3-> \textbf{Target:} \tgt{System~F$\omega$} $+$ $\dyn$ $+$ casts $+$
+      \textcolor{blameRed}{blame}, at higher kinds.
+    \item<4-> \textbf{Lineage:} Paulin-Mohring (POPL~'89), now with an
+      explicit boundary.
   \end{itemize}
   \note{%
-    \textbf{[2:30 — 4:00]}\\
-    So the question, stated plainly: how much structure survives if the target
-    is \emph{typed}, and can we \emph{prove} the translation right? Here's the
-    setup. \click Source: the Calculus of Constructions --- full dependent
-    types, as a pure type system, built on Barras' classic Coq-in-Coq.\\
-    \click Target: System~F$\omega$ --- higher-kinded polymorphism ---
-    plus a dynamic type ``Dyn'', casts, and blame. That's a \emph{polymorphic
-    blame calculus}, in the Ahmed--Findler--Siek--Wadler line, but I lift it to
-    higher kinds.\\
-    \click And the lineage: Paulin-Mohring did CoC-to-F$\omega$ back in
-    '89. We revisit that design point, but add an explicit dynamic/blame
-    boundary for the parts F$\omega$ can't reach.
+    \textbf{[3:30 — 4:30]}\\
+    So the question, stated plainly, has three parts: how much structure
+    survives if the target's types are richer? Where its types still run
+    out, can the fallback be \emph{safe} --- an explicit, checked failure
+    instead of \texttt{Obj.magic}? And can we \emph{prove} the whole
+    translation right? Here's the setup. \click Our source is the Calculus of Constructions ---
+    full dependent types, presented as a pure type system, and mechanized on
+    top of Barras' classic Coq-in-Coq development.\\
+    \click Our target is System~F$\omega$ --- so, higher-kinded
+    polymorphism --- plus a dynamic type Dyn, casts, and blame. That is a
+    \emph{polymorphic blame calculus}, in the Ahmed--Findler--Siek--Wadler
+    tradition, but lifted to higher kinds.\\
+    \click And there's some lineage here: Paulin-Mohring extracted F$\omega$
+    programs from CoC proofs back in '89. We are returning to that design
+    point, but with an explicit dynamic-slash-blame boundary for the parts
+    F$\omega$ can't reach.
   }
 \end{frame}
 
@@ -309,12 +321,11 @@ let f : int -> int = nth O Nil (F1 O) in f 3
   \bigskip
   At the boundary, exactly three things happen:
   \begin{itemize}
-    \item<2-> \tgt{\textbf{Preserve}} type structure --- type arguments stay as
-      type applications; parametric skeleton survives.
-    \item<3-> \textbf{Erase} term indices from types ---
+    \item<2-> \tgt{\textbf{Preserve}} type structure.
+    \item<3-> \textbf{Erase} term indices from types:
       \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}.
     \item<4-> \textcolor{dynOrange}{\textbf{Dynamize}} values used \emph{as
-      types} --- \src{\texttt{El : U -> Set}} $\rightsquigarrow$ $\dyn$ $+$
+      types}: \src{\texttt{El : U -> Set}} $\rightsquigarrow$ $\dyn$ $+$
       \textcolor{blameRed}{blame}.
   \end{itemize}
 
@@ -325,28 +336,62 @@ let f : int -> int = nth O Nil (F1 O) in f 3
     $\dyn$ only for the genuine residue of dependency.
   \end{block}}
   \note{%
-    \textbf{[4:00 — 6:00] --- the conceptual core; slow down.}\\
-    This is the heart of the talk. F$\omega$ already gives us a lot: polymorphism,
-    type-level functions, higher-kinded families. CoC gives \emph{more} --- types
-    can mention \emph{terms}. So a translation has to decide what to do with that
-    extra dependency.\\[1ex]
-    Three cases --- I'll show one example of each next. First,
-    \click preserve: anything that's really type structure stays type
-    structure. Second, \click erase: an index like the \emph{length} of a
-    vector is dropped \emph{from the type} --- \texttt{Vec A n} becomes
-    \texttt{Vec A}. The value \texttt{n} may still be around as data; it's the
-    \emph{invariant} that leaves. And third, \click dynamize: the hard residue
-    --- a \emph{value used as a type},
-    like a decoder \texttt{El : U -> Set} --- goes through Dyn with blame.\\
-    \click The word ``optimistic'' is the design principle: we never
-    dynamize defensively. We use Dyn \emph{only} where F$\omega$ genuinely can't
-    express the thing.
+    \textbf{[4:30 — 6:00]}\\
+    This slide is the heart of the talk. F$\omega$ already gives us a lot:
+    polymorphism, type-level functions, higher-kinded families. But CoC gives
+    us \emph{more} --- types can mention \emph{terms}. So the translation has
+    to decide what to do with that extra dependency. And exactly three things
+    can happen; I'll show you an example of each in a moment.\\[1ex]
+    First, \click we preserve: anything that's genuinely type structure stays
+    type structure. Second, \click we erase: an index like the \emph{length}
+    of a vector is dropped \emph{from the type} --- \texttt{Vec A n} becomes
+    \texttt{Vec A}. The value \texttt{n} may still be around as data; it's
+    the \emph{invariant} that leaves. And third, \click we dynamize: the hard
+    residue --- a \emph{value used as a type}, like a decoder
+    \texttt{El : U -> Set} --- goes through Dyn, with blame. Two colors to
+    keep an eye on from here: Dyn, the dynamic type, is always in orange ---
+    that's our boundary --- and blame, a run-time cast failure, is always in
+    red.\\
+    \click The word ``optimistic'' is our design principle: we never dynamize
+    defensively. We reach for Dyn \emph{only} where F$\omega$ genuinely
+    cannot express the thing.
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Preserve: the type that catches the drift}
+  The \texttt{sprintf} \alert{that segfaulted} --- now through \emph{our}
+  extraction:
+\begin{lstlisting}
+Check sprintf (Nat -> Str) (fint Str fstop).
+\end{lstlisting}
+  \pause
+\begin{lstlisting}[style=replout]
+Inferred type: Nat -> Str
+\end{lstlisting}
+
+  \pause
+  \medskip
+  The computed arity is an ordinary \tgt{F$\omega$ arrow type} --- the
+  drifted call site is a \alert{type error} again.
+  \note{%
+    \textbf{[6:00 — 6:45]}\\
+    Let's start with \emph{preserve} --- and it's an old friend: the printf
+    that segfaulted at the start of the talk, now going through our
+    extraction. We ask for the type of a format with one percent-d.
+    \click And the inferred target type is an ordinary arrow: Nat to Str.
+    One argument. The format's computed arity survives \emph{in the type},
+    because the target is polymorphic enough to keep it --- by the way, the
+    teal box is extracted target output; blue source, teal target, for the
+    rest of the talk. \click So the drifted call site from the segfault
+    slide --- the one that passed two arguments --- is a \emph{type error}
+    again, exactly as it was in the source. What OCaml's types could not
+    say, the target's types can.
   }
 \end{frame}
 
 \begin{frame}[fragile,shrink]{Erase: term indices leave the types}
-  A bounds-checked vector lookup --- an ordinary \texttt{Definition} over the
-  eliminators:
+  A bounds-checked vector lookup, \src{\texttt{vnth}} --- an ordinary
+  \texttt{Definition}:
 \begin{lstlisting}
 Definition vnth (A : Set) (n : Nat) (xs : Vec A n) (i : Fin n)
   : A :=
@@ -367,21 +412,26 @@ fun (A : *) (n : Nat) (xs : Vec A) (i : Fin) =>
 \end{lstlisting}
   \pause
   \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}, \
-  \src{\texttt{Fin n}} $\rightsquigarrow$ \tgt{\texttt{Fin}}: the \alert{invariant}
-  is gone, the implementation survives; \texttt{n}, \texttt{i} remain as data.
+  \src{\texttt{Fin n}} $\rightsquigarrow$ \tgt{\texttt{Fin}}: the
+  \alert{invariant} is gone, the code survives --- and \alert{no unchecked
+  cast} to hide behind.
   \note{%
-    \textbf{[6:00 — 7:30]}\\
-    Concrete example of \emph{erase}. \texttt{vnth} looks up the \texttt{i}-th
-    element of a length-\texttt{n} vector, with \texttt{i} provably in range ---
-    a \texttt{Fin n}. It's just a definition built from the recursor; nothing
-    exotic. Here's \click the extraction. Look at the types in the shaded box:
-    \click \texttt{Vec A n} became \texttt{Vec A}; \texttt{Fin n} became
-    \texttt{Fin}. The dependent index \texttt{n} dropped out of the \emph{types}.
-    But the \emph{code} is intact --- same recursion --- and \texttt{n} and
-    \texttt{i} are still there as ordinary arguments. What we lost is exactly the
-    \emph{invariant} ``\texttt{i} is in bounds,'' not the data. That's erasure.\\
-    Type applications are the \texttt{[A]} in brackets --- note the polymorphism
-    is preserved.
+    \textbf{[6:45 — 7:30]}\\
+    Next, \emph{erase}. \texttt{vnth} looks up the \texttt{i}-th element of a
+    length-\texttt{n} vector, where \texttt{i} is provably in range --- it's
+    a \texttt{Fin n}. Just an ordinary definition built from the recursor.
+    And here is \click its extraction. Look at the types in the teal box:
+    \click \texttt{Vec A n} became \texttt{Vec A}, and \texttt{Fin n} became
+    \texttt{Fin}. The dependent index dropped out of the \emph{types}; what
+    we lost is the invariant that says \texttt{i} is in bounds. But look at
+    what is \emph{not} here: there is no unchecked cast anywhere. Stock
+    extraction hides an erased invariant like this behind an
+    \texttt{Obj.magic}; in this target, there is nothing to hide behind ---
+    every cast is checked, so no well-typed client of this code can cause
+    undefined behavior. The worst thing that can happen anywhere in this
+    language is an explicit blame --- and we'll make that a theorem in a few
+    slides. Also notice the \texttt{[A]} in brackets --- those are type
+    applications, so the polymorphism is fully preserved.
   }
 \end{frame}
 
@@ -398,26 +448,27 @@ fun (c : U) =>
 \end{lstlisting}
   \pause
   \begin{itemize}
-    \item \src{\texttt{El}} has \alert{no F$\omega$ image} --- it maps values to
-      types.
-    \item Extraction emits reserved \textcolor{blameRed}{internal blame} (label
-      $2$), cast through $\dyn$ --- an \emph{honest} ``I can't translate this.''
-    \item<4-> A theorem: an extracted term run in isolation \alert{never} reaches
-      an \emph{external} label. (More on labels shortly.)
+    \item \src{\texttt{El}} maps values to types --- \alert{no F$\omega$
+      image}.
+    \item \textcolor{blameRed}{Internal blame} (label $2$) through $\dyn$:
+      an \emph{honest} ``I can't translate this.''
+    \item<4-> Theorem: isolated runs \alert{never} blame an \emph{external}
+      label.
   \end{itemize}
   \note{%
     \textbf{[7:30 — 9:00]}\\
-    Now \emph{dynamize} --- the interesting case. A Tarski universe: \texttt{U}
-    is a type of \emph{codes}, and \texttt{El} decodes a code into an actual
-    type. So \texttt{El} sends \emph{data} to \emph{types}. F$\omega$ has nothing
-    like that. The extraction of \texttt{fun c => El c} is
-    \click this. \click Since \texttt{El} has no F$\omega$ counterpart, we don't
-    fudge it --- we plant a \emph{blame}, cast through Dyn. It's a marked, honest
-    failure: ``this used a value as a type; I can't express it.'' The label
-    \texttt{2+} names \emph{which} kind of failure --- I'll unpack labels in two
-    slides.\\
-    \click And crucially, we \emph{prove} that a term we extract, run on
-    its own, only ever trips these \emph{internal} markers --- never an external,
+    Now let's look at dynamize --- the interesting case. Here we have a
+    Tarski universe: \texttt{U} is a type of \emph{codes}, and \texttt{El}
+    decodes a code into an actual type. So \texttt{El} sends \emph{data} to
+    \emph{types} --- and F$\omega$ has nothing like that. So what does the
+    extraction of \texttt{fun c => El c} look like? \click It looks like
+    this. \click Since \texttt{El} has no F$\omega$ counterpart, we don't
+    fudge it --- we plant a \emph{blame}, cast through Dyn. It's a marked,
+    honest failure that says: this program used a value as a type, and I
+    cannot express that. The label \texttt{2+} tells you \emph{which} kind of
+    failure this is --- I'll unpack the labels in two slides.\\
+    \click And crucially, we \emph{prove} that a term we extract, run on its
+    own, only ever trips these \emph{internal} markers --- never an external,
     user-level blame. So the fallback is contained.
   }
 \end{frame}
@@ -439,25 +490,30 @@ fun (t : (* => (* => *)))
   x
 \end{lstlisting}
   \begin{itemize}
-    \item<3-> \texttt{tagless.v}: the interpreter extracts with \alert{no $\dyn$,
-      no casts, no blame} --- the higher-kinded target expresses it natively.
-    \item<4-> Forcing $\dyn$ as a computed return type needs \alert{large
-      elimination} in the source --- the CIC extension.
+    \item<3-> Extracts with \alert{no $\dyn$, no casts, no blame} --- yet it
+      is stock extraction's heaviest \texttt{Obj.magic} user.
+    \item<4-> Forcing $\dyn$ as a return type needs \alert{large elimination}
+      --- the CIC extension.
   \end{itemize}
   \note{%
-    \textbf{[9:00 — 10:30] --- optional; skip if behind schedule.}\\
-    A ``gotcha'' slide. The program everyone expects to \emph{force} a dynamic
-    type is the tagless interpreter: its \emph{return type} is computed by a
-    \texttt{match} on a run-time tag --- \texttt{nat} or \texttt{bool}.\\
-    \click But if you Church-encode the codes one kind \emph{up}, the
-    \texttt{match} becomes ordinary type-level \emph{application}, and F$\omega$
-    eats it for free.\\
+    \textbf{[9:00 — 10:30]}\\
+    Now, a bit of a gotcha slide. The program everyone expects to
+    \emph{force} a dynamic type is the tagless interpreter: its \emph{return
+    type} is computed by a \texttt{match} on a run-time tag --- \texttt{nat}
+    or \texttt{bool}.\\
+    \click But if you Church-encode the type codes one kind \emph{up}, that
+    \texttt{match} becomes ordinary type-level \emph{application}, and
+    F$\omega$ eats it for free.\\
     \click The whole interpreter extracts with \emph{no} Dyn, \emph{no}
-    casts, \emph{no} blame --- it lands in the static fragment.\\
-    \click You only truly force Dyn as a computed \emph{return} type when
-    the source has \emph{large elimination} --- which bare CoC lacks. So the
-    boundary is sharper than folklore suggests. If I'm short on time I'll just
-    say this sentence and move on.
+    casts, \emph{no} blame --- it lands squarely in the static fragment. And
+    I love the contrast here: this very program is the heaviest
+    \texttt{Obj.magic} user in our whole example suite under stock OCaml
+    extraction --- and here it needs nothing at all, because the target has
+    the kinds to say what OCaml's types cannot.\\
+    \click You only truly force Dyn as a computed \emph{return} type when the
+    source has \emph{large elimination} --- which bare CoC lacks. So the
+    boundary is sharper than the folklore suggests. And if I'm short on time,
+    I'll just say that sentence and move on.
   }
 \end{frame}
 
@@ -479,34 +535,32 @@ fun (t : (* => (* => *)))
   \end{align*}
 
   \begin{itemize}
-    \item<4-> $\dyn$ is a proper type of kind $\kstar$ (no kind-indexed family).
-    \item<5-> Ground types $G ::= \dyn \to \dyn \mid N$, \ $N ::= \alpha \mid N\,A$
-      \alert{neutral} --- the F$\omega$ generalization of Blame-for-All's
-      variable tag.
+    \item<4-> $\dyn$ lives at kind $\kstar$ only.
+    \item<5-> Ground tags now include \alert{neutral} types
+      $N ::= \alpha \mid N\,A$ --- the F$\omega$ lift.
   \end{itemize}
   \note{%
     \textbf{[10:30 — 12:00]}\\
-    The target in one slide, revealed line by line.\\
-    Kinds are the usual F$\omega$ kinds. \click Types are F$\omega$ ---
-    variables, arrows, $\forall$, type-level $\Lambda$, application --- plus
-    \emph{Dyn}. \click Terms are F$\omega$ terms plus four gradual-typing
-    gadgets: a \emph{cast}
-    from A to B with a label; a \emph{ground injection} and \emph{ground test}
-    that mediate Dyn; a \emph{blame}; and a $\nu$ binder that seals a type ---
-    I'll come back to that.\\[1ex]
-    Two design points worth flagging. \click Dyn lives only at kind
-    star --- there's no \(\mathrm{Dyn}_K\) for every kind.\\
-    \click And ``ground types'' --- the shapes Dyn can hold --- now
-    include \emph{neutral} types, a variable applied to arguments. That's the
-    lift from System~F to F$\omega$: once type \emph{applications} can sit at the
-    Dyn boundary, the tags have to cover them. Don't dwell; it motivates the
-    next two slides.
+    Here is the whole target in one slide, revealed line by line. The kinds
+    are the usual F$\omega$ kinds. \click The types are F$\omega$ types ---
+    variables, arrows, foralls, type-level lambdas, applications --- plus
+    \emph{Dyn}. \click And the terms are F$\omega$ terms plus four
+    gradual-typing gadgets: a \emph{cast} from A to B carrying a label; a
+    \emph{ground injection} and a \emph{ground test} that mediate Dyn;
+    \emph{blame} itself; and a $\nu$ binder that seals a type --- I'll come
+    back to that one.\\[1ex]
+    Two design points are worth flagging here. \click First, Dyn lives only
+    at kind star --- there is no \(\mathrm{Dyn}_K\) for every kind.\\
+    \click And second, the ``ground types'' --- the shapes Dyn can hold ---
+    now include \emph{neutral} types: a type variable applied to arguments.
+    That's the lift from System~F to F$\omega$: once type \emph{applications}
+    can sit at the Dyn boundary, the tags have to cover them. Keep that in
+    mind; it motivates the next two slides.
   }
 \end{frame}
 
 \begin{frame}[shrink]{Reading a blame label}
-  A cast that can't reconcile its two types does \alert{not} get stuck and does
-  \alert{not} return a wrong value --- it fires $\blame{p}$. The label $p$ says:
+  A failing cast never gets stuck, never lies --- it fires $\blame{p}$:
   \begin{center}
   \begin{tabular}{ll}
     \textbf{id} & \emph{which} cast boundary broke \\
@@ -517,8 +571,7 @@ fun (t : (* => (* => *)))
 
   \onslide<2->{%
   \smallskip
-  Most ids are real boundaries; three are \alert{reserved} for the translation's
-  own plumbing:
+  Three ids are \alert{reserved} for the translation's own plumbing:
   \begin{center}
   \begin{tabular}{cl}
     \toprule
@@ -539,24 +592,30 @@ fun (t : (* => (* => *)))
     \alert{never} an external label ($\ge 3$).
   \end{alertblock}}
   \note{%
-    \textbf{[12:00 — 14:00] --- audience asks about this; take your time.}\\
-    Blame labels demystified. When a cast can't make its two types agree, it
-    doesn't get stuck and doesn't lie --- it fires \texttt{blame p}. The label is
-    a \emph{name tag} on the failure, and it answers two questions.\\
-    The \emph{id} says which cast boundary broke. The \emph{polarity}, a plus or
-    minus, says whose fault: plus blames the value flowing through the cast,
-    minus blames the surrounding context. (That's the Wadler--Findler
-    convention; a function cast flips the sign on its argument.)\\[1ex]
-    \click Now the numbers. Most ids name real, programmer-level
-    boundaries. But three small ids are reserved for our own machinery:\\
-    0 --- a sealed type variable trying to escape its scope through Dyn;\\
-    1 --- the ground test peeking at a sealed value;\\
-    2 --- the big one from the El slide: the extraction hit something with no
-    F$\omega$ image.\\
-    Anything 3 or above is \emph{external} --- a boundary a client set up.\\
-    \click And that split is the whole point: we prove an extracted term,
-    run in isolation, can only ever blame 0, 1, or 2 --- its own plumbing ---
-    never an external label. The extraction never frames an outside party.
+    \textbf{[12:00 — 14:00]}\\
+    Let's demystify blame labels; people often ask about these, so I'll take
+    my time here. When a cast cannot make its two types agree, it does not
+    get stuck, and it does not lie --- it fires \texttt{blame p}. The label
+    is a name tag on the failure, and it answers two questions. The
+    \emph{id} says which cast boundary broke. The \emph{polarity} --- a plus
+    or a minus --- says whose fault it was: plus blames the value flowing
+    through the cast, minus blames the surrounding context. That's the
+    Wadler--Findler convention; a function cast flips the sign on its
+    argument.\\[1ex]
+    \click Now, the numbers. Most ids name real, programmer-level boundaries.
+    But three small ids are reserved for our own machinery. Zero fires when a
+    sealed type variable tries to escape its scope through Dyn. One fires
+    when the ground test peeks at a sealed value. And two is the big one from
+    the \texttt{El} slide: the extraction hit something with no F$\omega$
+    image. Anything three or above is \emph{external} --- a genuine boundary
+    that a client set up.\\
+    \click And that split is the whole point: we prove that an extracted
+    term, run in isolation, can only ever blame zero, one, or two --- its own
+    plumbing --- and never an external label. In other words, the extraction
+    never frames an outside party. And compare this with the segfault at the
+    start of the talk, which named nobody: here, when a client sets up a
+    boundary and violates it, the failing cast carries the client's label,
+    so the failure names its culprit.
   }
 \end{frame}
 
@@ -577,60 +636,61 @@ fun (t : (* => (* => *)))
   \end{center}
 
   \begin{itemize}
-    \item<2-> Cast to $\dyn$ injects at a ground tag; cast from $\dyn$ collapses
-      on a match, \textcolor{blameRed}{blames} on a mismatch.
-    \item<3-> So every well-typed cast \emph{steps}: \alert{no ``stuck cast''}.
-      \mech{progress} falls out of \mech{compat\_dec}; it also makes the
-      extraction's $\mathsf{coerce}$ \emph{total}.
-    \item<4-> Caveat: $\mathsf{compat}$ is syntactic, not closed under
-      definitional equality.
+    \item<2-> To $\dyn$: inject at a ground tag. From $\dyn$: collapse or
+      \textcolor{blameRed}{blame}.
+    \item<3-> \alert{No stuck casts}: \mech{progress} via \mech{compat\_dec};
+      $\mathsf{coerce}$ is \emph{total}.
+    \item<4-> Caveat: syntactic --- not closed under definitional equality.
   \end{itemize}
   \note{%
     \textbf{[14:00 — 15:30]}\\
-    How casts actually run. In System~F, Blame-for-All's ``consistency'' relation
-    can be read both as a spec and as a strategy. Once you add type-level
-    functions, that stops being obvious --- so we make it \emph{executable}:
-    every constructor of our \texttt{compat} relation corresponds to a concrete
-    reduction rule. Identity casts, function WRAP, the $\forall$ steps, and the
-    Dyn injection/projection rules.\\
-    \click The Dyn mechanics: casting \emph{to} Dyn injects the value at
-    a ground tag; casting \emph{from} Dyn checks the tag --- collapses if it
-    matches, \emph{blames} if it doesn't. That blame-on-mismatch is where runtime
-    failures come from.\\
-    \click The payoff: there's no catch-all ``stuck cast'' case. Every
-    well-typed cast has a step, so \emph{progress} is basically the decision
-    procedure for \texttt{compat}; and the same decidability makes the
-    extraction's coercion a \emph{total} function.\\
-    \click Honest caveat: \texttt{compat} is syntactic --- it doesn't see
-    through definitional equality. That matters in a minute.
+    Now, how do casts actually run? In System~F, Blame-for-All's
+    ``consistency'' relation can be read both as a spec and as a strategy.
+    Once you add type-level functions, that stops being obvious. So we make
+    it \emph{executable}: every constructor of our \texttt{compat} relation
+    corresponds to a concrete reduction rule --- identity casts, the function
+    wrap rule, the $\forall$ steps, and the Dyn injection and projection
+    rules.\\
+    \click The Dyn mechanics go like this: casting \emph{to} Dyn injects the
+    value at a ground tag; casting \emph{from} Dyn checks the tag --- it
+    collapses if the tag matches, and it \emph{blames} if it doesn't. That
+    blame-on-mismatch is where all the runtime failures come from.\\
+    \click And the payoff: there is no catch-all ``stuck cast'' case. Every
+    well-typed cast has a step, so progress essentially falls out of the
+    decision procedure for \texttt{compat} --- and the same decidability
+    makes the extraction's coercion function \emph{total}.\\
+    \click One honest caveat: \texttt{compat} is syntactic --- it doesn't see
+    through definitional equality. Keep that in mind; it matters in a minute.
   }
 \end{frame}
 
 \begin{frame}{Target metatheory --- all mechanized, admit-free}
   \begin{itemize}
-    \item<1-> \textbf{Determinism} (\mech{step\_deterministic}) --- proving it
-      flushed out a real rule overlap (fixed by guarding GENERALIZE with
-      $A \neq \dyn$).
-    \item<2-> \textbf{Type-level confluence \& Church--Rosser} for genuine
-      F$\omega$ type computation (Takahashi method).
-    \item<3-> \textbf{Progress \& Preservation} (\mech{progress},
-      \mech{preservation}) for the full reduction relation, with kind regularity
-      of results and \emph{all} annotations.
-    \item<4-> \alert{Not} strongly normalizing: a closed, well-typed reduction
-      cycle (\mech{well\_typed\_non\_normalizing}). Type safety $\ne$ termination.
+    \item<1-> \textbf{Determinism} (\mech{step\_deterministic}) --- proving
+      it caught a real rule overlap.
+    \item<2-> \textbf{Type-level confluence \& Church--Rosser}.
+    \item<3-> \textbf{Progress \& preservation} (\mech{progress},
+      \mech{preservation}) --- ``the \alert{worst case is blame},'' as a
+      theorem.
+    \item<4-> \alert{Not} strongly normalizing
+      (\mech{well\_typed\_non\_normalizing}): safety $\ne$ termination.
   \end{itemize}
   \note{%
     \textbf{[15:30 — 16:30]}\\
     The target is a real, self-standing calculus, and we mechanized its
-    metatheory --- all admit-free. Determinism --- and proving it actually caught
-    a genuine bug: two rules overlapped, fixed by a side condition.
-    \click Type-level confluence and Church--Rosser, because we have honest
-    F$\omega$ type computation. \click Progress and preservation for the
-    \emph{whole} reduction relation, with kind regularity of every annotation.\\
-    \click And one deliberate non-result: it's \emph{not}
-    strongly normalizing --- there's a closed, well-typed loop. That's fine:
-    type \emph{safety} doesn't require termination. (Source CoC \emph{is}
-    normalizing --- we use that separately.) Keep this slide brisk.
+    metatheory, all admit-free. First, determinism --- and proving it
+    actually caught a genuine bug: two rules overlapped, and we fixed it with
+    a side condition. \click Then type-level confluence and Church--Rosser,
+    because we have honest F$\omega$ type computation. \click Then progress
+    and preservation, for the \emph{whole} reduction relation, with kind
+    regularity of every annotation. And notice: this pair is the promise
+    from the segfault slide, discharged. A well-typed program in this target
+    never has undefined behavior --- it's a value, it steps, or it blames.
+    The worst case is blame, and now that is a theorem.\\
+    \click And one deliberate non-result: the target is \emph{not} strongly
+    normalizing --- there is a closed, well-typed loop. And that is fine!
+    Type \emph{safety} does not require termination. The source, CoC,
+    \emph{is} normalizing, and we use that separately.
   }
 \end{frame}
 
@@ -640,43 +700,39 @@ fun (t : (* => (* => *)))
 
 \begin{frame}{The extraction: three maps, one invariant}
   \begin{description}
-    \item<1->[Kinds] classifier domains become kind arrows, term domains drop:\\
-      \src{$\SetS \to \Nat \to \SetS$} $\;\rightsquigarrow\;$
-      \tgt{$\kstar \karr \kstar$} --- exactly what a \texttt{Vec}-like family needs.
-    \item<2->[Types] $\extt(\Gamma, T) = \extt_L(\Gamma, \nf(T))$: \alert{normalize
-      first}, then translate. Sorts / term variables / term-headed applications
-      $\rightsquigarrow \dyn$.
+    \item<1->[Kinds] \src{$\SetS \to \Nat \to \SetS$} $\;\rightsquigarrow\;$
+      \tgt{$\kstar \karr \kstar$} --- term domains drop.
+    \item<2->[Types] \alert{normalize first}, then translate; sorts / term
+      variables / term-headed applications $\rightsquigarrow \dyn$.
     \item<3->[Terms] $\ext$ recurses on the \alert{typing derivation}.
   \end{description}
 
   \onslide<4->{%
   \medskip
   \begin{block}{The invariant that makes it well defined}
-    Every ``type-level vs.\ term-level'' choice uses the reduction-stable,
-    \emph{semantic} test $\islarge$ ($\hastype{\Gamma}{T}{\KindS}$) --- so the
-    translation \alert{respects definitional equality}.
+    Every type-vs-term choice uses the reduction-stable, \emph{semantic} test
+    $\islarge$ --- the translation \alert{respects definitional equality}.
   \end{block}}
   \note{%
     \textbf{[16:30 — 18:00]}\\
-    The translation is three maps working together. On kinds: a source binder
-    whose domain is type-level becomes a kind arrow; a term-level domain is
-    dropped --- that's how \texttt{Set -> Nat -> Set} becomes just star-to-star,
-    the kind of a vector family.\\
-    \click On types: the key move is \emph{normalize first}, then translate;
-    sorts, term variables, and term-headed applications are what turn into
-    Dyn.\\
+    The translation itself is three maps working together. On kinds: a source
+    binder whose domain is type-level becomes a kind arrow, and a term-level
+    domain is dropped --- that's how \texttt{Set -> Nat -> Set} becomes just
+    star-to-star, the kind of a vector family.\\
+    \click On types: the key move is to \emph{normalize first}, then
+    translate. Sorts, term variables, and term-headed applications are what
+    turn into Dyn.\\
     \click On terms: the extraction recurses on the \emph{typing derivation},
-    not the
-    raw term --- it needs the typing information to classify binders. (Aside if
-    asked: this forced \texttt{has\_type} to live in \texttt{Type}, not
-    \texttt{Prop} --- and dragged the whole reduction/conversion layer into
-    \texttt{Type} with it, since Rocq forbids eliminating \texttt{Prop} into
-    \texttt{Type}.)\\[1ex]
-    \click And the invariant that makes the whole thing well defined:
-    every time we ask ``is this type-level or term-level?'' we use a
-    \emph{semantic}, reduction-stable test --- ``does it have sort Kind?'' ---
-    which is preserved by reduction. That's why the translation respects
-    definitional equality instead of being brittle syntax.
+    not on the raw term --- it needs the typing information to classify the
+    binders. If anyone asks: this is what forced \texttt{has\_type} to live
+    in \texttt{Type} rather than \texttt{Prop}, and it dragged the whole
+    reduction and conversion layer into \texttt{Type} with it, because Rocq
+    forbids eliminating \texttt{Prop} into \texttt{Type}.\\[1ex]
+    \click And here is the invariant that makes the whole thing well defined:
+    every time we ask ``is this type-level or term-level?'', we use a
+    \emph{semantic}, reduction-stable test --- does it have sort Kind? ---
+    and that test is preserved by reduction. That is why the translation
+    respects definitional equality instead of being brittle syntax.
   }
 \end{frame}
 
@@ -692,63 +748,63 @@ fun (t : (* => (* => *)))
     \extt(\Gamma,\, U_r[v]),
   \]
   \pause
-  are \alert{not syntactically equal} --- they differ by a target $\beta$-redex
-  and by $\nf$ annotation drift. A naive commutation lemma with $=$ is
-  \emph{false}.
+  are \alert{not syntactically equal}: a $\beta$-redex $+$ $\nf$ drift. With
+  $=$, the lemma is \emph{false}.
 
   \pause
   \medskip
-  They \emph{are} equal up to F$\omega$ definitional equality
-  (\mech{ty\_equiv}). The target's conversion rule absorbs the gap ---
-  which is exactly \emph{why} the target needs \texttt{typing\_conv}.
+  They \emph{are} equal up to \mech{ty\_equiv} --- the conversion rule
+  \texttt{typing\_conv} absorbs the gap. That is \emph{why} the target has
+  one.
   \note{%
-    \textbf{[18:00 — 19:30] --- the technical highlight; land it clearly.}\\
-    My favorite subtlety. When the extraction hits a \emph{type} application, it
-    just emits a bare type application in the target --- no cast, no coercion.
-    You'd want to justify that with a lemma: ``extraction commutes with
-    substitution.'' Here are the two sides.\\
-    \click But phrased with plain \emph{equality}, that lemma is
-    \emph{false}. The two sides differ two ways: plugging a large argument
-    creates a target $\beta$-redex on one side, and normalizing annotations
-    drifts them on the other.\\
-    \click The fix: they're equal \emph{up to F$\omega$ definitional
-    equality}. So the extraction leans on the target's \emph{conversion} rule to
-    absorb the mismatch --- and that's the real reason the target has to carry a
-    conversion rule at all. This is the kind of thing that only shows up when you
-    actually mechanize it.
+    \textbf{[18:00 — 19:30]}\\
+    This one is my favorite subtlety, so let me take it slowly. When the
+    extraction hits a \emph{type} application, it just emits a bare type
+    application in the target --- no cast, no coercion. And you'd want to
+    justify that with a lemma that says ``extraction commutes with
+    substitution.'' Here are the two sides of that lemma.\\
+    \click But phrased with plain \emph{equality}, the lemma is
+    \emph{false}! The two sides differ in two ways: plugging in a large
+    argument creates a target $\beta$-redex on one side, and normalizing
+    annotations makes them drift on the other.\\
+    \click The fix: the two sides \emph{are} equal up to F$\omega$
+    definitional equality. So the extraction leans on the target's
+    \emph{conversion} rule to absorb the mismatch --- and that is the real
+    reason the target has to carry a conversion rule at all. This is exactly
+    the kind of thing you only find out when you actually mechanize the
+    proof.
   }
 \end{frame}
 
 \begin{frame}{The headline theorems (Rocq; only \texttt{eq\_rect\_eq})}
   \begin{enumerate}
-    \item<1-> \textbf{Well-typed extraction} (\mech{extract\_well\_typed}):
+    \item<1-> \textbf{Well-typed} (\mech{extract\_well\_typed}):
       $\hastype{\extc(\Gamma)}{\ext(\Gamma \vdash t{:}T)}{\extt(\Gamma, T)}$.
     \item<2-> \textbf{Simulation} (\mech{extract\_reduces}): $t \reduces v$
       $\Rightarrow$ $\ext(t) \sepsim^{*} \ext(v)$.
-    \item<3-> \textbf{Derivation independence} (\mech{extract\_deriv\_indep}):
-      the extraction doesn't depend on \emph{which} derivation.
-    \item<4-> \textbf{External-label non-generation}
-      (\mech{extraction\_blame\_free}): in isolation, never $\blame{p}$ with
-      $\mathrm{id}(p) \ge 3$.
-    \item<5-> \textbf{Optimism / $\dyn$-freedom}
-      (\mech{extract\_typ\_dyn\_free\_iff}): an \emph{exact} syntactic
-      characterization of which source types extract without $\dyn$.
+    \item<3-> \textbf{Derivation independence} (\mech{extract\_deriv\_indep}).
+    \item<4-> \textbf{No external blame in isolation}
+      (\mech{extraction\_blame\_free}): never $\mathrm{id}(p) \ge 3$.
+    \item<5-> \textbf{$\dyn$-freedom, exactly}
+      (\mech{extract\_typ\_dyn\_free\_iff}).
   \end{enumerate}
   \note{%
     \textbf{[19:30 — 21:00]}\\
-    The payoff theorems --- all in Rocq, and the audited set rests on a single
-    standard axiom, \texttt{eq\_rect\_eq}. They appear one per click.\\
-    One: extraction is \emph{well-typed} --- a well-typed source term extracts to
-    a well-typed target term at the extracted type.\\
+    And now the payoff theorems --- all in Rocq, and the audited set rests on
+    a single standard axiom, \texttt{eq\_rect\_eq}. They come one per
+    click.\\
+    One: extraction is \emph{well-typed} --- a well-typed source term
+    extracts to a well-typed target term, at the extracted type.\\
     \click Two: \emph{simulation} --- source reduction is tracked by the
     extraction.\\
-    \click Three: it doesn't depend on which typing derivation you picked.\\
-    \click Four: the safety result from the labels slide --- no external blame
-    in isolation.\\
-    \click Five: ``optimism'' made precise --- an \emph{exact} characterization
-    of which
-    source types come out Dyn-free. Read two or three of these out loud, don't
-    grind through all five.
+    \click Three: derivation independence --- the result doesn't depend on
+    which typing derivation you picked.\\
+    \click Four: the safety result from the labels slide --- no external
+    blame in isolation.\\
+    \click And five: optimism, made precise --- an \emph{exact}
+    characterization of which source types come out Dyn-free. I won't grind
+    through all five out loud; the ones to remember are well-typedness,
+    simulation, and label safety.
   }
 \end{frame}
 
@@ -758,33 +814,33 @@ fun (t : (* => (* => *)))
 
 \begin{frame}{Being honest about what this is not}
   \begin{itemize}
-    \item<1-> \textbf{Simulation is \emph{syntactic}}, not contextual
-      approximation: $\sepsim$ has rules (like $\blame{q}\sepsim t$) that are
-      false as behavioral principles. A typed logical-relations bridge is open.
-    \item<2-> \textbf{Internal blame is reachable by design} --- a value-as-type
-      run at runtime blames $\lint$. That's the marked fallback, not a bug.
-    \item<3-> \textbf{Not proof-erasing}, \textbf{$\dyn$ only at kind $\kstar$},
-      \textbf{inductives axiomatized} (bare PTS). All are future extensions.
+    \item<1-> \textbf{Simulation is \emph{syntactic}} --- not contextual
+      approximation. The typed logical-relations bridge is open.
+    \item<2-> \textbf{Internal blame is reachable by design} --- but defined
+      and observable, unlike \texttt{Obj.magic}.
+    \item<3-> \textbf{No proof erasure; $\dyn$ at $\kstar$ only; inductives
+      axiomatized.}
   \end{itemize}
 
   \onslide<4->{%
   \medskip
   None of these weakens the theorems proved --- they scope the claims.}
   \note{%
-    \textbf{[21:00 — 22:00] --- credibility slide; be candid.}\\
-    Let me be upfront about the boundaries.\\
-    The most important caveat: our \emph{simulation} relation is syntactic
-    bookkeeping, not a behavioral, contextual approximation --- it deliberately
-    contains rules that would be false as observational principles. Building the
-    typed logical-relations bridge is open work, and I'd rather say that plainly.\\
-    \click Internal blame is \emph{reachable} --- if you actually run a
-    value-as-type, you get an internal blame. That's the honest fallback, by
-    design --- and unlike an \texttt{Obj.magic} failure, it's a defined,
-    catchable outcome.\\
-    \click And it's not proof-erasing, Dyn is only at kind star, and
-    inductives are axiomatized since the source is a bare PTS --- all natural
-    next steps.\\
-    \click None of this weakens the theorems; it scopes them.
+    \textbf{[21:00 — 22:00]}\\
+    Let me be upfront about the boundaries of this work. The most important
+    caveat: our \emph{simulation} relation is syntactic bookkeeping, not a
+    behavioral, contextual approximation --- it deliberately contains rules
+    that would be false as observational principles. Building the typed
+    logical-relations bridge is open work, and I'd rather say that plainly.\\
+    \click Second, internal blame is \emph{reachable} --- if you actually run
+    a value-as-type, you get an internal blame. That is the honest fallback,
+    by design --- and unlike an \texttt{Obj.magic} failure, it is a defined,
+    observable outcome.\\
+    \click And third, this is not proof-erasing, Dyn lives only at kind star,
+    and inductives are axiomatized, since the source is a bare PTS. Those are
+    all natural next steps.\\
+    \click None of this weakens the theorems we proved --- it scopes the
+    claims.
   }
 \end{frame}
 
@@ -803,87 +859,89 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
     n xs
 \end{lstlisting}
   \begin{itemize}
-    \item<2-> De~Bruijn~$\to$~named printing is \alert{verified}: equivalence,
-      alpha-equivalence, uniqueness; names capture-free by construction
-      (\mech{pick\_name}).
-    \item<3-> Eighteen golden example batches (\texttt{dune test}); only string
-      layout is unverified OCaml.
+    \item<2-> De~Bruijn~$\to$~named printing is \alert{verified}
+      (\mech{pick\_name}): capture-free by construction.
+    \item<3-> Eighteen golden examples; only string layout is unverified.
   \end{itemize}
   \note{%
-    \textbf{[22:00 — 23:00] --- optional; drop first if over time.}\\
-    Quick, because it's fun: we extract the type checker \emph{and} the
-    translation to OCaml and wrap them in a REPL, so you can type a definition
-    and see its extraction. Here's \texttt{vmap}.\\
-    \click Even the pretty-printing is verified --- turning de~Bruijn
-    indices back into readable names is proved equivalence-preserving and
-    capture-free, which is usually the sketchy unverified part.\\
-    \click There are eighteen worked examples checked by \texttt{dune
-    test}; the only unverified bit is final string layout. Live demo available if
-    there's interest in Q\&A.
+    \textbf{[22:00 — 23:00]}\\
+    Quickly, because it's fun: we extract the type checker \emph{and} the
+    translation itself to OCaml, and wrap them in a REPL --- so you can type
+    in a definition and see its extraction. Here's \texttt{vmap}. If I'm
+    running over time, this is the slide I'll skim.\\
+    \click Even the pretty-printing is verified: turning de~Bruijn indices
+    back into readable names is proved equivalence-preserving and
+    capture-free --- and that is usually the sketchy, unverified part of a
+    tool like this.\\
+    \click There are eighteen worked examples checked by \texttt{dune test},
+    and the only unverified bit is the final string layout. If anyone wants
+    to see it live, find me afterwards --- I'm happy to demo it.
   }
 \end{frame}
 
-\begin{frame}[shrink]{\texttt{Inductive} by Böhm--Berarducci --- and its ceiling}
-  \texttt{Inductive T params : arity := \ldots} desugars to the \alert{indexed}
-  impredicative encoding, as computing \texttt{Definition}s:
+\begin{frame}{\texttt{Inductive} by Böhm--Berarducci}
+  \texttt{Inductive} desugars to the \alert{indexed} impredicative encoding:
   \[
     \tgt{\texttt{Vec A n}} \;=\; \forall (X{:}\Nat{\to}\kstar).\;
       X\,\mathrm{NZ} \to (\forall m.\,A \to X\,m \to X\,(\mathrm{NS}\,m)) \to X\,n
   \]
+
+  \onslide<2->{%
+  \medskip
+  The motive is \alert{index-parameterized} ($X : I{\to}\kstar$), so
+  \tgt{Vec}, \tgt{Fin}, \tgt{Eq} ($\mathit{Eq\_rec}$ \emph{is} transport),
+  \tgt{Fmt}, $\le$ all \textbf{compute}.}
+  \note{%
+    \textbf{[23:00 — 23:45]}\\
+    Here's a bonus that the REPL gives us: an \texttt{Inductive} command that
+    is pure sugar for the impredicative Böhm--Berarducci encoding --- and it
+    handles \emph{indexed} families. \click Because the motive is
+    parameterized by the index, Vec, Fin, Leibniz equality --- whose recursor
+    is literally transport --- the format family, the less-or-equal
+    predicate: they all become plain lambda terms that genuinely
+    \emph{compute}. Böhm--Berarducci did this in '85; Pfenning and Paulin
+    encoded these in CoC in '90.
+  }
+\end{frame}
+
+\begin{frame}{\ldots and its ceiling}
   \begin{itemize}
-    \item<2-> Motive is \alert{index-parameterized} ($X : I{\to}\kstar$), so
-      \tgt{Vec}, \tgt{Fin}, Leibniz \tgt{Eq} ($\mathit{Eq\_rec}$ \emph{is}
-      transport), \tgt{Fmt}, $\le$ all become terms that \textbf{compute}
-      (Böhm--Berarducci '85; Pfenning--Paulin '90).
-    \item<3-> \alert{Ceiling 1}: the recursor depends on \emph{indices}, not the
-      \emph{value} --- dependent \emph{induction} is not derivable (Geuvers '01).
-      No large elimination (\texttt{vreplicate}), no dependent projections.
-    \item<4-> \alert{Ceiling 2}: one-step \emph{inversion} (\texttt{Fin} case,
-      HList head) is not a fold --- kept axiomatic.
-    \item<5-> Scott/Parigot give O(1) inversion but need \emph{recursive types}
-      (not SN here); Mendler widens functors, same ceiling; \textcolor{okGreen}{self
-      types} (Fu--Stump '14) recover induction --- beyond CoC.
+    \item \alert{Ceiling 1}: the recursor is a fold, not dependent
+      \emph{induction} (Geuvers '01) --- no large elimination.
+    \item<2-> \alert{Ceiling 2}: one-step \emph{inversion} is not a fold ---
+      kept axiomatic.
+    \item<3-> Scott/Parigot need recursive types; Mendler: same ceiling;
+      \textcolor{okGreen}{self types} (Fu--Stump '14) go beyond CoC.
   \end{itemize}
   \note{%
-    \textbf{[23:00 — 24:30] --- the encoding story; land the tension.}\\
-    A bonus the REPL gives us: an \texttt{Inductive} command that's pure sugar
-    for the impredicative Böhm--Berarducci encoding --- and it handles
-    \emph{indexed} families. \click Because the motive is parameterized by the
-    index,
-    Vec, Fin, Leibniz equality (whose recursor is literally transport), the
-    format family, the $\le$ predicate --- all become plain lambda-terms that
-    \emph{compute} under \texttt{Compute}. Böhm--Berarducci in '85;
-    Pfenning--Paulin encoded these in CoC in '90.\\[1ex]
-    \click Now the honest ceiling, and it's intrinsic, not a bug. The
-    generated recursor's motive depends on the \emph{indices} but not the
-    \emph{value} --- it's a fold, not dependent induction, and Geuvers proved in
-    2001 that induction simply isn't derivable from these encodings. So large
-    elimination and dependent projections are out.\\
-    \click Second, one-step inversion isn't a fold either, so those stay
+    \textbf{[23:45 — 24:30]}\\
+    Now, the honest ceiling --- and it's intrinsic, not a bug. The generated
+    recursor's motive depends on the \emph{indices} but not on the
+    \emph{value}. It's a fold, not dependent induction --- and Geuvers proved
+    in 2001 that induction simply is not derivable from these encodings. So
+    large elimination and dependent projections are out of reach.\\
+    \click Second, one-step inversion is not a fold either, so those stay
     axiomatic.\\
-    \click And the alternatives: Scott and Parigot give you O(1)
-    inversion, but their types are recursive, so they don't even typecheck in a
-    normalizing system without mu-types; Mendler handles more functors but hits
-    the same wall; and if you really want dependent elimination with computation,
-    that's self types --- Fu and Stump --- which is a genuine extension beyond
-    CoC. This is the typeability-versus-computability tension in one slide.
+    \click And you might say, but Joomy, what about the other encodings?
+    They don't save us: Scott and Parigot give you constant-time inversion,
+    but their types are recursive, so they don't even typecheck in a
+    normalizing system without mu-types; Mendler handles more functors but
+    hits the same wall; and if you really want dependent elimination that
+    computes, that's self types --- Fu and Stump --- which is a genuine
+    extension beyond CoC. So this is the typeability-versus-computability
+    tension in one picture.
   }
 \end{frame}
 
 \begin{frame}{Takeaways}
   \begin{enumerate}
-    \item<1-> Extraction from a dependently typed language \alert{need not throw
-      the types away}: one verified translation keeps the parametric skeleton and
-      erases many indices from target types.
-    \item<2-> The genuine residue --- \textcolor{dynOrange}{values used as types}
-      --- is marked \emph{explicitly} with $\dyn$ and reserved
-      \textcolor{blameRed}{internal blame}: a typed, observable, attributable
-      outcome where stock extraction leaves \texttt{Obj.magic} and undefined
-      behavior.
-    \item<3-> The whole pipeline is \textcolor{okGreen}{\textbf{mechanized,
-      admit-free}}: an F$\omega$-style polymorphic blame calculus with
-      progress / preservation / determinism / confluence, plus the extraction
-      metatheorems.
+    \item<1-> Extraction \alert{need not bottom out in unchecked casts}:
+      skeleton preserved, indices erased.
+    \item<2-> The residue is explicit: $\dyn$ $+$
+      \textcolor{blameRed}{internal blame} --- typed, observable,
+      attributable, where stock extraction leaves \texttt{Obj.magic}.
+    \item<3-> \textcolor{okGreen}{\textbf{Mechanized, admit-free}}: the
+      target calculus and the extraction metatheory.
   \end{enumerate}
 
   \onslide<4->{%
@@ -893,22 +951,21 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
     algorithmic extraction; proof erasure; inductive families.
   \end{center}}
   \note{%
-    \textbf{[23:00 — 24:00]}\\
-    Three things to remember.\\
-    One: extraction into a \emph{typed} target is viable --- a single verified
-    translation keeps the polymorphic skeleton and drops dependent indices from
-    types.\\
-    \click Two: the genuine residue of dependency --- values used as types ---
-    is marked
-    \emph{explicitly}, with Dyn and reserved internal blame: a typed, observable,
-    attributable outcome, where stock extraction would leave an
-    \texttt{Obj.magic} and undefined behavior.\\
-    \click Three: it's all machine-checked and admit-free --- the target
-    calculus and
-    the extraction metatheory.\\
-    \click And where it's going: a real contextual/logical-relations
-    story, an algorithmic extractor, proof erasure, and inductive families.
-    Hand off to the thank-you slide.
+    \textbf{[24:30 — 25:30]}\\
+    Ok, let's wrap this up. Three things to remember. One: extraction does
+    not have to bottom out in unchecked casts --- a single verified
+    translation keeps the polymorphic skeleton and drops dependent indices
+    from the types, with no \texttt{Obj.magic} anywhere.\\
+    \click Two: the genuine residue of dependency --- values used as
+    types --- is marked \emph{explicitly}, with Dyn and reserved internal
+    blame. That is a typed, observable, attributable outcome, exactly where
+    stock extraction would leave you an \texttt{Obj.magic} and undefined
+    behavior.\\
+    \click Three: all of it is machine-checked and admit-free --- the target
+    calculus and the extraction metatheory.\\
+    \click And as for where this is going: a real contextual,
+    logical-relations story, an algorithmic extractor, proof erasure, and
+    inductive families.
   }
 \end{frame}
 
@@ -920,15 +977,17 @@ fun (A B : *) (f : A -> B) (n : Nat) (xs : Vec A) =>
   \texttt{dune exec tests/top.exe} --- try the REPL\\
   Rocq development: admit-free, audited down to \texttt{eq\_rect\_eq}}
   \note{%
-    \textbf{[24:00+] --- Q\&A.}\\
-    Thanks! Happy to take questions --- and I can run the REPL live if anyone
-    wants to see an extraction.\\[1ex]
-    Likely questions to be ready for: (a) why not just proof-erase? --- future
-    work, orthogonal; (b) is the simulation observational? --- no, it's
-    syntactic, that's the open bridge; (c) how does Dyn-at-kind-star limit you?
-    --- higher-kinded quantifiers don't cross the boundary; (d) relation to
-    CertiCoq / verified extraction to OCaml --- they do problem \#2 to an untyped
-    target, we do problem \#1 to a typed one.
+    \textbf{[25:30+] --- Q\&A.}\\
+    And that is all I have for you today --- thank you for listening! I'm
+    happy to take questions, and I can run the REPL live if anyone wants to
+    see an extraction.\\[1ex]
+    Questions I should be ready for: why not just proof-erase? --- future
+    work, and orthogonal. Is the simulation observational? --- no, it's
+    syntactic; that's the open bridge. Does Dyn-at-kind-star limit us? ---
+    higher-kinded quantifiers don't cross the boundary. And how does this
+    relate to CertiCoq and verified extraction to OCaml? --- they solve
+    problem two, to an untyped target; we work on problem one, to a typed
+    one.
   }
 \end{frame}
 

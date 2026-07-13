@@ -166,9 +166,12 @@ interfaces (Table~\ref{tab:examples}).  The consequence is a runtime-safety
 problem, not a cosmetic one.  The erased indices are exactly what made the
 source code safe, so the extracted module has \emph{well-typed} OCaml calls
 that violate the erased invariants; because the extractor hid the invariant
-behind an unchecked cast, such a call is undefined behavior.  Calling the
-extracted bounds-checked lookup out of bounds---a call OCaml's type checker
-accepts---raises no exception; it segfaults (\S\ref{sec:examples}).  The
+behind an unchecked cast, such a call is undefined behavior---and it arises
+from honest accidents, not adversarial clients.  Extracted type-safe
+\texttt{printf} comes out at type \texttt{'a fmt -> 'a} with \texttt{'a}
+unconstrained by the format, so a format and a call site that drift apart by
+one argument---the everyday bug the dependent type existed to rule
+out---compile without complaint and segfault (\S\ref{sec:examples}).  The
 failure cannot be caught at runtime, and nothing attributes it to the
 boundary that was violated.  A blame calculus replaces exactly this failure
 mode: the boundary becomes a \emph{typed} cast whose failure is
@@ -402,7 +405,11 @@ Here the computed arity \texttt{Str -> Nat -> Str} is a perfectly ordinary
 F$\omega$ arrow type; the dependent arity leaves no dynamic checks.
 \texttt{sprintf} itself is a definition---an accumulator-style fold over the
 format at motive $P\,X = \texttt{Str} \to X$---and its extraction inlines
-that fold at an ordinary polymorphic target type.
+that fold at an ordinary polymorphic target type.  The contrast with stock
+extraction is sharp: there, \texttt{sprintf} comes out at \texttt{'a fmt ->
+'a} with \texttt{'a} unconstrained, so a format/call-site arity drift
+compiles and segfaults (\S\ref{sec:examples}); here the computed arity
+survives in the target type, and the same drift is a type error.
 
 \paragraph{Where the dynamic type earns its keep.}
 The examples above stay within the target's static skeleton: their dependent
@@ -1439,28 +1446,35 @@ $\dyn$-free under our extraction (its computed return type is a genuine
 F$\omega$ type-level application, \S\ref{sec:examples}) yet its CIC port is
 among the heaviest \texttt{Obj.magic} users under stock extraction.
 
-The unsafe seven are not merely inelegant.  The erased index is what made the
-source safe, so the extracted module admits well-typed OCaml calls that
-violate it, and \texttt{Obj.magic} turns the violation into undefined
-behavior.  Concretely, the port of \texttt{fin.v} extracts the empty-index
-eliminator and lookup as
+The unsafe seven are not merely inelegant, and the failures they admit are
+not adversarial corner cases---they are everyday accidents.  Consider the
+port of \texttt{printf.v}.  In the source, the format \emph{value} determines
+the type of the variadic function it denotes, so a format used at the wrong
+arity is a type error; that is the point of the example.  Stock extraction
+severs the link:
 \begin{lstlisting}[language={}]
-let fin0 _ = Obj.magic Tt
-let rec nth _ = function
-  | Nil -> fin0
-  | Cons (m, a, v) -> (fun i -> fin_case m a (nth m v) i)
+type 'x fmt = Fstop | Flit of str * 'x fmt
+            | Fint of __ fmt | Fstr of __ fmt
+val sprintf : 'a1 fmt -> 'a1
 \end{lstlisting}
-with type \texttt{nat -> 'a1 t -> fin -> 'a1}: the bound linking the vector
-and the index is gone from the OCaml type, so the out-of-bounds call is
-well typed.  The client
+The constructors no longer constrain the type parameter, so \texttt{'a1} is
+whatever the caller expects.  Now let a format and one of its call sites
+drift apart by a single argument---someone adds a \texttt{\%s} in one place
+and not the other, the everyday bug dependent \texttt{printf} exists to rule
+out:
 \begin{lstlisting}[language={}]
-let f : int -> int = nth O Nil (F1 O) in f 3
+let report : nat -> str -> str = sprintf (Fint Fstop)
+let _ = report O Sempty
 \end{lstlisting}
-compiles without warning and dies with SIGSEGV: \texttt{nth} reaches
-\texttt{fin0}, whose \texttt{Obj.magic Tt} materializes a unit value at type
-\texttt{int -> int}, and applying it crashes the process.  No OCaml exception
-is raised, so the failure cannot be caught, and nothing identifies the
-violated boundary.  In the blame target the corresponding boundary is a typed
+OCaml accepts the mismatch, and the second application dies with SIGSEGV:
+\texttt{sprintf (Fint Fstop)} builds a one-argument closure whose
+\texttt{Obj.magic} lets it pose as a two-argument function, and its result
+is a data block applied as a closure.  No OCaml exception is raised, so the
+failure cannot be caught, and nothing identifies the violated boundary.  The
+other unsafe ports fail the same way; in \texttt{fin.v}, for instance, the
+``impossible'' empty-index eliminator extracts to
+\texttt{let fin0 \_ = Obj.magic Tt}, so an off-by-one index reaching it
+returns a unit value posing as any type the caller wanted.  In the blame target the corresponding boundary is a typed
 cast: a well-typed client linked against an extracted term forms a well-typed
 target program, and target progress and preservation
 (\S\ref{sec:metatheory}) confine every failure to an explicit, observable
@@ -1761,8 +1775,9 @@ not an implementation of those examples.
 \section{Conclusion}\label{sec:conclusion}
 %% ==========================================================================
 
-We have shown that extraction from a dependently typed language need not throw
-away all types: with an explicit dynamic/blame target, a single verified translation preserves
+We have shown that extraction from a dependently typed language need not
+bridge the gaps in the target's type system with unchecked casts: with an
+explicit dynamic/blame target, a single verified translation preserves
 the parametric-polymorphic skeleton of CoC programs, removes many dependent
 indices from target types, and represents the translation's fallback cases---most visibly values used as
 types---with $\dyn$ and, when forced operationally, reserved internal blame.  In this sense the work returns to Paulin-Mohring's

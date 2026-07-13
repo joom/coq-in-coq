@@ -10,10 +10,12 @@ slides: $(SLIDES).pdf
 $(PAPER).pdf: $(PAPER).tex references.bib
 	latexmk -pdf -interaction=nonstopmode -halt-on-error $(PAPER).tex
 
-# Metropolis (mtheme) renders best with XeLaTeX + Fira fonts; fall back to
-# `latexmk -pdf` if xelatex is unavailable.
+# Metropolis (mtheme) needs a Unicode engine for Fira fonts. Use LuaLaTeX,
+# NOT XeLaTeX: with the default show-notes (pgfpages) layout, XeLaTeX leaks
+# beamer's overlay-transparency state across the double-width pages, which
+# renders all base-layer slide text nearly invisible.
 $(SLIDES).pdf: $(SLIDES).tex
-	latexmk -xelatex -interaction=nonstopmode -halt-on-error $(SLIDES).tex \
+	latexmk -lualatex -interaction=nonstopmode -halt-on-error $(SLIDES).tex \
 	  || latexmk -pdf -interaction=nonstopmode -halt-on-error $(SLIDES).tex
 
 clean:
