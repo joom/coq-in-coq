@@ -75,30 +75,126 @@
 \setbeamercolor{neutral card}{fg=black,bg=black!6}
 \setbeamercolor{terminal card}{fg=white,bg=black!86}
 
-\newenvironment{sourcecard}[1]{%
+%% Cards take an OPTIONAL fixed content height as [..]: e.g.
+%% \begin{sourcecard}[2.6cm]{Title}...  When given, the body is wrapped in a
+%% top-aligned minipage of that height so several cards in a row line up top and
+%% bottom (the coloured background extends to the fixed height). Empty = natural.
+\def\cardnil{}% plain \def (non-\long) so \ifx matches \edef-produced empties
+%% beamercolorbox adds its sep (0.62em each side) as horizontal skips, which a
+%% minipage ignores, so shrink the minipage by 2*sep to keep text inside.
+%% \raggedright + no hyphenation: left-aligned card text, no hyphen breaks.
+\newcommand{\cardhtbegin}[1]{\edef\cardhtarg{#1}%
+  \ifx\cardhtarg\cardnil\else
+    \begin{minipage}[t][\cardhtarg][t]{\dimexpr\hsize-1.24em\relax}%
+    \raggedright\hyphenpenalty=10000\exhyphenpenalty=10000\relax\fi}
+\newcommand{\cardhtend}{\ifx\cardhtarg\cardnil\else\end{minipage}\fi}
+\newenvironment{sourcecard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{source card}%
-  {\color{srcBlue}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
-\newenvironment{targetcard}[1]{%
+  \cardhtbegin{#1}{\color{srcBlue}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+\newenvironment{targetcard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{target card}%
-  {\color{tgtTeal}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
-\newenvironment{dynamiccard}[1]{%
+  \cardhtbegin{#1}{\color{tgtTeal}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+\newenvironment{dynamiccard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{dynamic card}%
-  {\color{dynOrange}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
-\newenvironment{dangercard}[1]{%
+  \cardhtbegin{#1}{\color{dynOrange}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+\newenvironment{dangercard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{danger card}%
-  {\color{blameRed}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
-\newenvironment{successcard}[1]{%
+  \cardhtbegin{#1}{\color{blameRed}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+\newenvironment{successcard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{success card}%
-  {\color{okGreen}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
-\newenvironment{neutralcard}[1]{%
+  \cardhtbegin{#1}{\color{okGreen}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+\newenvironment{neutralcard}[2][]{%
   \begin{beamercolorbox}[wd=\linewidth,sep=0.62em,rounded=true]{neutral card}%
-  {\color{black!75}\bfseries #1}\par\smallskip
-}{\end{beamercolorbox}}
+  \cardhtbegin{#1}{\color{black!75}\bfseries #2}\par\smallskip
+}{\cardhtend\end{beamercolorbox}}
+
+%% --- equal-height card rows -------------------------------------------------
+%% \eqcards{ \rc{width}{overlay}{cardcode} ...  \rcx{width}{plain} ... }
+%% Measures every \rc card at its natural height, then lays them out in a
+%% [T] columns row forcing all to the tallest, so tops AND bottoms align.
+%% Each card must take its height from [\eqrowht], e.g.
+%%   \rc{0.48\textwidth}{2-}{\begin{dangercard}[\eqrowht]{Title}...\end{dangercard}}
+%% \rcx is an un-measured column (arrows, spacers). Overlay "1-" = always shown.
+\makeatletter
+\newlength{\eq@h}
+\newcommand{\eqrowht}{}
+\long\def\eqcards#1{%
+  \setlength{\eq@h}{\z@}\let\eqrowht\cardnil
+  \begingroup
+  \long\def\rc##1##2##3{\setbox\@tempboxa=\hbox{\begin{minipage}{##1}##3\end{minipage}}%
+    \dimen@=\ht\@tempboxa\advance\dimen@\dp\@tempboxa
+    \ifdim\dimen@>\eq@h\global\eq@h=\dimen@\fi}%
+  \long\def\rcx##1##2{}%
+  #1%
+  \endgroup
+  \advance\eq@h by-8\p@ \edef\eqrowht{\the\eq@h}%
+  \begin{columns}[T,onlytextwidth]%
+    \long\def\rc##1##2##3{\column{##1}\onslide<##2>{##3}}%
+    \long\def\rcx##1##2{\column{##1}##2}%
+    #1%
+  \end{columns}}
+%% \eqmeasure{ \mc{width}{cardcode} ... } sets \eqrowht to the tallest card
+%% (cards use [\eqrowht]); lay the cards out yourself afterwards. Useful for
+%% grids where the same height must span two stacked rows.
+\long\def\eqmeasure#1{%
+  \setlength{\eq@h}{\z@}\let\eqrowht\cardnil
+  \begingroup
+  \long\def\mc##1##2{\setbox\@tempboxa=\hbox{\begin{minipage}{##1}##2\end{minipage}}%
+    \dimen@=\ht\@tempboxa\advance\dimen@\dp\@tempboxa
+    \ifdim\dimen@>\eq@h\global\eq@h=\dimen@\fi}%
+  #1%
+  \endgroup
+  \advance\eq@h by-8\p@ \edef\eqrowht{\the\eq@h}}
+%% \eqhalfheight{width}{content} measures a tall box and stores in \rightht the
+%% content height for each of TWO stacked cards so together they equal it. Used
+%% on slide 18 (left REPL box == the two right cards combined).
+\newcommand{\rightht}{}
+\newcommand{\eqhalfheight}[2]{%
+  \setbox\@tempboxa=\hbox{\begin{minipage}{#1}#2\end{minipage}}%
+  \@tempdima=\ht\@tempboxa\advance\@tempdima\dp\@tempboxa
+  \edef\rightht{\the\dimexpr0.5\@tempdima-11pt\relax}}
+%% \eqmatchcol{rightW}{rightContent}{leftW}{leftCard} makes a left card's TOTAL
+%% height exactly equal the stacked right column, with no guessing about the
+%% card's own padding. \leftCard must be a macro that draws the left card using
+%% [\lefthgt] for its height. Two passes: (1) measure right total R and the left
+%% card's total when its content height is set to R, giving overhead = L-R; then
+%% (2) set \lefthgt = R - overhead = 2R - L, so the laid-out left total is R.
+\newcommand{\lefthgt}{}
+\newcommand{\eqmatchcol}[4]{%
+  \setbox\@tempboxa=\hbox{\begin{minipage}[t]{#1}#2\end{minipage}}%
+  \@tempdima=\dimexpr\ht\@tempboxa+\dp\@tempboxa\relax % R = right total
+  \edef\lefthgt{\the\@tempdima}%
+  \setbox\@tempboxa=\hbox{\begin{minipage}[t]{#3}#4\end{minipage}}%
+  \@tempdimb=\dimexpr\ht\@tempboxa+\dp\@tempboxa\relax % L = left total at height R
+  \edef\lefthgt{\the\dimexpr2\@tempdima-\@tempdimb\relax}}
+%% \eqgrid{colwidth}{ovA}{cardA}{ovB}{cardB}{ovC}{cardC}{ovD}{cardD}
+%% 2x2 grid: A,B stacked in the left column; C,D in the right. Each ROW's two
+%% cards are forced to a common height (A=C, B=D), so cells align across columns
+%% and rows without inflating the whole grid to one global maximum. Cards read
+%% their height from \eqrowht, which is switched per row during layout.
+\newcommand{\eqrha}{}\newcommand{\eqrhb}{}
+\long\def\eq@rowht#1#2#3{% #1=width #2,#3 the two cards; result in \@tempdima
+  \setbox\@tempboxa=\hbox{\begin{minipage}{#1}#2\end{minipage}}%
+  \@tempdima=\ht\@tempboxa\advance\@tempdima\dp\@tempboxa
+  \setbox\@tempboxa=\hbox{\begin{minipage}{#1}#3\end{minipage}}%
+  \dimen@=\ht\@tempboxa\advance\dimen@\dp\@tempboxa
+  \ifdim\dimen@>\@tempdima\@tempdima=\dimen@\fi}
+\long\def\eqgrid#1#2#3#4#5#6#7#8#9{%
+  \let\eqrowht\cardnil
+  \eq@rowht{#1}{#3}{#7}\edef\eqrha{\the\dimexpr\@tempdima-8pt\relax}%
+  \eq@rowht{#1}{#5}{#9}\edef\eqrhb{\the\dimexpr\@tempdima-8pt\relax}%
+  \begin{columns}[T,onlytextwidth]%
+    \column{#1}\let\eqrowht\eqrha\onslide<#2>{#3}\smallskip\par
+               \let\eqrowht\eqrhb\onslide<#4>{#5}%
+    \column{#1}\let\eqrowht\eqrha\onslide<#6>{#7}\smallskip\par
+               \let\eqrowht\eqrhb\onslide<#8>{#9}%
+  \end{columns}}
+\makeatother
 
 \newcommand{\talkpill}[2]{%
   \tikz[baseline=(pill.base)]
@@ -158,15 +254,20 @@
 %% can see where you are. It does NOT add overlays: each \note<i> is accumulated
 %% at the right overlay during frame processing (beamer's slide-in-frame counter
 %% is unreliable inside notes because the note is typeset at the next slide).
-\definecolor{noteNow}{HTML}{B45309}
-\newcommand{\beathl}[1]{{\color{noteNow}\bfseries #1}}
+%% highlight in srcBlue (the "Static guarantee" card blue): strong contrast
+%% against the dimmed gray beats and easy to read.
+\newcommand{\beathl}[1]{{\color{srcBlue}#1}}
 \newcommand{\beatdim}[1]{{\color{black!48}#1}}
+%% click icon shown before every beat except the first (beat 1 needs no click),
+%% so the number of clicks in a slide is visible at a glance.
+\newcommand{\nbicon}{\faMousePointer}
 \makeatletter
 \newcount\nb@total \newcount\nb@i \newcount\nb@k
 %% runtime renderer for one beat: advance the running index, highlight it if it
 %% matches the (baked) active overlay, else dim. \nb@active is set per note page.
 \newcommand{\nb@item}[1]{\global\advance\nb@k by1
-  \ifnum\nb@k=\nb@active\relax\beathl{#1}\else\beatdim{#1}\fi\par\smallskip}
+  \ifnum\nb@k>1 \def\nb@ic{\nbicon~}\else\def\nb@ic{}\fi
+  \ifnum\nb@k=\nb@active\relax\beathl{\nb@ic#1}\else\beatdim{\nb@ic#1}\fi\par\smallskip}
 \long\def\notescript#1{%
   \global\nb@total=0 \gdef\nb@list{}\gdef\nb@header{}%
   %% pass 1: capture header + each beat's text (typesetting absorbed by the box)
@@ -227,7 +328,7 @@
 }
 
 \title{Extracting Blame}
-\subtitle{Keeping Dependent Guarantees Across the Extraction Boundary}
+\subtitle{Static Guarantees Where Possible, Checked Casts Where Not}
 \author{Joomy Korkut}
 \institute{Bloomberg\\[1.2ex]
   {\scriptsize
@@ -240,6 +341,38 @@
    {\color{accentOrange}\faMastodon}\hspace{0.5em}%
    {\color{black!65}\texttt{@joomy@functional.cafe}}}}
 \date{}
+
+%% --- the CoC -> System F-omega+Dyn+blame pipeline diagram (title + closing) -
+\newcommand{\pipelinediagram}{%
+  \normalsize
+  \begin{tikzpicture}[node distance=0.58cm]
+    \node[source node,text width=3.15cm] (coc) {%
+      {\color{srcBlue}\bfseries Calculus of\\ Constructions}\\[0.15ex]
+      {\scriptsize\color{black!55}proof + program}};
+    \node[rounded corners=3pt,inner sep=7pt,align=center,text width=3.15cm,
+      top color=tgtTeal!12,bottom color=dynOrange!13,
+      below=1.7cm of coc] (target) {%
+      {\color{tgtTeal}\bfseries System F$\omega$}\\[0.15ex]
+      {\color{black!45}\bfseries +}\\[0.15ex]
+      {\color{dynOrange}\bfseries Dyn}\,{\color{black!50}\small with}\,%
+      {\color{blameRed}\bfseries blame}\\[0.45ex]
+      {\scriptsize\color{black!62}static skeleton,\\[-0.7ex] runtime checked casts}};
+    %% faux gradient border: strong tgtTeal->dynOrange rectangle behind the
+    %% light-gradient fill, offset out by ~1pt so only a thin frame shows.
+    \begin{scope}[on background layer]
+      \node[fit=(target),rounded corners=3.6pt,inner sep=1.1pt,
+        top color=tgtTeal!85,bottom color=dynOrange!85] {};
+    \end{scope}
+    %% single continuous gradient-shaded arrow, coc -> target (gapped)
+    \shade[top color=srcBlue,bottom color=tgtTeal]
+      ($(coc.south)+(-0.045cm,-0.16cm)$) rectangle
+      ($(target.north)+(0.045cm,0.25cm)$);
+    \fill[tgtTeal] ($(target.north)+(-0.11cm,0.25cm)$) --
+      ($(target.north)+(0.11cm,0.25cm)$) -- ($(target.north)+(0,0.16cm)$) -- cycle;
+    \node[font=\scriptsize\bfseries,text=dynOrange,align=left,anchor=west]
+      at ($(coc.south)!0.5!(target.north)+(0.16cm,0)$)
+      {verified\\extraction};
+  \end{tikzpicture}}
 
 \begin{document}
 
@@ -262,8 +395,8 @@
       Extracting Blame\par}
     \vspace{0.65em}
     {\color{black!72}\large
-      Keeping Dependent Guarantees\\[-0.15ex]
-      Across the Extraction Boundary\par}
+      Static Guarantees Where Possible,\\[-0.15ex]
+      Checked Casts Where Not\par}
 
     \vspace{0.9em}
     {\color{accentOrange}\rule{\linewidth}{1.05pt}}
@@ -284,29 +417,7 @@
 
     \column{0.34\textwidth}
     \centering
-    \begin{tikzpicture}[node distance=0.58cm]
-      \node[source node,text width=3.15cm] (coc) {%
-        {\color{srcBlue}\bfseries Calculus of\\ Constructions}\\[0.15ex]
-        \scriptsize proof + program};
-      \node[below=0.5cm of coc,font=\scriptsize\bfseries,
-        text=dynOrange] (boundary) {verified extraction};
-      \node[rounded corners=3pt,inner sep=7pt,align=center,text width=3.15cm,
-        top color=tgtTeal!12,bottom color=dynOrange!13,
-        below=0.5cm of boundary] (target) {%
-        {\color{tgtTeal}\bfseries System F$\omega$}\\[0.15ex]
-        {\color{black!45}\bfseries +}\\[0.15ex]
-        {\color{dynOrange}\bfseries Dyn}\,{\color{black!50}\small with}\,%
-        {\color{blameRed}\bfseries blame}\\[0.45ex]
-        {\scriptsize\color{black!62}static skeleton,\\[-0.7ex] runtime checked casts}};
-      %% faux gradient border: strong tgtTeal->dynOrange rectangle behind the
-      %% light-gradient fill, offset out by ~1pt so only a thin frame shows.
-      \begin{scope}[on background layer]
-        \node[fit=(target),rounded corners=3.6pt,inner sep=1.1pt,
-          top color=tgtTeal!85,bottom color=dynOrange!85] {};
-      \end{scope}
-      \draw[flow arrow,draw=dynOrange] (coc) -- (boundary);
-      \draw[flow arrow,draw=tgtTeal] (boundary) -- (target);
-    \end{tikzpicture}
+    \pipelinediagram
   \end{columns}
   \note{%
     \textbf{[0:00 — 0:30]}\\
@@ -326,7 +437,7 @@
 \section{The problem}
 %% ==========================================================================
 
-\begin{frame}{A format value can determine a function's type}
+\begin{frame}{\texttt{sprintf}: a format value can determine a function's type}
   \begin{center}
   \begin{tikzpicture}[node distance=0.55cm and 2.15cm]
     \node[source node,minimum width=2.2cm,minimum height=0.9cm]
@@ -352,53 +463,66 @@
   \end{sourcecard}
   \notescript{%
     \textbf{[0:30 — 1:30]}\\
-    \beat{1}{Here is the only dependent-type idea you need for this talk. The
-    format percent-d describes a function that consumes a natural number and
-    returns a string. Percent-d percent-s describes a function with two
-    arguments. The format is ordinary data, but it determines the function's
-    type.}\\
-    \lbeat{2}{That is what ``dependent'' means in this example: a value appears
-    in, or computes, a type. The source type checker can therefore keep the
-    format and every call site synchronized. You do not need to know the
-    Calculus of Constructions to follow the rest; keep this one relationship in
-    mind.}
+    \beat{1}{Here is the running example, and you already know the function:
+    sprintf. The format percent-d describes a function that consumes a natural
+    number and returns a string. Percent-d percent-s describes a function with
+    two arguments. The format is ordinary data, but it determines the
+    function's type.}\\
+    \lbeat{2}{That is what ``dependent'' means here: a value appears in, or
+    computes, a type. The source type checker can therefore keep the format
+    and every call site synchronized. Vectors, matrices, and the rest later
+    are the same idea with a different value driving the type; you do not need
+    the Calculus of Constructions to follow any of it.}
   }
 \end{frame}
 
-\begin{frame}[fragile]{Rocq catches the drift}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.48\textwidth}
-    \begin{sourcecard}{\texttt{Fmt A} carries the promise}
-      \small\ttfamily
-      sprintf : Fmt A -> A\\[0.55ex]
-      fint : Fmt A -> Fmt (Nat -> A)\\[0.55ex]
-      fstr : Fmt A -> Fmt (Str -> A)
-    \end{sourcecard}
-
-    \column{0.48\textwidth}
-    \pause
-    \begin{successcard}{\faCheckCircle\quad One argument / accepted}
+\begin{frame}[fragile]{Enjoy the dependent guarantees with no limits}
+  %% \rrh = each right box's height. \eqmatchcol makes the left box's TOTAL height
+  %% exactly equal the two stacked right boxes. Inside the left box: a little space
+  %% before the definition, then the slack split (via two \vfill) between
+  %% def->sprintf and after sprintf.
+  \def\rrh{2.05cm}%
+  \def\cardacc{\begin{successcard}[\rrh]{\faCheckCircle\quad One argument / accepted}
       \small\ttfamily
       Check sprintf\\
       \quad (Nat -> Str)\\
       \quad (fint Str fstop).
-    \end{successcard}
-
-    \smallskip
-    \begin{dangercard}{\faTimesCircle\quad Two arguments / rejected}
+    \end{successcard}}%
+  \def\cardrej{\begin{dangercard}[\rrh]{\faTimesCircle\quad Two arguments / rejected}
       \small\ttfamily
       Check sprintf\\
       \quad (Nat -> Str -> Str)\\
       \quad (fint Str fstop).
-    \end{dangercard}
+    \end{dangercard}}%
+  \def\leftcard{\begin{sourcecard}[\lefthgt]{\texttt{Fmt A} carries the promise}
+      \footnotesize\ttfamily
+      \smallskip
+      Inductive Fmt : Set -> Set :=\\
+      | fstop : Fmt Str\\
+      | flit\ \ : forall A, Str -> Fmt A -> Fmt A\\
+      | fint\ \ : forall A, Fmt A -> Fmt (Nat -> A)\\
+      | fstr\ \ : forall A, Fmt A -> Fmt (Str -> A)\par
+      \vspace{\baselineskip}
+      sprintf : forall A, Fmt A -> A\par
+      \vfill
+    \end{sourcecard}}%
+  \eqmatchcol{0.41\textwidth}{\cardacc\par\smallskip\cardrej}{0.55\textwidth}{\leftcard}%
+  \begin{columns}[T,onlytextwidth]
+    \column{0.55\textwidth}
+    \leftcard
+
+    \column{0.41\textwidth}
+    \pause
+    \cardacc\par\smallskip\cardrej
   \end{columns}
   \notescript{%
     \textbf{[1:30 — 2:30]}\\
-    \beat{1}{Here is the small amount of source notation behind it. A value of
-    type \texttt{Fmt A} is a format denoting an \texttt{A}. Adding percent-d
-    changes the index from \texttt{A} to \texttt{Nat to A}; percent-s does the
-    same for strings. So \texttt{sprintf} can return exactly the function
-    described by its format.}\\
+    \beat{1}{Here is the source definition. A value of type \texttt{Fmt A} is a
+    format denoting an \texttt{A}: \texttt{fstop} denotes a bare string, and
+    each percent-d constructor, \texttt{fint}, extends the index from \texttt{A}
+    to \texttt{Nat to A}; percent-s does the same for strings. So
+    \texttt{sprintf}, of type \texttt{Fmt A to A}, returns exactly the function
+    its format describes.}\\
     \lbeat{2}{The first check says that a one-percent-d format denotes a
     one-argument function. Rocq accepts it. The second call claims the same
     format takes two arguments. Rocq rejects it. This is not a theorem about a
@@ -407,28 +531,27 @@
   }
 \end{frame}
 
-\begin{frame}[fragile]{Stock extraction severs the link}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.40\textwidth}
-    \begin{sourcecard}{What the source promised}
+\begin{frame}[fragile]{Where the limits appear}
+  \eqcards{%
+    \rc{0.40\textwidth}{1-}{%
+    \begin{sourcecard}[\eqrowht]{What the source promised}
       \begin{center}
         \Large\src{\texttt{Fmt A $\to$ A}}
       \end{center}
       \smallskip
       The \emph{format} determines \texttt{A}.
-    \end{sourcecard}
-
-    \column{0.56\textwidth}
-    \pause
-    \begin{dangercard}{What OCaml receives}
+    \end{sourcecard}}
+    \rc{0.56\textwidth}{2-}{%
+    \begin{dangercard}[\eqrowht]{What OCaml receives}
       \small\ttfamily
       type 'x fmt =\\
-      \quad Fstop | Flit of str * 'x fmt\\
+      \quad\ \ Fstop \\
+      \quad | Flit of str * 'x fmt\\
       \quad | Fint of \_\_ fmt\\
       \quad | Fstr of \_\_ fmt\\[0.7ex]
       val sprintf : 'a fmt -> 'a
-    \end{dangercard}
-  \end{columns}
+    \end{dangercard}}
+  }
 
   \medskip
   \begin{center}
@@ -451,40 +574,35 @@
 \end{frame}
 
 \begin{frame}[fragile]{A plausible refactoring, a segfault}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.57\textwidth}
-    \begin{neutralcard}{The refactoring drift}
+  \eqcards{%
+    \rc{0.57\textwidth}{1-}{%
+    \begin{neutralcard}[\eqrowht]{The refactoring drift}
       \small\ttfamily
       (* format: "\%d"; caller: "\%d\%s" *)\\[0.5ex]
       let report : nat -> str -> str =\\
       \quad sprintf (Fint Fstop)\\[0.5ex]
       let \_ = report O Sempty
-    \end{neutralcard}
-
-    \column{0.39\textwidth}
-    \onslide<2->{%
-    \begin{dangercard}{\faExclamationTriangle\quad Runtime outcome}
+    \end{neutralcard}}
+    \rc{0.39\textwidth}{2-}{%
+    \begin{dangercard}[\eqrowht]{\faExclamationTriangle\quad Runtime outcome}
       \begin{center}
         \LARGE\alert{SIGSEGV}
 
         \smallskip
-        \small Not an exception.\\
-        Not catchable.\\
+        \small Undefined behavior.\\
+        Silent --- no report.\\
         Names nobody.
       \end{center}
     \end{dangercard}}
-  \end{columns}
+  }
 
   \onslide<3->{%
   \smallskip
   \begin{beamercolorbox}[wd=\linewidth,sep=0.72em,rounded=true]{danger card}
-    \begin{columns}[c,onlytextwidth]
-      \column{0.18\textwidth}
-      \centering\color{blameRed}\fontsize{24}{25}\selectfont\bfseries 7/18
-      \column{0.78\textwidth}
-      \small Stock-extracted example idioms use \texttt{Obj.magic} or
-      \texttt{Obj.t}. This is a boundary problem, not a toy corner case.
-    \end{columns}
+    \small Not unique to printf --- the same failure lurks wherever a type
+    depends on a value: \textbf{bounds-checked indexing},
+    \textbf{heterogeneous data}, \textbf{typed interpreters},
+    \textbf{dimensioned matrices}, \textbf{session types}, and more.
   \end{beamercolorbox}}
   \notescript{%
     \textbf{[3:40 — 4:50]}\\
@@ -493,35 +611,30 @@
     accepts this because the weakened interface lets the one-argument closure
     pose as a two-argument function.}\\
     \beat{2}{The second application tries to call a data block as a closure and
-    the process receives SIGSEGV. No OCaml exception is raised, so the failure
-    cannot be caught, and no boundary is identified.}\\
-    \lbeat{3}{This is not unique to printf. Seven of the eighteen dependent
-    programming idioms in our artifact need unchecked casts or \texttt{Obj.t}
-    interfaces under stock Rocq extraction: bounds-checked indexing,
-    heterogeneous data, typed interpreters, and others. If proofs are going to
-    protect deployed code, the handoff to the surrounding ecosystem matters.}
+    the process receives SIGSEGV. That is undefined behavior: the program simply
+    crashes, with no result to observe and no boundary identified.}\\
+    \lbeat{3}{And this is not unique to printf. The same boundary failure appears
+    wherever a source type depends on a runtime value: bounds-checked array
+    indexing, heterogeneous data, typed interpreters, dimensioned matrices,
+    session types, and more. If proofs are going to protect deployed code, the
+    handoff to the surrounding ecosystem matters.}
   }
 \end{frame}
 
 \begin{frame}{What should extraction promise?}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.31\textwidth}
-    \begin{successcard}{\faCheckCircle\quad Best case}
+  \eqcards{%
+    \rc{0.31\textwidth}{1-}{\begin{successcard}[\eqrowht]{\faCheckCircle\quad Best case}
       Preserve enough structure to reject the mistake
       \textcolor{okGreen}{statically}.
-    \end{successcard}
-
-    \column{0.31\textwidth}
-    \onslide<2->{\begin{dynamiccard}{\faLock\quad Fallback}
+    \end{successcard}}
+    \rc{0.31\textwidth}{2-}{\begin{dynamiccard}[\eqrowht]{\faLock\quad Fallback}
       Cross a checked boundary whose failure is explicit
       \textcolor{blameRed}{blame}.
     \end{dynamiccard}}
-
-    \column{0.31\textwidth}
-    \onslide<3->{\begin{dangercard}{\faTimesCircle\quad Never}
+    \rc{0.31\textwidth}{3-}{\begin{dangercard}[\eqrowht]{\faTimesCircle\quad Never}
       Hide the gap behind an unchecked cast and undefined behavior.
     \end{dangercard}}
-  \end{columns}
+  }
 
   \onslide<4->{%
   \bigskip
@@ -535,7 +648,7 @@
     not a runtime check at all. If the target can express the relationship, keep
     it static and reject the mistake before the program runs.}\\
     \beat{2}{If the target genuinely cannot express the dependency, use a typed,
-    checked boundary. A mismatch then becomes explicit blame: an ordinary result
+    checked boundary. A mismatch then becomes explicit blame: a defined result
     in the target semantics, carrying a label.}\\
     \beat{3}{What we must not do is pretend the types agree and delegate the
     consequences to undefined behavior.}\\
@@ -550,32 +663,27 @@
 %% ==========================================================================
 
 \begin{frame}{One translation, three outcomes}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.31\textwidth}
-    \begin{targetcard}{\faLayerGroup\quad 1 / Preserve}
+  \eqcards{%
+    \rc{0.31\textwidth}{1-}{\begin{targetcard}[\eqrowht]{\faLayerGroup\quad 1 / Preserve}
       Type structure the target can express.
 
       \smallskip
       \src{\texttt{Fmt A}} $\rightsquigarrow$ \tgt{\texttt{Fmt A}}
-    \end{targetcard}
-
-    \column{0.31\textwidth}
-    \begin{neutralcard}{\faCode\quad 2 / Erase}
+    \end{targetcard}}
+    \rc{0.31\textwidth}{1-}{\begin{neutralcard}[\eqrowht]{\faCode\quad 2 / Erase}
       Term indices from target types.
 
       \smallskip
       \src{\texttt{Vec A n}} $\rightsquigarrow$ \tgt{\texttt{Vec A}}
-    \end{neutralcard}
-
-    \column{0.31\textwidth}
-    \begin{dynamiccard}{\faRandom\quad 3 / Dynamize}
+    \end{neutralcard}}
+    \rc{0.31\textwidth}{1-}{\begin{dynamiccard}[\eqrowht]{\faRandom\quad 3 / Dynamize}
       Values used where the target needs a type.
 
       \smallskip
       \src{\texttt{El c}} $\rightsquigarrow$
       \mbox{$\dyn + \blame{\mathsf{int}}$}
-    \end{dynamiccard}
-  \end{columns}
+    \end{dynamiccard}}
+  }
 
   \pause
   \bigskip
@@ -600,20 +708,14 @@
 \end{frame}
 
 \begin{frame}{The type-theoretic gap, precisely}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.43\textwidth}
-    \begin{sourcecard}{CoC / the source}
+  \eqcards{%
+    \rc{0.43\textwidth}{1-}{\begin{sourcecard}[\eqrowht]{CoC / the source}
       \begin{center}\Large$\Pi(x{:}A).\,B\,x$\end{center}
-      \small Unified terms and types. The codomain $B\,x$ may mention the
-      \emph{term} $x$.
-    \end{sourcecard}
-
-    \column{0.08\textwidth}
-    \onslide<2->{\vspace{1.3cm}\centering
-      {\color{accentOrange}\Large\faArrowRight}}
-
-    \column{0.43\textwidth}
-    \onslide<2->{\begin{targetcard}{System F$\omega$ / the static core}
+      \small Unified terms and types.\\The codomain $B\,x$ may mention\\the \emph{term} $x$.
+    \end{sourcecard}}
+    \rcx{0.08\textwidth}{\onslide<2->{\vspace{1.3cm}\centering
+      {\color{accentOrange}\Large\faArrowRight}}}
+    \rc{0.43\textwidth}{2-}{\begin{targetcard}[\eqrowht]{System F$\omega$ / the static core}
       \begin{center}
         A \to B
         \quad
@@ -624,7 +726,7 @@
       \small Higher-kinded type functions --- but no \emph{term value} $x$
       inside a type.
     \end{targetcard}}
-  \end{columns}
+  }
 
   \onslide<3->{%
   \smallskip
@@ -698,9 +800,8 @@
 \end{frame}
 
 \begin{frame}{Erase: indices leave the type, not the program}
-  \begin{columns}[c,onlytextwidth]
-    \column{0.43\textwidth}
-    \begin{sourcecard}{Source type / the relationship}
+  \eqcards{%
+    \rc{0.43\textwidth}{1-}{\begin{sourcecard}[\eqrowht]{Source type / the relationship}
       \[
         \begin{aligned}
           &\forall A\,\textcolor{dynOrange}{n}.\\[-0.2ex]
@@ -708,14 +809,10 @@
             \to \mathsf{Fin}\,\textcolor{dynOrange}{n} \to A
         \end{aligned}
       \]
-    \end{sourcecard}
-
-    \column{0.08\textwidth}
-    \pause
-    \centering{\color{accentOrange}\Large\faArrowRight}
-
-    \column{0.43\textwidth}
-    \begin{targetcard}{Target type / after erasure}
+    \end{sourcecard}}
+    \rcx{0.08\textwidth}{\onslide<2->{\vspace{0.9cm}\centering
+      {\color{accentOrange}\Large\faArrowRight}}}
+    \rc{0.43\textwidth}{2-}{\begin{targetcard}[\eqrowht]{Target type / after erasure}
       \[
         \begin{aligned}
           &\forall A{:}\kstar.\\[-0.2ex]
@@ -723,8 +820,8 @@
             \mathsf{Vec}\ A \to \mathsf{Fin} \to A
         \end{aligned}
       \]
-    \end{targetcard}
-  \end{columns}
+    \end{targetcard}}
+  }
 
   \medskip
   \begin{center}
@@ -779,21 +876,18 @@
 
   \pause
   \smallskip
-  \begin{columns}[T,onlytextwidth]
-    \column{0.31\textwidth}
-    \begin{neutralcard}{Datum $=$ eliminator}
+  \eqcards{%
+    \rc{0.31\textwidth}{2-}{\begin{neutralcard}[\eqrowht]{Datum $=$ eliminator}
       \small A value is what can be folded into every suitable motive $X$.
-    \end{neutralcard}
-    \column{0.31\textwidth}
-    \begin{sourcecard}{Indexed motive}
+    \end{neutralcard}}
+    \rc{0.31\textwidth}{2-}{\begin{sourcecard}[\eqrowht]{Indexed motive}
       \small $X : \Nat \to \SetS$ lets \src{Vec}, \src{Fin}, and \src{Fmt}
       compute.
-    \end{sourcecard}
-    \column{0.31\textwidth}
-    \begin{targetcard}{\texttt{sprintf}'s motive}
+    \end{sourcecard}}
+    \rc{0.31\textwidth}{2-}{\begin{targetcard}[\eqrowht]{\texttt{sprintf}'s motive}
       \small $X\,Y = \mathsf{Str} \to Y$ computes the function arity.
-    \end{targetcard}
-  \end{columns}
+    \end{targetcard}}
+  }
 
   \notescript{%
     \textbf{[10:00 — 11:10]}\\
@@ -864,35 +958,23 @@
 \end{frame}
 
 \begin{frame}{The target's runtime contract}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.31\textwidth}
-    \begin{successcard}{\Large\faCheckCircle\quad 1}
-      \large\textbf{A value}
-
-      \smallskip
+  \eqcards{%
+    \rc{0.31\textwidth}{1-}{\begin{successcard}[\eqrowht]{\faCheckCircle\quad A value}
       \normalsize The computation is finished.
-    \end{successcard}
-    \column{0.31\textwidth}
-    \onslide<2->{\begin{targetcard}{\Large\faArrowRight\quad 2}
-      \large\textbf{A step}
-
-      \smallskip
+    \end{successcard}}
+    \rc{0.31\textwidth}{2-}{\begin{targetcard}[\eqrowht]{\faArrowRight\quad A step}
       \normalsize $e \reduces e'$ by deterministic rules.
     \end{targetcard}}
-    \column{0.31\textwidth}
-    \onslide<3->{\begin{dangercard}{\Large\faExclamationTriangle\quad 3}
-      \large\textbf{Blame}
-
-      \smallskip
+    \rc{0.31\textwidth}{3-}{\begin{dangercard}[\eqrowht]{\faExclamationTriangle\quad Blame}
       \normalsize $\blame{p}$ names a checked boundary.
     \end{dangercard}}
-  \end{columns}
+  }
 
   \onslide<4->{%
   \bigskip
   \begin{successcard}{\faLock\quad Progress $+$ preservation}
-    \centering A closed, well-typed term is a value, takes a step, or reports
-    blame; every step preserves its type.
+    \centering A closed, well-typed term is either a value, takes a step, or reports
+    blame;\\ every step preserves its type.
   \end{successcard}}
   \notescript{%
     \textbf{[12:25 — 13:35]}\\
@@ -920,17 +1002,17 @@
 \begin{frame}{Hard part 1: classify every binder semantically}
   \begin{center}
   \begin{tikzpicture}
-    \node[source node,text width=4.5cm] (src) at (0,1.35)
+    \node[source node,text width=4.5cm] (src) at (0,1.9)
       {one CoC syntax\\[0.25ex]\large\src{\texttt{fun (x : A) => ...}}};
 
     \onslide<2->{%
       \node[dynamic node,diamond,aspect=2.15,text width=2.25cm,inner sep=2pt]
         (class) at (0,-0.15) {does $A$ have\\sort $\KindS$?};
       \draw[flow arrow,dynOrange] (src) -- (class);
-      \node[target node,text width=3.0cm] (type) at (-3.1,-1.65)
+      \node[target node,text width=3.15cm,minimum height=1.9cm] (type) at (-3.9,-2.6)
         {\textbf{yes} / type binder\\$\Lambda A{:}\kstar.\;\cdots$\\[-0.1ex]
          \scriptsize e.g. $A = \SetS$};
-      \node[target node,text width=3.0cm] (term) at (3.1,-1.65)
+      \node[target node,text width=3.15cm,minimum height=1.9cm] (term) at (3.9,-2.6)
         {\textbf{no} / term binder\\$\lambda x{:}A.\;\cdots$\\[-0.1ex]
          \scriptsize e.g. $A = \Nat$};
       \draw[flow arrow,tgtTeal] (class) -- (type);
@@ -1011,37 +1093,37 @@
 
 \begin{frame}{Hard part 3: the proof is part of the program}
   \begin{center}
-  \begin{tikzpicture}
-    \node[source node,text width=2.25cm] (d) at (-4.2,0.55)
+  \begin{tikzpicture}[every node/.append style={font=\small,
+        execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000\relax}},
+      step arrow/.style={-{Latex[length=3.2mm,width=2.8mm]},
+        line width=1.9pt,draw=dynOrange!88!black}]
+    \node[source node,text width=2.15cm,minimum height=2.4cm] (d) at (-5.1,0.55)
       {\texttt{extract} consumes\\$H : \Gamma \vdash t : T$};
     \onslide<2->{%
-      \node[dynamic node,text width=2.25cm] (elim) at (-1.4,0.55)
+      \node[dynamic node,text width=2.15cm,minimum height=2.4cm] (elim) at (-1.7,0.55)
         {Rocq must inspect $H$\\to build target data};
-      \draw[flow arrow,dynOrange] (d) -- (elim);
+      \draw[step arrow] (d) -- (elim);
     }
     \onslide<3->{%
-      \node[dynamic node,text width=2.15cm] (type) at (1.4,0.55)
+      \node[dynamic node,text width=2.15cm,minimum height=2.4cm] (type) at (1.7,0.55)
         {\texttt{has\_type}\\must live in \texttt{Type}};
-      \node[neutral node,text width=2.45cm] (infra) at (4.3,0.55)
+      \node[neutral node,text width=2.15cm,minimum height=2.4cm] (infra) at (5.1,0.55)
         {reduction $+$ conversion\\also computational\\\scriptsize $\sim$20 CoC files};
-      \draw[flow arrow,dynOrange] (elim) -- (type);
-      \draw[flow arrow,black!48] (type) -- (infra);
+      \draw[step arrow] (elim) -- (type);
+      \draw[step arrow] (type) -- (infra);
     }
   \end{tikzpicture}
   \end{center}
 
-  \onslide<4->{%
   \smallskip
-  \begin{columns}[T,onlytextwidth]
-    \column{0.44\textwidth}
-    \begin{successcard}{\faCheckCircle\quad Derivation independence}
+  \eqcards{%
+    \rc{0.44\textwidth}{4-}{\begin{successcard}[\eqrowht]{\faCheckCircle\quad Derivation independence}
       \small Different typing proofs produce simulation-related extractions.
-    \end{successcard}
-    \column{0.52\textwidth}
-    \begin{dangercard}{Mechanization changed the design}
+    \end{successcard}}
+    \rc{0.52\textwidth}{4-}{\begin{dangercard}[\eqrowht]{Mechanization changed the design}
       \small The determinism proof exposed a real overlapping reduction rule.
-    \end{dangercard}
-  \end{columns}}
+    \end{dangercard}}
+  }
   \notescript{%
     \textbf{[16:05 — 17:35]}\\
     \beat{1}{The third difficulty is specific to making the translation an object
@@ -1066,25 +1148,20 @@
 %% ==========================================================================
 
 \begin{frame}{What Rocq actually checks}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.48\textwidth}
-    \begin{sourcecard}{\faCheckCircle\quad Static guarantee}
+  \eqgrid{0.48\textwidth}%
+    {1-}{\begin{sourcecard}[\eqrowht]{\faCheckCircle\quad Static guarantee}
       \small Well-typed source $\rightsquigarrow$ well-typed target.
-    \end{sourcecard}
-    \smallskip
-    \onslide<3->{\begin{targetcard}{\faRoute\quad Source behavior}
+    \end{sourcecard}}%
+    {3-}{\begin{targetcard}[\eqrowht]{\faRoute\quad Source behavior}
       \small Source reduction is tracked by a deliberately \emph{syntactic} simulation.
-    \end{targetcard}}
-
-    \column{0.48\textwidth}
-    \onslide<2->{\begin{successcard}{\faArrowRight\quad Dynamic guarantee}
+    \end{targetcard}}%
+    {2-}{\begin{successcard}[\eqrowht]{\faArrowRight\quad Dynamic guarantee}
       \small Types are preserved; execution yields a value, a step, or blame.
-    \end{successcard}}
-    \smallskip
-    \onslide<4->{\begin{dynamiccard}{\faLock\quad Boundary guarantee}
-      \small No external labels in isolation; exact characterization of Dyn-free types.
+    \end{successcard}}%
+    {4-}{\begin{dynamiccard}[\eqrowht]{\faLock\quad Boundary guarantee}
+      \small No external labels in isolation; exact characterization of Dyn-free types ---
+      the F$\omega$ subset of CoC extracts with zero \texttt{Dyn}.
     \end{dynamiccard}}
-  \end{columns}
 
   \onslide<5->{%
   \medskip
@@ -1105,7 +1182,10 @@
     or observational approximation.}\\
     \beat{4}{Fourth, an isolated extracted term never invents a client-owned blame
     label, and a separate theorem gives an exact syntactic characterization of
-    which source types translate without Dyn.}\\
+    which source types translate without Dyn. Concretely: if you stay inside
+    the Fomega-expressible fragment of CoC --- no type-level use of a runtime
+    value --- the translation is optimistic and produces zero Dyn. Dyn only
+    shows up at the genuine boundary we've been describing all along.}\\
     \lbeat{5}{All of these results are machine checked, with no admitted lemmas or
     project-local axioms. The audit reports only the standard equality axiom
     shown here. The theorem names and exact statements are in the backup deck.}
@@ -1113,76 +1193,56 @@
 \end{frame}
 
 \begin{frame}[fragile]{Evidence you can poke at}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.59\textwidth}
-    \begin{beamercolorbox}[wd=\linewidth,sep=0.85em,rounded=true]{terminal card}
-      \small\ttfamily
-      {\color{accentOrange}Coc \textless} {\color{white}Infer}\\
-      \quad fun (A : {\color{srcBlue!45!white}Set}) (x : A) => x.\\
-      {\color{okGreen!65!white}Inferred: forall (A : Set), A -> A}\\[0.8ex]
-      {\color{accentOrange}Coc \textless} {\color{white}Extract}\\
-      \quad fun (A : {\color{srcBlue!45!white}Set}) (x : A) => x.\\
-      {\color{tgtTeal!55!white}Extracted: fun (A : *) (x : A) => x}
-    \end{beamercolorbox}
+  \begin{beamercolorbox}[wd=\linewidth,sep=1.0em,rounded=true]{terminal card}
+    \small\ttfamily
+    {\color{accentOrange}Coc \textless} {\color{white}Check mmul.}\\
+    {\color{okGreen!70!white}Inferred type: forall (m n p : nat),
+      Mat m n -> Mat n p -> Mat m p}\\[1.4ex]
+    \onslide<2->{%
+    {\color{accentOrange}Coc \textless} {\color{white}Extract mmul.}\\
+    {\color{tgtTeal!60!white}Extracted: fun (m n p : nat) (a b : Mat) => \ldots}}
+  \end{beamercolorbox}
 
-    \column{0.37\textwidth}
-    \pause
-    \begin{targetcard}{\faCubes\quad Artifact breadth}
-      {\color{tgtTeal}\fontsize{23}{24}\selectfont\bfseries 18}
-      \hspace{0.35em}{\small\bfseries checked batches}
-
-      \smallskip
-      \scriptsize Vectors, printf, matrices, units,\\[-0.1ex]
-      AVL trees, sessions, and more.
-    \end{targetcard}
-    \smallskip
-    \begin{dangercard}{\faExclamationTriangle\quad Stock baseline}
-      {\color{blameRed}\fontsize{21}{22}\selectfont\bfseries 7/18}
-      \hspace{0.35em}{\small\bfseries stock examples}
-
-      \smallskip
-      \scriptsize expose \texttt{Obj.magic} or \texttt{Obj.t}.
-    \end{dangercard}
-  \end{columns}
+  \onslide<2->{%
+  \medskip
+  \begin{center}\small
+    \talkpill{tgtTeal}{dimensions are part of the source type}
+    \hspace{0.6em}
+    \talkpill{okGreen}{extracts to honest F$\omega$ --- no \texttt{Obj.magic}}
+  \end{center}}
 
   \notescript{%
     \textbf{[19:05 — 20:20]}\\
     \beat{1}{The artifact also extracts the source type checker and the
-    mathematical translation to OCaml, with a small REPL around them. The first
-    command infers the source type of polymorphic identity; the second prints its
-    target extraction.}\\
-    \lbeat{2}{The repository includes eighteen golden example batches: vectors,
-    printf, dimensioned matrices, units of measure, balanced trees, session
-    types, interpreters, and heterogeneous data. We also ported the same idioms
-    to ordinary CIC and ran stock Rocq 9.0 extraction; seven expose unchecked
-    casts or Obj.t interfaces. Even de Bruijn-to-named recovery is proved
-    capture-free. To scope that accurately, the theorem covers name recovery,
-    not the parser, the final string formatting, or the OCaml wrapper around the
-    extracted code.}
+    translation itself to OCaml, wrapped in a small REPL you can run. Here I ask
+    it to check matrix multiplication. The inferred type is \texttt{forall m n p,
+    Mat m n to Mat n p to Mat m p}: the dimensions are part of the contract, so a
+    shape mismatch is a static error, exactly as in the source.}\\
+    \lbeat{2}{And it extracts to real, well-typed F-omega. The dimension index
+    erases --- \texttt{Mat m n} becomes plain \texttt{Mat}, with m, n, p staying
+    as ordinary runtime arguments --- but there is no \texttt{Obj.magic} and no
+    unchecked cast anywhere. The genuine residue, a type that depends on a
+    runtime value, is exactly where blame would step in, as we saw. You can run
+    all of this yourself: vectors, printf, matrices, session types, and more are
+    in the repository.}
   }
 \end{frame}
 
 \begin{frame}{What this is --- and is not}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.48\textwidth}
-    \begin{neutralcard}{\faCode\quad Mathematical translation}
+  \eqgrid{0.48\textwidth}%
+    {1-}{\begin{neutralcard}[\eqrowht]{\faCode\quad Mathematical translation}
       \small Total and verified, but normalizes types and invokes inference:
       not a production back end.
-    \end{neutralcard}
-    \smallskip
-    \onslide<3->{\begin{neutralcard}{\faProjectDiagram\quad Syntactic simulation}
+    \end{neutralcard}}%
+    {3-}{\begin{neutralcard}[\eqrowht]{\faProjectDiagram\quad Syntactic simulation}
       \small Not contextual equivalence or a full compiler-correctness theorem.
-    \end{neutralcard}}
-
-    \column{0.48\textwidth}
-    \onslide<2->{\begin{dangercard}{\faExclamationTriangle\quad Reachable internal blame}
+    \end{neutralcard}}%
+    {2-}{\begin{dangercard}[\eqrowht]{\faExclamationTriangle\quad Reachable internal blame}
       \small A type that depends on a runtime value can deliberately fail.
-    \end{dangercard}}
-    \smallskip
-    \onslide<4->{\begin{dynamiccard}{\faLockOpen\quad Executable boundary}
+    \end{dangercard}}%
+    {4-}{\begin{dynamiccard}[\eqrowht]{\faLockOpen\quad Executable boundary}
       \small No proof erasure or native inductives; opaque proof bodies are accessed.
     \end{dynamiccard}}
-  \end{columns}
 
   \onslide<5->{%
   \smallskip
@@ -1261,18 +1321,20 @@
   }
 \end{frame}
 
-\begin{frame}[standout]
-  Thank you!
+\begin{frame}[c,noframenumbering]
+  \begin{columns}[c,onlytextwidth]
+    \column{0.42\textwidth}
+    \raggedleft
+    {\Large\bfseries\color{black!82} Thank you!}
 
-  \medskip
-  {\normalsize
-    \src{CoC} $\longrightarrow$ \tgt{System F$\omega$}
-    $+$ $\dyn$ $+$ \textcolor{blameRed}{blame}}
-
-  \medskip
-  {\small
-  \texttt{dune exec tests/top.exe} --- try the REPL\\
-  Full Rocq development, examples, paper, and Q\&A backup slides in the artifact}
+    \bigskip
+    {\normalsize\color{black!72} \textbf{One thing to remember:}\\[-0.1ex]
+      Static guarantees where possible,\\[-0.1ex]
+      checked casts where not}
+    \column{0.34\textwidth}
+    \centering
+    \pipelinediagram
+  \end{columns}
   \note{%
     \textbf{[23:00+] — Q\&A.}\\
     Thank you! I'm happy to take questions. I have backup slides with the full
