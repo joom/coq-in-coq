@@ -9,8 +9,9 @@
 %%  SPEAKER NOTES / SCRIPT
 %%    The numbered main deck is scripted for roughly 23 minutes. Every main
 %%    frame has a complete spoken script and a time budget; the backup frames
-%%    after the thank-you slide are for Q&A. <click> markers in the script sit
-%%    where the next overlay is revealed.
+%%    after the thank-you slide are for Q&A. Notes are written with \notescript
+%%    (see its definition below): each spoken beat is a \beat{k}{...} matching
+%%    overlay k, and the note screen highlights the current beat as you click.
 %%
 %%    DEFAULT BUILD: notes on the right half of a double-width page
 %%    (show notes on second screen=right) — rehearsal-ready out of the box.
@@ -35,7 +36,10 @@
 \usepackage{xcolor}
 \usepackage{pgfpages}
 \usepackage{fontawesome5}
-\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric,backgrounds}
+
+%% --- monospace font: Iosevka (Metropolis loads fontspec under LuaLaTeX) -----
+\setmonofont{Iosevka}[Scale=MatchLowercase]
 
 %% --- speaker notes (default ON; comment out for the clean deck) -------------
 \setbeameroption{show notes on second screen=right}
@@ -146,7 +150,52 @@
 \newcommand{\src}[1]{\textcolor{srcBlue}{#1}}
 \newcommand{\tgt}[1]{\textcolor{tgtTeal}{#1}}
 \newcommand{\mech}[1]{\textcolor{okGreen}{\texttt{#1}}}
-\newcommand{\click}{{\color{accentOrange}\textbf{\textless click\textgreater}}~}
+
+%% --- overlay-aware speaker-note beats ---------------------------------------
+%% Wrap a note in \notescript{...}; write each spoken beat as \beat{k}{text}
+%% (or \lbeat{k}{text} for the final one). \notescript emits one note page per
+%% overlay, highlighting the beat for that overlay and dimming the rest, so you
+%% can see where you are. It does NOT add overlays: each \note<i> is accumulated
+%% at the right overlay during frame processing (beamer's slide-in-frame counter
+%% is unreliable inside notes because the note is typeset at the next slide).
+\definecolor{noteNow}{HTML}{B45309}
+\newcommand{\beathl}[1]{{\color{noteNow}\bfseries #1}}
+\newcommand{\beatdim}[1]{{\color{black!48}#1}}
+\makeatletter
+\newcount\nb@total \newcount\nb@i \newcount\nb@k
+%% runtime renderer for one beat: advance the running index, highlight it if it
+%% matches the (baked) active overlay, else dim. \nb@active is set per note page.
+\newcommand{\nb@item}[1]{\global\advance\nb@k by1
+  \ifnum\nb@k=\nb@active\relax\beathl{#1}\else\beatdim{#1}\fi\par\smallskip}
+\long\def\notescript#1{%
+  \global\nb@total=0 \gdef\nb@list{}\gdef\nb@header{}%
+  %% pass 1: capture header + each beat's text (typesetting absorbed by the box)
+  \setbox\z@\vbox{\hsize\textwidth
+    \long\def\textbf##1{\gdef\nb@header{\textbf{##1}}}%
+    \long\def\beat##1##2{\global\advance\nb@total by1
+      \g@addto@macro\nb@list{\nb@item{##2}}}%
+    \let\lbeat\beat
+    \def\\{}\def\quad{}%
+    #1}%
+  \ifnum\nb@total=0\relax
+    \note{#1}%  no beats: emit a plain note unchanged
+  \else
+    %% emit one \note<i> per overlay; bake header, active index, and beat list
+    %% fully into each note (via \unexpanded) so late typesetting stays correct.
+    \nb@i=0
+    \loop\ifnum\nb@i<\nb@total
+      \advance\nb@i by1
+      \edef\nb@do{%
+        \noexpand\note<\the\nb@i>{%
+          \unexpanded\expandafter{\nb@header}%
+          \noexpand\par\noexpand\smallskip
+          \noexpand\global\noexpand\nb@k=0\relax
+          \noexpand\def\noexpand\nb@active{\the\nb@i}%
+          \unexpanded\expandafter{\nb@list}}}%
+      \nb@do
+    \repeat
+  \fi}
+\makeatother
 
 %% --- listings: CoC source vs. REPL output -----------------------------------
 \lstdefinelanguage{coc}{
@@ -236,34 +285,40 @@
     \column{0.34\textwidth}
     \centering
     \begin{tikzpicture}[node distance=0.58cm]
-      \node[source node,text width=2.85cm] (coc) {%
-        {\color{srcBlue}\bfseries\large CoC}\\[-0.1ex]
+      \node[source node,text width=3.15cm] (coc) {%
+        {\color{srcBlue}\bfseries Calculus of\\ Constructions}\\[0.15ex]
         \scriptsize proof + program};
       \node[below=0.5cm of coc,font=\scriptsize\bfseries,
         text=dynOrange] (boundary) {verified extraction};
-      \node[target node,text width=2.85cm,below=0.5cm of boundary] (static) {%
-        {\color{tgtTeal}\bfseries System F$\omega$}\\[-0.1ex]
-        \scriptsize static skeleton};
-      \node[dynamic node,text width=2.85cm,below=0.46cm of static] (dynamic) {%
-        {\color{dynOrange}\bfseries Dyn}
-        {\color{black!55}\bfseries +}
-        {\color{blameRed}\bfseries blame}\\[-0.1ex]
-        \scriptsize checked remainder};
+      \node[rounded corners=3pt,inner sep=7pt,align=center,text width=3.15cm,
+        top color=tgtTeal!12,bottom color=dynOrange!13,
+        below=0.5cm of boundary] (target) {%
+        {\color{tgtTeal}\bfseries System F$\omega$}\\[0.15ex]
+        {\color{black!45}\bfseries +}\\[0.15ex]
+        {\color{dynOrange}\bfseries Dyn}\,{\color{black!50}\small with}\,%
+        {\color{blameRed}\bfseries blame}\\[0.45ex]
+        {\scriptsize\color{black!62}static skeleton,\\[-0.7ex] runtime checked casts}};
+      %% faux gradient border: strong tgtTeal->dynOrange rectangle behind the
+      %% light-gradient fill, offset out by ~1pt so only a thin frame shows.
+      \begin{scope}[on background layer]
+        \node[fit=(target),rounded corners=3.6pt,inner sep=1.1pt,
+          top color=tgtTeal!85,bottom color=dynOrange!85] {};
+      \end{scope}
       \draw[flow arrow,draw=dynOrange] (coc) -- (boundary);
-      \draw[flow arrow,draw=tgtTeal] (boundary) -- (static);
-      \node[text=black!42,font=\bfseries] at
-        ($(static.south)!0.5!(dynamic.north)$) {$+$};
+      \draw[flow arrow,draw=tgtTeal] (boundary) -- (target);
     \end{tikzpicture}
   \end{columns}
   \note{%
     \textbf{[0:00 — 0:30]}\\
-    Hi everyone! I'm Joomy. This talk starts with a small refactoring that
-    Rocq's type system rejects, but the extracted OCaml program accepts --- and
-    then segfaults. That example exposes a boundary we do not talk about enough:
-    when verified code leaves a proof assistant, which guarantees survive in
-    the target language? I will show a verified translation that keeps the
-    static structure its target can express and turns the genuine remainder
-    into an explicit, checked failure instead of an unchecked cast.
+    Hi everyone, I'm Joomy. You verify a program in Rocq, prove it correct, and
+    extract it to OCaml. The proof still holds --- but now ordinary OCaml around
+    it can call that code in a way Rocq would have rejected, and segfault.
+    Nothing malicious, no unsafe casts of my own: just a reasonable-looking
+    mistake at the boundary that the extracted interface no longer catches. So
+    the real question is: when verified code leaves the proof assistant, which
+    of its guarantees actually survive? My answer is a verified translation that
+    preserves every guarantee the target can express --- and for the part it
+    can't, replaces silent, unchecked casts with explicit, checked blame.
   }
 \end{frame}
 
@@ -295,32 +350,32 @@
     A \emph{value} --- the format --- determines the \emph{type} of the
     function that interprets it.
   \end{sourcecard}
-  \note{%
+  \notescript{%
     \textbf{[0:30 — 1:30]}\\
-    Here is the only dependent-type idea you need for this talk. The format
-    percent-d describes a function that consumes a natural number and returns a
-    string. Percent-d percent-s describes a function with two arguments. The
-    format is ordinary data, but it determines the function's type.\\
-    \click That is what ``dependent'' means in this example: a value appears in,
-    or computes, a type. The source type checker can therefore keep the format
-    and every call site synchronized. You do not need to know the Calculus of
-    Constructions to follow the rest; keep this one relationship in mind.
+    \beat{1}{Here is the only dependent-type idea you need for this talk. The
+    format percent-d describes a function that consumes a natural number and
+    returns a string. Percent-d percent-s describes a function with two
+    arguments. The format is ordinary data, but it determines the function's
+    type.}\\
+    \lbeat{2}{That is what ``dependent'' means in this example: a value appears
+    in, or computes, a type. The source type checker can therefore keep the
+    format and every call site synchronized. You do not need to know the
+    Calculus of Constructions to follow the rest; keep this one relationship in
+    mind.}
   }
 \end{frame}
 
 \begin{frame}[fragile]{Rocq catches the drift}
   \begin{columns}[T,onlytextwidth]
-    \column{0.43\textwidth}
+    \column{0.48\textwidth}
     \begin{sourcecard}{\texttt{Fmt A} carries the promise}
       \small\ttfamily
       sprintf : Fmt A -> A\\[0.55ex]
-      fint : Fmt A ->\\
-      \hspace*{2.2em}Fmt (Nat -> A)\\[0.55ex]
-      fstr : Fmt A ->\\
-      \hspace*{2.2em}Fmt (Str -> A)
+      fint : Fmt A -> Fmt (Nat -> A)\\[0.55ex]
+      fstr : Fmt A -> Fmt (Str -> A)
     \end{sourcecard}
 
-    \column{0.53\textwidth}
+    \column{0.48\textwidth}
     \pause
     \begin{successcard}{\faCheckCircle\quad One argument / accepted}
       \small\ttfamily
@@ -337,18 +392,18 @@
       \quad (fint Str fstop).
     \end{dangercard}
   \end{columns}
-  \note{%
+  \notescript{%
     \textbf{[1:30 — 2:30]}\\
-    Here is the small amount of source notation behind it. A value of type
-    \texttt{Fmt A} is a format denoting an \texttt{A}. Adding percent-d changes
-    the index from \texttt{A} to \texttt{Nat to A}; percent-s does the same for
-    strings. So \texttt{sprintf} can return exactly the function described by
-    its format.\\
-    \click The first check says that a one-percent-d format denotes a
+    \beat{1}{Here is the small amount of source notation behind it. A value of
+    type \texttt{Fmt A} is a format denoting an \texttt{A}. Adding percent-d
+    changes the index from \texttt{A} to \texttt{Nat to A}; percent-s does the
+    same for strings. So \texttt{sprintf} can return exactly the function
+    described by its format.}\\
+    \lbeat{2}{The first check says that a one-percent-d format denotes a
     one-argument function. Rocq accepts it. The second call claims the same
     format takes two arguments. Rocq rejects it. This is not a theorem about a
     distant specification: it is an everyday interface guarantee enforced at
-    the call site.
+    the call site.}
   }
 \end{frame}
 
@@ -381,17 +436,17 @@
     \hspace{0.6em}
     \talkpill{blameRed}{\texttt{Obj.magic} promises it was right}
   \end{center}
-  \note{%
+  \notescript{%
     \textbf{[2:30 — 3:40]}\\
-    Now we extract that program with Rocq 9.0's stock OCaml extraction.\\
-    \click The result is still typed OCaml, but read what the type says.
+    \beat{1}{Now we extract that program with Rocq 9.0's stock OCaml extraction.}\\
+    \lbeat{2}{The result is still typed OCaml, but read what the type says.
     \texttt{Fint} can take a format at one type and return a format at any other
     type. And \texttt{sprintf} says: give me a format and I can return whatever
     type the caller asks for. The format no longer determines the function; the
     caller does. To implement that impossible promise, the extracted body uses
     \texttt{Obj.magic}, OCaml's unchecked cast. The source program remains
     verified inside Rocq. What broke is its ability to compose safely through
-    the exported target interface.
+    the exported target interface.}
   }
 \end{frame}
 
@@ -431,20 +486,20 @@
       \texttt{Obj.t}. This is a boundary problem, not a toy corner case.
     \end{columns}
   \end{beamercolorbox}}
-  \note{%
+  \notescript{%
     \textbf{[3:40 — 4:50]}\\
-    So someone changes a format in one place but misses one call site --- the
-    exact refactoring error type-safe printf exists to prevent. OCaml accepts
-    this because the weakened interface lets the one-argument closure pose as a
-    two-argument function.\\
-    \click The second application tries to call a data block as a closure and
+    \beat{1}{So someone changes a format in one place but misses one call site
+    --- the exact refactoring error type-safe printf exists to prevent. OCaml
+    accepts this because the weakened interface lets the one-argument closure
+    pose as a two-argument function.}\\
+    \beat{2}{The second application tries to call a data block as a closure and
     the process receives SIGSEGV. No OCaml exception is raised, so the failure
-    cannot be caught, and no boundary is identified.\\
-    \click This is not unique to printf. Seven of the eighteen dependent
+    cannot be caught, and no boundary is identified.}\\
+    \lbeat{3}{This is not unique to printf. Seven of the eighteen dependent
     programming idioms in our artifact need unchecked casts or \texttt{Obj.t}
     interfaces under stock Rocq extraction: bounds-checked indexing,
     heterogeneous data, typed interpreters, and others. If proofs are going to
-    protect deployed code, the handoff to the surrounding ecosystem matters.
+    protect deployed code, the handoff to the surrounding ecosystem matters.}
   }
 \end{frame}
 
@@ -474,19 +529,19 @@
     How much dependent structure can a richer typed target preserve?\\[-0.2ex]
     Can we verify both the translation and its fallback?
   \end{alertblock}}
-  \note{%
+  \notescript{%
     \textbf{[4:50 — 5:50]}\\
-    This gives us a hierarchy of outcomes. First, the best outcome is not a
-    runtime check at all. If the target can express the relationship, keep it
-    static and reject the mistake before the program runs.\\
-    \click If the target genuinely cannot express the dependency, use a typed,
+    \beat{1}{This gives us a hierarchy of outcomes. First, the best outcome is
+    not a runtime check at all. If the target can express the relationship, keep
+    it static and reject the mistake before the program runs.}\\
+    \beat{2}{If the target genuinely cannot express the dependency, use a typed,
     checked boundary. A mismatch then becomes explicit blame: an ordinary result
-    in the target semantics, carrying a label.\\
-    \click What we must not do is pretend the types agree and delegate the
-    consequences to undefined behavior.\\
-    \click So our question is: how much can we preserve, where exactly must we
+    in the target semantics, carrying a label.}\\
+    \beat{3}{What we must not do is pretend the types agree and delegate the
+    consequences to undefined behavior.}\\
+    \lbeat{4}{So our question is: how much can we preserve, where exactly must we
     fall back, and can Rocq check the answer? This separation is important:
-    printf will stay static; blame is for the harder residue.
+    printf will stay static; blame is for the harder residue.}
   }
 \end{frame}
 
@@ -529,18 +584,18 @@
     \hspace{0.6em}
     \talkpill{dynOrange}{Expose the remainder explicitly}
   \end{center}
-  \note{%
+  \notescript{%
     \textbf{[5:50 — 6:50]}\\
-    Our translation has one policy and three outcomes. On the left, preserve:
-    polymorphism, functions over types, and higher-kinded type families remain
-    genuine target type structure. In the middle, erase: a vector's length may
-    disappear from its target type even if the length remains as runtime data.
-    On the right, dynamize: when an ordinary value is being used as a type and
-    the target has no such type-level object, that residue goes through Dyn and
-    a reserved internal blame marker.\\
-    \click We call the translation optimistic because it does not defensively
+    \beat{1}{Our translation has one policy and three outcomes. On the left,
+    preserve: polymorphism, functions over types, and higher-kinded type
+    families remain genuine target type structure. In the middle, erase: a
+    vector's length may disappear from its target type even if the length
+    remains as runtime data. On the right, dynamize: when an ordinary value is
+    being used as a type and the target has no such type-level object, that
+    residue goes through Dyn and a reserved internal blame marker.}\\
+    \lbeat{2}{We call the translation optimistic because it does not defensively
     make everything dynamic. It preserves every part this translation knows how
-    to express statically and reaches for Dyn only at the genuine boundary.
+    to express statically and reaches for Dyn only at the genuine boundary.}
   }
 \end{frame}
 
@@ -577,23 +632,23 @@
     \centering\small F$\omega$ is richer than ML, less dependent than CoC.\\[-0.2ex]
     Preserve its static skeleton; erase or dynamize the remaining term dependency.
   \end{dynamiccard}}
-  \note{%
+  \notescript{%
     \textbf{[6:50 — 8:00]}\\
-    Let me name the type-theoretic gap more precisely. Our source is the Calculus
-    of Constructions, the small dependent core behind Rocq. Its central type is
-    the dependent product, Pi x of A, B x. Ordinary functions and universal
-    quantification are both instances of it, and the result type may mention the
-    value x. CoC also treats terms and types in one uniform syntax.\\
-    \click The static core of our target is System F-omega. This is substantially
-    richer than ML polymorphism: it has explicit type abstraction and
-    application, type-level lambda functions, and higher kinds. That is why it
-    can preserve structures like Fmt and computed type-level codes. But it still
-    separates terms from types, so an ordinary term value cannot occur in a
-    target type.\\
-    \click That makes F-omega a useful middle ground. Paulin-Mohring already
+    \beat{1}{Let me name the type-theoretic gap more precisely. Our source is the
+    Calculus of Constructions, the small dependent core behind Rocq. Its central
+    type is the dependent product, Pi x of A, B x. Ordinary functions and
+    universal quantification are both instances of it, and the result type may
+    mention the value x. CoC also treats terms and types in one uniform syntax.}\\
+    \beat{2}{The static core of our target is System F-omega. This is
+    substantially richer than ML polymorphism: it has explicit type abstraction
+    and application, type-level lambda functions, and higher kinds. That is why
+    it can preserve structures like Fmt and computed type-level codes. But it
+    still separates terms from types, so an ordinary term value cannot occur in a
+    target type.}\\
+    \lbeat{3}{That makes F-omega a useful middle ground. Paulin-Mohring already
     connected CoC and F-omega in 1989. We keep that expressive static skeleton
     and add Dyn and blame for the part of dependency that crosses the remaining
-    term-to-type boundary.
+    term-to-type boundary.}
   }
 \end{frame}
 
@@ -628,17 +683,17 @@
     \hspace{0.35em}\talkpill{okGreen}{0 blame}
     \hspace{0.7em}\small The arity is ordinary F$\omega$ structure.
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[8:00 — 9:00]}\\
-    Now return to printf. The percent-d format has source type
-    \texttt{Fmt of Nat to Str}.\\
-    \click Under our translation, the extracted application has target type
+    \beat{1}{Now return to printf. The percent-d format has source type
+    \texttt{Fmt of Nat to Str}.}\\
+    \lbeat{2}{Under our translation, the extracted application has target type
     \texttt{Nat to Str}. This is a statement about the translated target type,
     justified by the well-typedness theorem; the REPL's \texttt{Check} command
     itself checks the source term. F-omega can express the computed arrow type,
     so the drifted two-argument client is a
     target type error again, before evaluation. The richer target preserves the
-    useful static guarantee that stock ML extraction lost.
+    useful static guarantee that stock ML extraction lost.}
   }
 \end{frame}
 
@@ -679,17 +734,18 @@
     \hspace{0.35em}
     \talkpill{okGreen}{no unchecked cast}
   \end{center}
-  \note{%
+  \notescript{%
     \textbf{[9:00 — 10:00]}\\
-    Erasure is a different outcome. A bounds-checked vector lookup says that the
-    vector length and the upper bound on its index are the same value, n.\\
-    \click In the target, Vec no longer mentions n, and Fin no longer mentions
+    \beat{1}{Erasure is a different outcome. A bounds-checked vector lookup says
+    that the vector length and the upper bound on its index are the same value,
+    n.}\\
+    \lbeat{2}{In the target, Vec no longer mentions n, and Fin no longer mentions
     n. Notice that the ordinary argument n can remain because the program may
     compute with it; what disappears is the relationship in the type. We are
     explicit about that loss. The target client no longer receives the
     bounds-safety guarantee, but there is also no \texttt{Obj.magic} claiming
     the guarantee still exists. Any cast elsewhere in the target is a checked
-    operation governed by its semantics.
+    operation governed by its semantics.}
   }
 \end{frame}
 
@@ -739,14 +795,14 @@
     \end{targetcard}
   \end{columns}
 
-  \note{%
+  \notescript{%
     \textbf{[10:00 — 11:10]}\\
-    There is one more CoC detail worth seeing. Our source is bare CoC, without
-    native inductive declarations. The REPL's Inductive command expands to an
-    indexed Böhm--Berarducci encoding. Here a vector of A at length n is defined
-    by its fold: for every family X indexed by naturals, give me the empty case
-    and the cons case, and I produce X n.\\
-    \click The motive X depends on the index. The first argument supplies the
+    \beat{1}{There is one more CoC detail worth seeing. Our source is bare CoC,
+    without native inductive declarations. The REPL's Inductive command expands
+    to an indexed Böhm--Berarducci encoding. Here a vector of A at length n is
+    defined by its fold: for every family X indexed by naturals, give me the
+    empty case and the cons case, and I produce X n.}\\
+    \lbeat{2}{The motive X depends on the index. The first argument supplies the
     \texttt{vnil} case; the second supplies \texttt{vcons}; applying the encoded
     vector to both produces $X\,n$. Vec, Fin, equality, and Fmt therefore receive
     indexed folds that compute as ordinary CoC lambda terms. For Fmt, sprintf
@@ -754,7 +810,7 @@
     the function type computed by the format, so the arity is represented as
     F-omega type structure after extraction. The ceiling is also precise: this
     gives indexed folds, not full dependent induction or large elimination. I
-    have that distinction in the backup slides.
+    have that distinction in the backup slides.}
   }
 \end{frame}
 
@@ -790,20 +846,20 @@
     Internal blame is reachable. It says ``this translation cannot represent
     the requested dependency'' --- a defined outcome, not undefined behavior.
   \end{alertblock}}
-  \note{%
+  \notescript{%
     \textbf{[11:10 — 12:25]}\\
-    Dynamization is the genuinely hard residue. Imagine a universe of codes and
-    a decoder El. A code is ordinary runtime data, but El turns it into a type.
-    In the bare-CoC artifact this decoder is abstract, because defining it by
-    large elimination is itself beyond the source calculus.\\
-    \click F-omega can compute with types, but it cannot turn the runtime value
+    \beat{1}{Dynamization is the genuinely hard residue. Imagine a universe of
+    codes and a decoder El. A code is ordinary runtime data, but El turns it into
+    a type. In the bare-CoC artifact this decoder is abstract, because defining
+    it by large elimination is itself beyond the source calculus.}\\
+    \beat{2}{F-omega can compute with types, but it cannot turn the runtime value
     c into a type. When a source type depends on c in this way, its translation
     uses Dyn. If that unrepresentable type-level object is demanded as a term,
-    extraction inserts a reserved internal blame marker cast through Dyn.\\
-    \click The result does not cover execution of every dependent program. It
+    extraction inserts a reserved internal blame marker cast through Dyn.}\\
+    \lbeat{3}{The result does not cover execution of every dependent program. It
     gives this unrepresentable case an explicit, typed outcome in the target
     semantics, instead of silently asserting an impossible type equality and
-    allowing a host-language failure later.
+    allowing a host-language failure later.}
   }
 \end{frame}
 
@@ -838,22 +894,22 @@
     \centering A closed, well-typed term is a value, takes a step, or reports
     blame; every step preserves its type.
   \end{successcard}}
-  \note{%
+  \notescript{%
     \textbf{[12:25 — 13:35]}\\
-    The target is System F-omega --- a language with polymorphism and functions
-    over types --- extended with Dyn, checked casts, and blame. You do not need
-    its grammar to understand its contract. A closed, well-typed term may
-    already be a value.\\
-    \click Or it can take a step, according to a deterministic operational
-    semantics.\\
-    \click Or it can be an explicit blame term carrying a label. A cast
+    \beat{1}{The target is System F-omega --- a language with polymorphism and
+    functions over types --- extended with Dyn, checked casts, and blame. You do
+    not need its grammar to understand its contract. A closed, well-typed term
+    may already be a value.}\\
+    \beat{2}{Or it can take a step, according to a deterministic operational
+    semantics.}\\
+    \beat{3}{Or it can be an explicit blame term carrying a label. A cast
     mismatch does not fall off the end of the semantics and does not invoke an
-    unchecked host-language operation.\\
-    \click We prove progress and preservation for the complete target. Together,
-    they say that stepping preserves the type and that a closed, well-typed term
-    is a value, takes a step, or reports blame. A cast mismatch therefore stays
-    inside the target semantics as blame rather than becoming a host-language
-    failure.
+    unchecked host-language operation.}\\
+    \lbeat{4}{We prove progress and preservation for the complete target.
+    Together, they say that stepping preserves the type and that a closed,
+    well-typed term is a value, takes a step, or reports blame. A cast mismatch
+    therefore stays inside the target semantics as blame rather than becoming a
+    host-language failure.}
   }
 \end{frame}
 
@@ -887,21 +943,21 @@
   \begin{center}
     \talkpill{tgtTeal}{reduction-stable classification $+$ split target namespaces}
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[13:35 — 14:50]}\\
-    The first implementation difficulty is the namespace mismatch we just saw.
-    CoC deliberately treats
-    programs and types uniformly. These two binders have the same syntactic
-    form: one binds a type A and one binds a value n.\\
-    \click F-omega separates those worlds. A becomes a type abstraction, while
+    \beat{1}{The first implementation difficulty is the namespace mismatch we
+    just saw. CoC deliberately treats programs and types uniformly. These two
+    binders have the same syntactic form: one binds a type A and one binds a
+    value n.}\\
+    \beat{2}{F-omega separates those worlds. A becomes a type abstraction, while
     n becomes an ordinary function argument. The translation must also compress
     one source de Bruijn namespace into separate target type and term
-    namespaces.\\
-    \click We cannot make this choice by looking for a particular surface
+    namespaces.}\\
+    \lbeat{3}{We cannot make this choice by looking for a particular surface
     syntax, because an annotation may compute before revealing what it is. We
     use the semantic question ``does this have sort Kind?'' The source
     normalization and subject-reduction results are what let us prove that this
-    classification does not change under computation.
+    classification does not change under computation.}
   }
 \end{frame}
 
@@ -936,20 +992,20 @@
     \hspace{0.4em}
     \talkpill{okGreen}{conversion absorbs the static gap}
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[14:50 — 16:05]}\\
-    The second difficulty is that types compute. A type-level identity function
-    applied to Nat is definitionally equal to Nat even though the syntax is
-    different. Every decision made by the extraction has to respect that
-    equality.\\
-    \click The hardest application case compares two routes: substitute a
+    \beat{1}{The second difficulty is that types compute. A type-level identity
+    function applied to Nat is definitionally equal to Nat even though the syntax
+    is different. Every decision made by the extraction has to respect that
+    equality.}\\
+    \beat{2}{The hardest application case compares two routes: substitute a
     source type argument and then translate, or translate both pieces and
-    substitute in the target. A paper proof might casually say these commute.\\
-    \click They do not commute by literal equality. One route contains a target
+    substitute in the target. A paper proof might casually say these commute.}\\
+    \lbeat{3}{They do not commute by literal equality. One route contains a target
     beta redex, and normalizing source annotations introduces another mismatch.
     The correct theorem says the two target types are equal after type-level
     computation. That discovery forced the target typing judgment to include a
-    conversion rule. The exact equation is in the backup slides.
+    conversion rule. The exact equation is in the backup slides.}
   }
 \end{frame}
 
@@ -986,22 +1042,22 @@
       \small The determinism proof exposed a real overlapping reduction rule.
     \end{dangercard}
   \end{columns}}
-  \note{%
+  \notescript{%
     \textbf{[16:05 — 17:35]}\\
-    The third difficulty is specific to making the translation an object inside
-    Rocq. Extraction follows the typing derivation because that derivation tells
-    it which application and binder cases it is translating.\\
-    \click But Rocq separates proof-only propositions from computational data.
+    \beat{1}{The third difficulty is specific to making the translation an object
+    inside Rocq. Extraction follows the typing derivation because that derivation
+    tells it which application and binder cases it is translating.}\\
+    \beat{2}{But Rocq separates proof-only propositions from computational data.
     It does not let a function inspect a Prop proof in order to return arbitrary
-    Type data.\\
-    \click So \texttt{has\_type} had to live in Type. That decision propagated
+    Type data.}\\
+    \beat{3}{So \texttt{has\_type} had to live in Type. That decision propagated
     into well-formedness, one-step and multi-step reduction, conversion,
     confluence, normalization bridges, and inference across about twenty source
-    files, even though the translation function itself is small.\\
-    \click Finally, typing derivations are not unique, so we prove derivation
+    files, even though the translation function itself is small.}\\
+    \lbeat{4}{Finally, typing derivations are not unique, so we prove derivation
     independence. The determinism proof also found two operational rules that
     really overlapped, so the mechanization led to a change in the target
-    semantics.
+    semantics.}
   }
 \end{frame}
 
@@ -1037,22 +1093,22 @@
     \hspace{0.45em}
     \talkpill{okGreen}{audit: \texttt{eq\_rect\_eq} only}
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[17:35 — 19:05]}\\
-    The checked results fall into four groups. First, the translation is type
-    preserving: if Rocq accepts the source, the extracted term is accepted by
-    the target at the translated type.\\
-    \click Second, the target itself is safe: preservation maintains those types
-    and progress gives the value-step-or-blame trichotomy.\\
-    \click Third, a source reduction is tracked by the extraction. I want to be
+    \beat{1}{The checked results fall into four groups. First, the translation is
+    type preserving: if Rocq accepts the source, the extracted term is accepted
+    by the target at the translated type.}\\
+    \beat{2}{Second, the target itself is safe: preservation maintains those
+    types and progress gives the value-step-or-blame trichotomy.}\\
+    \beat{3}{Third, a source reduction is tracked by the extraction. I want to be
     precise: this theorem uses a syntactic bookkeeping relation, not contextual
-    or observational approximation.\\
-    \click Fourth, an isolated extracted term never invents a client-owned blame
+    or observational approximation.}\\
+    \beat{4}{Fourth, an isolated extracted term never invents a client-owned blame
     label, and a separate theorem gives an exact syntactic characterization of
-    which source types translate without Dyn.\\
-    \click All of these results are machine checked, with no admitted lemmas or
+    which source types translate without Dyn.}\\
+    \lbeat{5}{All of these results are machine checked, with no admitted lemmas or
     project-local axioms. The audit reports only the standard equality axiom
-    shown here. The theorem names and exact statements are in the backup deck.
+    shown here. The theorem names and exact statements are in the backup deck.}
   }
 \end{frame}
 
@@ -1089,20 +1145,20 @@
     \end{dangercard}
   \end{columns}
 
-  \note{%
+  \notescript{%
     \textbf{[19:05 — 20:20]}\\
-    The artifact also extracts the source type checker and the mathematical
-    translation to OCaml, with a small REPL around them. The first command
-    infers the source type of polymorphic identity; the second prints its target
-    extraction.\\
-    \click The repository includes eighteen golden example batches: vectors,
+    \beat{1}{The artifact also extracts the source type checker and the
+    mathematical translation to OCaml, with a small REPL around them. The first
+    command infers the source type of polymorphic identity; the second prints its
+    target extraction.}\\
+    \lbeat{2}{The repository includes eighteen golden example batches: vectors,
     printf, dimensioned matrices, units of measure, balanced trees, session
     types, interpreters, and heterogeneous data. We also ported the same idioms
     to ordinary CIC and ran stock Rocq 9.0 extraction; seven expose unchecked
     casts or Obj.t interfaces. Even de Bruijn-to-named recovery is proved
     capture-free. To scope that accurately, the theorem covers name recovery,
     not the parser, the final string formatting, or the OCaml wrapper around the
-    extracted code.
+    extracted code.}
   }
 \end{frame}
 
@@ -1133,23 +1189,23 @@
   \begin{center}
     \talkpill{tgtTeal}{boundaries today $\rightsquigarrow$ roadmap to an algorithmic compiler}
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[20:20 — 21:35]}\\
-    The result has four important limits. First, the translation is a total
-    mathematical function on typing derivations, but it normalizes types and
-    calls a decision procedure. It is not an efficient production back end,
-    even though the REPL lets us run examples.\\
-    \click Second, internal blame is intentionally reachable. It marks a source
-    type that depends on runtime data in a way F-omega cannot represent.\\
-    \click Third, simulation is syntactic. We do not yet prove that arbitrary
+    \beat{1}{The result has four important limits. First, the translation is a
+    total mathematical function on typing derivations, but it normalizes types
+    and calls a decision procedure. It is not an efficient production back end,
+    even though the REPL lets us run examples.}\\
+    \beat{2}{Second, internal blame is intentionally reachable. It marks a source
+    type that depends on runtime data in a way F-omega cannot represent.}\\
+    \beat{3}{Third, simulation is syntactic. We do not yet prove that arbitrary
     typed program contexts observe equivalent behavior; that needs a new typed
-    logical relation.\\
-    \click Fourth, the current translation does not erase proof terms, the bare
+    logical relation.}\\
+    \beat{4}{Fourth, the current translation does not erase proof terms, the bare
     CoC source models inductive families rather than adding native CIC
     inductives, and Rocq extraction of the executable accesses opaque
-    computational proof bodies.\\
-    \click These limitations do not weaken the stated theorems. They say exactly
-    what stage of the design space this artifact establishes.
+    computational proof bodies.}\\
+    \lbeat{5}{These limitations do not weaken the stated theorems. They say exactly
+    what stage of the design space this artifact establishes.}
   }
 \end{frame}
 
@@ -1185,22 +1241,23 @@
     \textcolor{blameRed}{blame},\\[-0.1ex]
     rather than hiding the boundary behind \texttt{Obj.magic}.
   \end{center}}
-  \note{%
+  \notescript{%
     \textbf{[21:35 — 23:00]}\\
-    I will close with four claims. First, verification does not end when a source
-    term is accepted. If extracted code must compose with ordinary clients, the
-    exported target type is part of the safety story.\\
-    \click Second, we do not need to erase all the way down to a weak ML
+    \beat{1}{I will close with four claims. First, verification does not end when
+    a source term is accepted. If extracted code must compose with ordinary
+    clients, the exported target type is part of the safety story.}\\
+    \beat{2}{Second, we do not need to erase all the way down to a weak ML
     interface. F-omega preserves type abstraction, type application, and
     higher-kinded structure; that is enough to make the printf mistake a static
-    error again.\\
-    \click Third, when full dependency really exceeds the target, we make the
+    error again.}\\
+    \beat{3}{Third, when full dependency really exceeds the target, we make the
     residue explicit with Dyn and internal blame. It may fail, but it fails
-    inside the semantics instead of corrupting the runtime.\\
-    \click Fourth, Rocq checks both the target calculus and the translation, with
-    the assumptions audited and no admits.\\
-    \click The design rule is to preserve what F-omega can express, represent the
-    remainder with Dyn and blame, and never hide that boundary with Obj.magic.
+    inside the semantics instead of corrupting the runtime.}\\
+    \beat{4}{Fourth, Rocq checks both the target calculus and the translation,
+    with the assumptions audited and no admits.}\\
+    \lbeat{5}{The design rule is to preserve what F-omega can express, represent
+    the remainder with Dyn and blame, and never hide that boundary with
+    Obj.magic.}
   }
 \end{frame}
 
