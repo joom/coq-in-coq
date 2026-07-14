@@ -37,6 +37,8 @@
 \usepackage{pgfpages}
 \usepackage{fontawesome5}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric,backgrounds}
+\usepackage{tikz-cd}
+\usepackage{adjustbox}
 
 %% --- monospace font: Iosevka (Metropolis loads fontspec under LuaLaTeX) -----
 \setmonofont{Iosevka}[Scale=MatchLowercase]
@@ -433,6 +435,46 @@
   }
 \end{frame}
 
+\begin{frame}{Where source and target sit: the $\lambda$-cube}
+  \begin{center}
+  \adjustbox{max totalsize={\linewidth}{0.78\textheight},center}{%
+  \begin{tikzcd}[row sep=1.5em, column sep=1.3em, ampersand replacement=\&]
+   \&  \& |[draw=tgtTeal,line width=1pt,fill=tgtTeal!12,rounded corners=2pt,inner sep=4pt]| \text{System F$\omega$} \arrow[rrr] \&  \&  \& |[draw=srcBlue,line width=1pt,fill=srcBlue!12,rounded corners=2pt,inner sep=4pt]| \text{CoC} \\
+   \&  \&  \&  \&  \&  \\
+  \text{System F} \arrow[rruu] \arrow[rrr] \&  \&  \& \text{System FP} \arrow[rruu] \&  \&  \\
+   \&  \& \text{System F$\underline{\omega}$} \arrow[rrr] \arrow[uuu] \&  \&  \& \text{System F$\underline{\omega}$-P} \arrow[uuu] \\
+   \&  \&  \&  \&  \&  \\
+  \text{STLC}
+    \arrow{rruu}[sloped,above]{\text{\fontsize{5}{6}\selectfont Types depending on types}}
+    \arrow{rruu}[sloped,below]{\text{\fontsize{5}{6}\selectfont Type operators}}
+    \arrow{uuu}[sloped,above]{\text{\fontsize{5}{6}\selectfont Values depending on types}}
+    \arrow{uuu}[sloped,below]{\text{\fontsize{5}{6}\selectfont Polymorphism}}
+    \arrow{rrr}[sloped,above]{\text{\fontsize{5}{6}\selectfont Types depending on values}}
+    \arrow{rrr}[sloped,below]{\text{\fontsize{5}{6}\selectfont Dependent types}}
+    \&  \&  \& \text{LF} \arrow[rruu] \arrow[uuu] \&  \&
+  \end{tikzcd}}
+  \end{center}
+
+  \medskip
+  \begin{center}\small
+    {\color{tgtTeal}$\blacksquare$~System F$\omega$ --- our \emph{target}}
+    \hspace{1.6em}
+    {\color{srcBlue}$\blacksquare$~CoC --- our \emph{source}}
+  \end{center}
+  \note{%
+    \textbf{[0:30 — 1:15]}\\
+    A quick orientation before the problem. Barendregt's lambda-cube organizes
+    the typed lambda calculi along three independent axes: polymorphism ---
+    values depending on types; type operators --- types depending on types; and
+    dependent types --- types depending on values. Our source is the top-right
+    corner, lambda-Pi-omega, the Calculus of Constructions, which turns on all
+    three. Our target is lambda-omega, System F-omega: it keeps polymorphism and
+    type operators but drops dependent types. Extraction is exactly the move from
+    the all-features corner back to F-omega --- and everything hard in this talk
+    comes from the one axis we give up: types depending on values.
+  }
+\end{frame}
+
 %% ==========================================================================
 \section{The problem}
 %% ==========================================================================
@@ -581,7 +623,7 @@
       (* format: "\%d"; caller: "\%d\%s" *)\\[0.5ex]
       let report : nat -> str -> str =\\
       \quad sprintf (Fint Fstop)\\[0.5ex]
-      let \_ = report O Sempty
+      let \_ = report O ""
     \end{neutralcard}}
     \rc{0.39\textwidth}{2-}{%
     \begin{dangercard}[\eqrowht]{\faExclamationTriangle\quad Runtime outcome}
@@ -590,7 +632,6 @@
 
         \smallskip
         \small Undefined behavior.\\
-        Silent --- no report.\\
         Names nobody.
       \end{center}
     \end{dangercard}}
@@ -681,7 +722,7 @@
 
       \smallskip
       \src{\texttt{El c}} $\rightsquigarrow$
-      \mbox{$\dyn + \blame{\mathsf{int}}$}
+      \mbox{$\dyn$}
     \end{dynamiccard}}
   }
 
@@ -783,7 +824,7 @@
     \talkpill{okGreen}{0 Dyn}
     \hspace{0.35em}\talkpill{okGreen}{0 casts}
     \hspace{0.35em}\talkpill{okGreen}{0 blame}
-    \hspace{0.7em}\small The arity is ordinary F$\omega$ structure.
+    \hspace{0.7em}\small The function type is ordinary F$\omega$ structure.
   \end{center}}
   \notescript{%
     \textbf{[8:00 — 9:00]}\\
@@ -846,65 +887,41 @@
   }
 \end{frame}
 
-\begin{frame}{A little more CoC: data as its fold}
-  \begin{sourcecard}{The indexed Böhm--Berarducci encoding}
-    \centering
-    \begin{tikzpicture}[node distance=0.28cm and 0.34cm]
-      \node (nil) {$X\,\mathrm{Z}$};
-      \node[right=of nil] (a1) {$\to$};
-      \node[right=of a1] (cons)
-        {$(\forall m.\,A \to X\,m \to X\,(\mathrm{S}\,m))$};
-      \node[right=of cons] (a2) {$\to$};
-      \node[right=of a2] (result) {$X\,n$};
-      \node[above=0.30cm of cons] (prefix)
-        {$\mathsf{Vec}\;A\;n = \forall X{:}\Nat{\to}\SetS.$};
-
-      \node[below=0.30cm of nil,font=\scriptsize\ttfamily,text=srcBlue]
-        (nillabel) {vnil case};
-      \node[below=0.30cm of cons,font=\scriptsize\ttfamily,text=srcBlue]
-        (conslabel) {vcons case};
-      \node[below=0.30cm of result,font=\scriptsize,text=tgtTeal]
-        (resultlabel) {result};
-      \draw[-{Latex[length=1.4mm]},srcBlue!75]
-        (nillabel.north) -- (nil.south);
-      \draw[-{Latex[length=1.4mm]},srcBlue!75]
-        (conslabel.north) -- (cons.south);
-      \draw[-{Latex[length=1.4mm]},tgtTeal!75]
-        (resultlabel.north) -- (result.south);
-    \end{tikzpicture}\par
+\begin{frame}{A little more CoC: data is its own fold}
+  \begin{sourcecard}{Bare CoC has no built-in data --- a value \emph{is} its fold}
+    \centering\smallskip
+    $\mathsf{Vec}\;A\;n \;=\; \forall X{:}\Nat{\to}\SetS.\;
+      \underbrace{X\,\mathrm{Z}}_{\src{\text{\scriptsize vnil}}} \to
+      \underbrace{(\forall m.\,A \to X\,m \to X\,(\mathrm{S}\,m))}_{\src{\text{\scriptsize vcons}}} \to
+      \underbrace{X\,n}_{\tgt{\text{\scriptsize result}}}$
+    \par\smallskip
   \end{sourcecard}
 
   \pause
   \smallskip
   \eqcards{%
-    \rc{0.31\textwidth}{2-}{\begin{neutralcard}[\eqrowht]{Datum $=$ eliminator}
-      \small A value is what can be folded into every suitable motive $X$.
-    \end{neutralcard}}
-    \rc{0.31\textwidth}{2-}{\begin{sourcecard}[\eqrowht]{Indexed motive}
-      \small $X : \Nat \to \SetS$ lets \src{Vec}, \src{Fin}, and \src{Fmt}
-      compute.
+    \rc{0.47\textwidth}{2-}{\begin{sourcecard}[\eqrowht]{The motive $X$ is the answer}
+      \small It computes the function type a format demands and \src{Vec}'s
+      length --- the engine of \emph{Preserve} and \emph{Erase}.
     \end{sourcecard}}
-    \rc{0.31\textwidth}{2-}{\begin{targetcard}[\eqrowht]{\texttt{sprintf}'s motive}
-      \small $X\,Y = \mathsf{Str} \to Y$ computes the function arity.
-    \end{targetcard}}
+    \rc{0.47\textwidth}{2-}{\begin{dynamiccard}[\eqrowht]{The ceiling}
+      \small Folds, not large elimination --- the gap is \emph{Dynamize}.
+    \end{dynamiccard}}
   }
 
   \notescript{%
     \textbf{[10:00 — 11:10]}\\
-    \beat{1}{There is one more CoC detail worth seeing. Our source is bare CoC,
-    without native inductive declarations. The REPL's Inductive command expands
-    to an indexed Böhm--Berarducci encoding. Here a vector of A at length n is
-    defined by its fold: for every family X indexed by naturals, give me the
-    empty case and the cons case, and I produce X n.}\\
-    \lbeat{2}{The motive X depends on the index. The first argument supplies the
-    \texttt{vnil} case; the second supplies \texttt{vcons}; applying the encoded
-    vector to both produces $X\,n$. Vec, Fin, equality, and Fmt therefore receive
-    indexed folds that compute as ordinary CoC lambda terms. For Fmt, sprintf
-    chooses the motive ``a string accumulator producing Y.'' The Y is precisely
-    the function type computed by the format, so the arity is represented as
-    F-omega type structure after extraction. The ceiling is also precise: this
-    gives indexed folds, not full dependent induction or large elimination. I
-    have that distinction in the backup slides.}
+    \beat{1}{One CoC detail underpins all three outcomes. Our source is bare CoC,
+    with no native data types --- the REPL's Inductive command expands to a fold
+    encoding. A vector of A at length n just \emph{is} its fold: give me a base
+    case and a step case, and I hand back $X\,n$.}\\
+    \lbeat{2}{The key is the motive X --- the answer the fold computes. For Fmt,
+    sprintf picks the motive ``a string accumulator producing Y,'' and that Y is
+    exactly the function type the format demands --- so that function type
+    survives as F-omega type structure. That same mechanism is what makes
+    Preserve and Erase work. Its ceiling is equally precise: we get indexed folds, not large
+    elimination --- and that missing power is exactly the Dynamize case on the
+    next slide. The full distinction is in the backup deck.}
   }
 \end{frame}
 
@@ -996,6 +1013,128 @@
 \end{frame}
 
 %% ==========================================================================
+\section{Evidence and scope}
+%% ==========================================================================
+
+\begin{frame}{What Rocq actually checks}
+  \eqcards{%
+    \rc{0.31\textwidth}{1-}{\begin{sourcecard}[\eqrowht]{\small\faCheckCircle~Static guarantee}
+      \small Well-typed source $\rightsquigarrow$ well-typed target.
+    \end{sourcecard}}
+    \rc{0.31\textwidth}{2-}{\begin{successcard}[\eqrowht]{\small\faArrowRight~Dynamic guarantee}
+      \small Types are preserved; execution yields a value, a step, or blame.
+      \par\smallskip
+      {\footnotesize\itshape Source reduction is tracked by a deliberately
+      \emph{syntactic} simulation --- not contextual equivalence.}
+    \end{successcard}}
+    \rc{0.31\textwidth}{3-}{\begin{dynamiccard}[\eqrowht]{\small\faLock~Boundary guarantee}
+      \small No external labels in isolation; exact characterization of Dyn-free types ---
+      the F$\omega$ subset of CoC extracts with zero \texttt{Dyn}.
+    \end{dynamiccard}}
+  }
+
+  \onslide<4->{%
+  \medskip
+  \begin{center}
+    \talkpill{okGreen}{fully mechanized $+$ admit-free}
+    \hspace{0.45em}
+    \talkpill{okGreen}{audit: \texttt{eq\_rect\_eq} only}
+  \end{center}}
+  \notescript{%
+    \textbf{[17:35 — 19:05]}\\
+    \beat{1}{The checked results fall into three groups. First, the translation is
+    type preserving: if Rocq accepts the source, the extracted term is accepted
+    by the target at the translated type.}\\
+    \beat{2}{Second, the target itself is safe: preservation maintains those
+    types and progress gives the value-step-or-blame trichotomy. Tied to that,
+    a source reduction is tracked by the extraction --- but I want to be precise:
+    this uses a syntactic bookkeeping relation, not contextual or observational
+    approximation.}\\
+    \beat{3}{Third, an isolated extracted term never invents a client-owned blame
+    label, and a separate theorem gives an exact syntactic characterization of
+    which source types translate without Dyn. Concretely: if you stay inside
+    the Fomega-expressible fragment of CoC --- no type-level use of a runtime
+    value --- the translation is optimistic and produces zero Dyn. Dyn only
+    shows up at the genuine boundary we've been describing all along.}\\
+    \lbeat{4}{All of these results are machine checked, with no admitted lemmas or
+    project-local axioms. The audit reports only the standard equality axiom
+    shown here. The theorem names and exact statements are in the backup deck.}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Evidence you can poke at}
+  \begin{beamercolorbox}[wd=\linewidth,sep=1.0em,rounded=true]{terminal card}
+    \small\ttfamily
+    {\color{accentOrange}Coc <} {\color{white}Check mmul.}\\
+    {\color{okGreen!70!white}Inferred type: forall (m n p : nat),
+      Mat m n -> Mat n p -> Mat m p}\\[1.4ex]
+    \onslide<2->{%
+    {\color{accentOrange}Coc <} {\color{white}Extract mmul.}\\
+    {\color{tgtTeal!60!white}Extracted: fun (m n p : nat) (a b : Mat) => \ldots}}
+  \end{beamercolorbox}
+
+  \onslide<2->{%
+  \medskip
+  \begin{center}\small
+    \talkpill{tgtTeal}{dimensions are part of the source type}
+    \hspace{0.6em}
+    \talkpill{okGreen}{extracts to honest F$\omega$ --- no \texttt{Obj.magic}}
+  \end{center}}
+
+  \notescript{%
+    \textbf{[19:05 — 20:20]}\\
+    \beat{1}{The artifact also extracts the source type checker and the
+    translation itself to OCaml, wrapped in a small REPL you can run. Here I ask
+    it to check matrix multiplication. The inferred type is \texttt{forall m n p,
+    Mat m n to Mat n p to Mat m p}: the dimensions are part of the contract, so a
+    shape mismatch is a static error, exactly as in the source.}\\
+    \lbeat{2}{And it extracts to real, well-typed F-omega. The dimension index
+    erases --- \texttt{Mat m n} becomes plain \texttt{Mat}, with m, n, p staying
+    as ordinary runtime arguments --- but there is no \texttt{Obj.magic} and no
+    unchecked cast anywhere. The genuine residue, a type that depends on a
+    runtime value, is exactly where blame would step in, as we saw. You can run
+    all of this yourself: vectors, printf, matrices, session types, and more are
+    in the repository.}
+  }
+\end{frame}
+
+\begin{frame}{What this is --- and is not}
+  \eqcards{%
+    \rc{0.31\textwidth}{1-}{\begin{neutralcard}[\eqrowht]{\small\faCode~Verified translation}
+      \small A total mathematical translation --- not a production compiler.
+    \end{neutralcard}}
+    \rc{0.31\textwidth}{2-}{\begin{dangercard}[\eqrowht]{\small\faExclamationTriangle~Reachable blame}
+      \small By design, a type that depends on a runtime value can fail --- inside the semantics.
+    \end{dangercard}}
+    \rc{0.31\textwidth}{3-}{\begin{neutralcard}[\eqrowht]{\small\faProjectDiagram~Syntactic simulation}
+      \small A structural correspondence, not full compiler correctness.
+    \end{neutralcard}}
+  }
+
+  \onslide<4->{%
+  \smallskip
+  \begin{center}
+    \talkpill{tgtTeal}{boundaries today $\rightsquigarrow$ roadmap to an algorithmic compiler}
+  \end{center}}
+  \notescript{%
+    \textbf{[20:20 — 21:35]}\\
+    \beat{1}{Three honest limits. First, this is a verified mathematical
+    translation, not a production compiler --- it normalizes types and calls
+    inference. The REPL runs it, but it is not an efficient back end.}\\
+    \beat{2}{Second, internal blame is reachable by design. When a source type
+    genuinely depends on a runtime value, F-omega cannot represent it, so that
+    case can fail --- but it fails as blame, inside the semantics.}\\
+    \beat{3}{Third, the source-to-target correspondence is a syntactic
+    simulation, not contextual equivalence or a full compiler-correctness
+    theorem.}\\
+    \lbeat{4}{None of this weakens the stated theorems --- it just marks what
+    stage of the design space this artifact establishes. Let me close by
+    spending a few minutes on why the central theorem, well-typed source goes
+    to well-typed target, was hard to prove in practice.}
+  }
+\end{frame}
+
+%% ==========================================================================
 \section{Why this is hard}
 %% ==========================================================================
 
@@ -1026,11 +1165,13 @@
     \talkpill{tgtTeal}{reduction-stable classification $+$ split target namespaces}
   \end{center}}
   \notescript{%
-    \textbf{[13:35 — 14:50]}\\
-    \beat{1}{The first implementation difficulty is the namespace mismatch we
-    just saw. CoC deliberately treats programs and types uniformly. These two
-    binders have the same syntactic form: one binds a type A and one binds a
-    value n.}\\
+    \textbf{[21:35 — 22:50]}\\
+    \beat{1}{Recall the static guarantee from a moment ago: well-typed source
+    goes to well-typed target. Everything on this and the next two slides is an
+    obstacle to that one theorem. First obstacle: the namespace mismatch we saw
+    at the start. CoC deliberately treats programs and types uniformly. These
+    two binders have the same syntactic form: one binds a type A and one binds
+    a value n.}\\
     \beat{2}{F-omega separates those worlds. A becomes a type abstraction, while
     n becomes an ordinary function argument. The translation must also compress
     one source de Bruijn namespace into separate target type and term
@@ -1075,19 +1216,21 @@
     \talkpill{okGreen}{conversion absorbs the static gap}
   \end{center}}
   \notescript{%
-    \textbf{[14:50 — 16:05]}\\
-    \beat{1}{The second difficulty is that types compute. A type-level identity
-    function applied to Nat is definitionally equal to Nat even though the syntax
-    is different. Every decision made by the extraction has to respect that
-    equality.}\\
+    \textbf{[22:50 — 24:05]}\\
+    \beat{1}{The second obstacle to type preservation is that types compute. A
+    type-level identity function applied to Nat is definitionally equal to Nat
+    even though the syntax is different. Every decision made by the extraction
+    has to respect that equality, because the translation must land the
+    extracted term at the translated type, not just some type.}\\
     \beat{2}{The hardest application case compares two routes: substitute a
     source type argument and then translate, or translate both pieces and
     substitute in the target. A paper proof might casually say these commute.}\\
     \lbeat{3}{They do not commute by literal equality. One route contains a target
     beta redex, and normalizing source annotations introduces another mismatch.
     The correct theorem says the two target types are equal after type-level
-    computation. That discovery forced the target typing judgment to include a
-    conversion rule. The exact equation is in the backup slides.}
+    computation --- ordinary F-omega beta-equivalence on types, not a
+    blame-specific hack. That discovery forced the target typing judgment to
+    include a conversion rule. The exact equation is in the backup slides.}
   }
 \end{frame}
 
@@ -1125,8 +1268,8 @@
     \end{dangercard}}
   }
   \notescript{%
-    \textbf{[16:05 — 17:35]}\\
-    \beat{1}{The third difficulty is specific to making the translation an object
+    \textbf{[24:05 — 25:35]}\\
+    \beat{1}{The third obstacle is specific to making the translation an object
     inside Rocq. Extraction follows the typing derivation because that derivation
     tells it which application and binder cases it is translating.}\\
     \beat{2}{But Rocq separates proof-only propositions from computational data.
@@ -1139,133 +1282,8 @@
     \lbeat{4}{Finally, typing derivations are not unique, so we prove derivation
     independence. The determinism proof also found two operational rules that
     really overlapped, so the mechanization led to a change in the target
-    semantics.}
-  }
-\end{frame}
-
-%% ==========================================================================
-\section{Evidence and scope}
-%% ==========================================================================
-
-\begin{frame}{What Rocq actually checks}
-  \eqgrid{0.48\textwidth}%
-    {1-}{\begin{sourcecard}[\eqrowht]{\faCheckCircle\quad Static guarantee}
-      \small Well-typed source $\rightsquigarrow$ well-typed target.
-    \end{sourcecard}}%
-    {3-}{\begin{targetcard}[\eqrowht]{\faRoute\quad Source behavior}
-      \small Source reduction is tracked by a deliberately \emph{syntactic} simulation.
-    \end{targetcard}}%
-    {2-}{\begin{successcard}[\eqrowht]{\faArrowRight\quad Dynamic guarantee}
-      \small Types are preserved; execution yields a value, a step, or blame.
-    \end{successcard}}%
-    {4-}{\begin{dynamiccard}[\eqrowht]{\faLock\quad Boundary guarantee}
-      \small No external labels in isolation; exact characterization of Dyn-free types ---
-      the F$\omega$ subset of CoC extracts with zero \texttt{Dyn}.
-    \end{dynamiccard}}
-
-  \onslide<5->{%
-  \medskip
-  \begin{center}
-    \talkpill{okGreen}{fully mechanized $+$ admit-free}
-    \hspace{0.45em}
-    \talkpill{okGreen}{audit: \texttt{eq\_rect\_eq} only}
-  \end{center}}
-  \notescript{%
-    \textbf{[17:35 — 19:05]}\\
-    \beat{1}{The checked results fall into four groups. First, the translation is
-    type preserving: if Rocq accepts the source, the extracted term is accepted
-    by the target at the translated type.}\\
-    \beat{2}{Second, the target itself is safe: preservation maintains those
-    types and progress gives the value-step-or-blame trichotomy.}\\
-    \beat{3}{Third, a source reduction is tracked by the extraction. I want to be
-    precise: this theorem uses a syntactic bookkeeping relation, not contextual
-    or observational approximation.}\\
-    \beat{4}{Fourth, an isolated extracted term never invents a client-owned blame
-    label, and a separate theorem gives an exact syntactic characterization of
-    which source types translate without Dyn. Concretely: if you stay inside
-    the Fomega-expressible fragment of CoC --- no type-level use of a runtime
-    value --- the translation is optimistic and produces zero Dyn. Dyn only
-    shows up at the genuine boundary we've been describing all along.}\\
-    \lbeat{5}{All of these results are machine checked, with no admitted lemmas or
-    project-local axioms. The audit reports only the standard equality axiom
-    shown here. The theorem names and exact statements are in the backup deck.}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Evidence you can poke at}
-  \begin{beamercolorbox}[wd=\linewidth,sep=1.0em,rounded=true]{terminal card}
-    \small\ttfamily
-    {\color{accentOrange}Coc \textless} {\color{white}Check mmul.}\\
-    {\color{okGreen!70!white}Inferred type: forall (m n p : nat),
-      Mat m n -> Mat n p -> Mat m p}\\[1.4ex]
-    \onslide<2->{%
-    {\color{accentOrange}Coc \textless} {\color{white}Extract mmul.}\\
-    {\color{tgtTeal!60!white}Extracted: fun (m n p : nat) (a b : Mat) => \ldots}}
-  \end{beamercolorbox}
-
-  \onslide<2->{%
-  \medskip
-  \begin{center}\small
-    \talkpill{tgtTeal}{dimensions are part of the source type}
-    \hspace{0.6em}
-    \talkpill{okGreen}{extracts to honest F$\omega$ --- no \texttt{Obj.magic}}
-  \end{center}}
-
-  \notescript{%
-    \textbf{[19:05 — 20:20]}\\
-    \beat{1}{The artifact also extracts the source type checker and the
-    translation itself to OCaml, wrapped in a small REPL you can run. Here I ask
-    it to check matrix multiplication. The inferred type is \texttt{forall m n p,
-    Mat m n to Mat n p to Mat m p}: the dimensions are part of the contract, so a
-    shape mismatch is a static error, exactly as in the source.}\\
-    \lbeat{2}{And it extracts to real, well-typed F-omega. The dimension index
-    erases --- \texttt{Mat m n} becomes plain \texttt{Mat}, with m, n, p staying
-    as ordinary runtime arguments --- but there is no \texttt{Obj.magic} and no
-    unchecked cast anywhere. The genuine residue, a type that depends on a
-    runtime value, is exactly where blame would step in, as we saw. You can run
-    all of this yourself: vectors, printf, matrices, session types, and more are
-    in the repository.}
-  }
-\end{frame}
-
-\begin{frame}{What this is --- and is not}
-  \eqgrid{0.48\textwidth}%
-    {1-}{\begin{neutralcard}[\eqrowht]{\faCode\quad Mathematical translation}
-      \small Total and verified, but normalizes types and invokes inference:
-      not a production back end.
-    \end{neutralcard}}%
-    {3-}{\begin{neutralcard}[\eqrowht]{\faProjectDiagram\quad Syntactic simulation}
-      \small Not contextual equivalence or a full compiler-correctness theorem.
-    \end{neutralcard}}%
-    {2-}{\begin{dangercard}[\eqrowht]{\faExclamationTriangle\quad Reachable internal blame}
-      \small A type that depends on a runtime value can deliberately fail.
-    \end{dangercard}}%
-    {4-}{\begin{dynamiccard}[\eqrowht]{\faLockOpen\quad Executable boundary}
-      \small No proof erasure or native inductives; opaque proof bodies are accessed.
-    \end{dynamiccard}}
-
-  \onslide<5->{%
-  \smallskip
-  \begin{center}
-    \talkpill{tgtTeal}{boundaries today $\rightsquigarrow$ roadmap to an algorithmic compiler}
-  \end{center}}
-  \notescript{%
-    \textbf{[20:20 — 21:35]}\\
-    \beat{1}{The result has four important limits. First, the translation is a
-    total mathematical function on typing derivations, but it normalizes types
-    and calls a decision procedure. It is not an efficient production back end,
-    even though the REPL lets us run examples.}\\
-    \beat{2}{Second, internal blame is intentionally reachable. It marks a source
-    type that depends on runtime data in a way F-omega cannot represent.}\\
-    \beat{3}{Third, simulation is syntactic. We do not yet prove that arbitrary
-    typed program contexts observe equivalent behavior; that needs a new typed
-    logical relation.}\\
-    \beat{4}{Fourth, the current translation does not erase proof terms, the bare
-    CoC source models inductive families rather than adding native CIC
-    inductives, and Rocq extraction of the executable accesses opaque
-    computational proof bodies.}\\
-    \lbeat{5}{These limitations do not weaken the stated theorems. They say exactly
-    what stage of the design space this artifact establishes.}
+    semantics. That's the full obstacle course behind the one static guarantee
+    from a few slides back --- so let's close with what it buys us.}
   }
 \end{frame}
 
@@ -1286,7 +1304,7 @@
 
     \column{0.48\textwidth}
     \onslide<2->{\begin{targetcard}{2 / Preserve the static skeleton}
-      F$\omega$ keeps \texttt{sprintf}'s arity and makes index erasure explicit.
+      F$\omega$ keeps the function type a format computes and makes index erasure explicit.
     \end{targetcard}}
     \smallskip
     \onslide<4->{\begin{successcard}{4 / Check the whole story}
@@ -1302,7 +1320,7 @@
     rather than hiding the boundary behind \texttt{Obj.magic}.
   \end{center}}
   \notescript{%
-    \textbf{[21:35 — 23:00]}\\
+    \textbf{[25:35 — 27:00]}\\
     \beat{1}{I will close with four claims. First, verification does not end when
     a source term is accepted. If extracted code must compose with ordinary
     clients, the exported target type is part of the safety story.}\\
@@ -1336,7 +1354,7 @@
     \pipelinediagram
   \end{columns}
   \note{%
-    \textbf{[23:00+] — Q\&A.}\\
+    \textbf{[27:00+] — Q\&A.}\\
     Thank you! I'm happy to take questions. I have backup slides with the full
     target grammar, blame labels, the compatibility rules, the exact conversion
     lemma, theorem names, and the inductive encoding. I can also run the REPL if
